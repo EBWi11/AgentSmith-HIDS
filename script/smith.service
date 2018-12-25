@@ -1,0 +1,11 @@
+[Unit]
+Description=smith
+
+[Service]
+Type=forking
+PIDFile=/run/smith.pid
+ExecStart=/opt/smith/smithworker1
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

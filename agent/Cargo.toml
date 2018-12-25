@@ -1,0 +1,12 @@
+[package]
+name = "agent"
+version = "0.1.4"
+authors = ["E_Bwill <cy_sniper@yeah.net>"]
+
+[dependencies]
+kafka = "0.7"
+libc = "0.2.43"
+daemonize = "0.3.0"
+
+[build-dependencies]
+cc = "1.0"
