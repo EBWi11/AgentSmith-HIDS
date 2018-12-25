@@ -54,7 +54,7 @@ Installing the AgentSmith-HIDS on the host enables you to monitor the behavior o
 
 ### How to use the AgentSmith-HIDS
 * The AgentSmith-HIDS provides a simple user-mode demo which is responsible for receiving information transmitted from LKM, converting the information received to JSON format and forwarding it to the server. We utilized the Rust in developing the AgentSmith-HIDS and the openssl lib will be required to provide necessary support. Also, the transmission method is Kafka.
-* The positioning of the AgentSmith-HIDS is a lightweight, high-performance information collecting tool, which can further detect some blind spots in the detection capability of the AgentSmith-NIDS such as shell reversion, command execution, malicious programs downloading, some rootkits etc... Meanwhile, it collaborates with the AgentSmith-NIDS and CMDB to provide a comprehensive view including:
+* The positioning of the AgentSmith-HIDS is a lightweight, high-performance information collecting tool, which can further detect some blind spots in the detection capability of the AgentSmith-NIDS such as shell reversion, command execution, malicious programs downloading, some rootkits etc... Meanwhile, it collaborates with the AgentSmith-NIDS and CMDB to provide a comprehensive view including:<br>
 	•	PID;<br>
 	•	PPID;<br>
 	•	Nodename;<br>
