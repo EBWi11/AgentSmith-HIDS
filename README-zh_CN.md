@@ -68,13 +68,13 @@ AgentSmith-HIDS 目前已经在点融经过压力测试/稳定性测试，目前
 
 4. 部署测试环境接收端Kafka Server，注意需要手动创建topic。
 
-5. (可选)部署测试环境HIDS心跳Server，具体请看：https://github.com/DianrongSecurity/AgentSmith-HIDS/tree/master/smith_console。
+5. (可选)部署测试环境HIDS心跳Server，具体请看：https://github.com/DianrongSecurity/AgentSmith-HIDS/tree/master/smith_console 。
 
 6. 编译agent模块，需要提前安装rust环境。在目录：`/root/smithhids/agent/src/conf`下，先修改agent配置文件：`/root/smithhids/agent/src/conf/settings.rs`，修改相关的Kafka信息和心跳配置，通过`cargo build —-release`，在`/agent/target/release/ `下得到编译好的agent。(注：需要提前`yun install openssl` && `yun install openssl-devel`)
 
 7. 安装agent，下发agent到测试环境，直接执行即可。
 
-8. 如果配置并部署了HIDS心跳Server，可以通过HIDS Console来简单对测试服务器的情况进行查看，具体操作请看：https://github.com/DianrongSecurity/AgentSmith-HIDS/tree/master/smith_console。
+8. 如果配置并部署了HIDS心跳Server，可以通过HIDS Console来简单对测试服务器的情况进行查看，具体操作请看：https://github.com/DianrongSecurity/AgentSmith-HIDS/tree/master/smith_console 。
 
 9. SELinux设置enforcing也不影响Agent运行。
 
