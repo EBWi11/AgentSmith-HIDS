@@ -48,7 +48,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 ### 关于使用方式
 
 * AgentSmith-HIDS 有一个简陋的用户态demo进行接收LKM传输的信息，并将信息拼接为JSON后传输到Server端，该项目用Rust编写，需要有openssl lib的支持，传输方式采用Kafka传输。
-* AgentSmith-HIDS 的定位就是一款轻量级，高性能的情报采集工具，首先可以检测如:反弹shell，执行可以命令，下载恶意程序，一些Rootkit等等NIDS的死角。其次可以和NIDS/CMDB完成联动，达到：**PID+PPID+nodename+cmdline+cwd+user+exe+TCP/UDP五元组+部分协议的原始数据+业务相关信息+FW_RULE+NIDS/HIDS规则ID+威胁情报信息**的联动效果。
+* AgentSmith-HIDS 的定位就是一款轻量级，高性能的情报采集工具，首先可以检测如:反弹shell，执行可以命令，下载恶意程序，一些Rootkit等等NIDS的死角。其次可以和NIDS/CMDB完成联动，达到：**PID+PPID+nodename+cmdline+cwd+user+exe+TCP/UDP五元组+部分协议的原始数据+业务相关信息+FW_RULE+NIDS/HIDS规则ID+威胁情报信息+等**的联动效果。
 
 
 
