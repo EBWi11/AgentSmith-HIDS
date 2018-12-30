@@ -25,10 +25,10 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 ### AgentSmith-HIDS实现了以下的功能：
 
 * 通过加载LKM的方式Hook了**execve,connect,init_module,finit_module**的system_call；
-
 * 通过对Linux namespace兼容的方式实现了对Docker容器行为的情报收集；
-
 * 实现了两种将Hook Info从内核态传输到用户态的方式：netlink和共享内存，共享内存传输损耗相较于netlink减小30%，在测试服务器上Hook connect耗时中位数8478ns，更详细的AgentSmith-HIDS BencherMark请见:https://github.com/DianrongSecurity/AgentSmith-HIDS/tree/master/doc **(注:经过其他小伙伴提醒，我们的压力测试方法有一定问题，并不是极限测试，我们会尽快发布更"压力"的测试报告)**
+* **系统文件完整性检测**，**系统用户列表查询**，**系统端口监听列表查询**，**系统RPM LIST查询**，**系统定时任务查询**功能；
+* 支持自定义检测模块(具体添加方式见下文)
 
 
 
@@ -80,6 +80,20 @@ AgentSmith-HIDS 目前已经在点融经过压力测试/稳定性测试，目前
 
 
 （注：由于Agent取本机IP是通过命令:`hostname -i`，所以测试时请保证hostname和hosts配置正确，否则HIDS Console端无法读取正确的IP。）
+
+
+
+### 自定义检测模块
+
+1.自定义检测模块依赖心跳检测模块，既需要开启心跳检测才可支持自定义检测模块；
+
+2.自定义检测模块的触发方式是心跳Server向Agent下发指令完成的，检测结果通过Kafka传递到Server端，因此不具备实时性；
+
+3.自定义检测函数添加在https://github.com/DianrongSecurity/AgentSmith-HIDS/blob/master/agent/src/lib/detection_module.rs 文件下，并且需要在该文件的Detective impl的start函数定义好Mapping关系(Server下发指令和调用的检测函数关系)；
+
+4.添加完自定义检测函数后需要在https://github.com/DianrongSecurity/AgentSmith-HIDS/blob/master/smith_console/heartbeat_server.py 中添加下发指令逻辑，注意需要和其他指令通过“;”间隔；
+
+5.实现逻辑，Agent向心跳服务器发送心跳包，Server返回检测指令，Agent通过指令和检测函数的Mapping执行指令所指的检测函数，检测结果通过Kafka传递到Server端。
 
 
 
