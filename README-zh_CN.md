@@ -54,7 +54,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ### 关于项目进度和未来
 
-AgentSmith-HIDS 目前已经在点融经过压力测试/稳定性测试，目前正在内部线上测试环境进行更加全面的测试，并会在将来更新Linux基线检查/Linux完整性检测功能。
+AgentSmith-HIDS 目前已经在点融经过压力测试/稳定性测试，目前正在内部线上测试环境进行更加全面的测试。
 
 
 
