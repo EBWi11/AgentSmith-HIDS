@@ -16,9 +16,11 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 
 
+
 ### 谁适合AgentSmith-HIDS？
 
 对Linux有一定了解，对HIDS有需求，对现有的HIDS性能/联动能力/二次开发难度不满意的安全工程师，AgentSmith-HIDS也许是你的选择，AgentSmith-HIDS是为了低性能损耗和联动能力(主要为了关联点融的AgentSmith-NIDS)而生的项目。
+
 
 
 
@@ -32,6 +34,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 
 
+
 ### 关于兼容系统及内核版本
 
 * AgentSmith-HIDS 仅在**Centos7.2/7.3/7.4/7.5/7.6**上进行过充分的测试，关于Kernel版本仅在**3.10-327/3.10-514/3.10-693/3.10-862/3.10-957**上进行过充分测试。虽然理论上Smith支持更多的版本，但是由于未经过充分测试，在加载LKM的时候会对Kernel进行版本强制校验(>3.10)，如果有其他人在其他版本上进行过稳定性测试，可以随时联系我们（需附稳定性测试报告）。
@@ -39,9 +42,11 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 
 
+
 ### 对Docker的兼容
 
 在宿主机上安装AgentSmith-HIDS可以监控宿主机上容器的行为。如果是宿主机行为，nodename为宿主机hostname；如果是原生Docker容器，nodename为container name；如果是k8s，nodename为pod name。
+
 
 
 
@@ -52,9 +57,11 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 
 
+
 ### 关于项目进度和未来
 
 AgentSmith-HIDS 目前已经在点融经过压力测试/稳定性测试，目前正在内部线上测试环境进行更加全面的测试。
+
 
 
 
@@ -83,17 +90,19 @@ AgentSmith-HIDS 目前已经在点融经过压力测试/稳定性测试，目前
 
 
 
+
 ### 自定义检测模块
 
-1.自定义检测模块依赖心跳检测模块，既需要开启心跳检测才可支持自定义检测模块；
+1. 自定义检测模块依赖心跳检测模块，既需要开启心跳检测才可支持自定义检测模块；
 
-2.自定义检测模块的触发方式是心跳Server向Agent下发指令完成的，检测结果通过Kafka传递到Server端，因此不具备实时性；
+2. 自定义检测模块的触发方式是心跳Server向Agent下发指令完成的，检测结果通过Kafka传递到Server端，因此不具备实时性；
 
-3.自定义检测函数添加在https://github.com/DianrongSecurity/AgentSmith-HIDS/blob/master/agent/src/lib/detection_module.rs 文件下，并且需要在该文件的Detective impl的start函数定义好Mapping关系(Server下发指令和调用的检测函数关系)；
+3. 自定义检测函数添加在https://github.com/DianrongSecurity/AgentSmith-HIDS/blob/master/agent/src/lib/detection_module.rs 文件下，并且需要在该文件的Detective impl的start函数定义好Mapping关系(Server下发指令和调用的检测函数关系)；
 
-4.添加完自定义检测函数后需要在https://github.com/DianrongSecurity/AgentSmith-HIDS/blob/master/smith_console/heartbeat_server.py 中添加下发指令逻辑，注意需要和其他指令通过“;”间隔；
+4. 添加完自定义检测函数后需要在https://github.com/DianrongSecurity/AgentSmith-HIDS/blob/master/smith_console/heartbeat_server.py 中添加下发指令逻辑，注意需要和其他指令通过“;”间隔；
 
-5.实现逻辑，Agent向心跳服务器发送心跳包，Server返回检测指令，Agent通过指令和检测函数的Mapping执行指令所指的检测函数，检测结果通过Kafka传递到Server端。
+5. 实现逻辑，Agent向心跳服务器发送心跳包，Server返回检测指令，Agent通过指令和检测函数的Mapping执行指令所指的检测函数，检测结果通过Kafka传递到Server端。
+
 
 
 
@@ -103,15 +112,18 @@ AgentSmith-HIDS 目前已经在点融经过压力测试/稳定性测试，目前
 
 
 
+
 ### 卸载
 
 卸载AgentSmith-HIDS前需要先关闭用户态agent进程，agent默认Log path：`/var/log/smith.log`，默认pid file：`/run/smith.pid`，默认下：`cat /run/smith.pid |xargs kill -9`再通过`rmmod syshook`来完成卸载。
 
 
 
+
 ### 简单演示
 
 ![Demo](https://github.com/DianrongSecurity/AgentSmith-HIDS/blob/master/demo.gif)
+
 
 
 
@@ -141,6 +153,7 @@ AgentSmith-HIDS 目前已经在点融经过压力测试/稳定性测试，目前
 
 
 
+
 ### 特别说明
 
 * 虽然我们通过Hook syscall来尽可能的拿到所有我们想要的信息，但是需要注意依然存在绕过Hook的可能性，虽然这种情况难度较大，可能性很小。我们建议如果想要确保万无一失，在服务器初始化后尽早的部署HIDS。
@@ -149,9 +162,11 @@ AgentSmith-HIDS 目前已经在点融经过压力测试/稳定性测试，目前
 
 
 
+
 ### 致谢
 
 感谢[@yuzunzhi](https://github.com/yuzunzhi)和[@hapood](https://github.com/hapood)在项目过程中的大力支持！！！
+
 
 
 
