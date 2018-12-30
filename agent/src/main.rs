@@ -1,11 +1,18 @@
 extern crate daemonize;
 extern crate kafka;
 extern crate libc;
+extern crate chrono;
+
+#[macro_use]
+extern crate serde_derive;
+extern crate serde;
+extern crate serde_json;
 
 use conf::*;
 use daemonize::Daemonize;
 use lib::heartbeat::HeartBeat;
 use lib::kafka_output::KafkaOutput;
+use lib::detection_module::Detective;
 use libc::c_char;
 use std::collections::HashSet;
 use std::ffi::CStr;
@@ -30,7 +37,7 @@ extern { fn shm_close(); }
 extern { fn shm_run_no_callback() -> *const c_char; }
 
 fn get_output_kafka(threads: u32) -> KafkaOutput {
-    KafkaOutput::new(threads)
+    KafkaOutput::new(threads, false)
 }
 
 fn get_heartbeat(msg: String) -> HeartBeat {
@@ -53,7 +60,9 @@ fn get_data_no_callback() {
     }
 
     let local_ip = get_machine_ip();
+    let hostname = get_hostname();
     let local_ip_str = format!(",\"local_ip\":\"{}\"", local_ip);
+    let hostname_str = format!(",\"hostname\":\"{}\"", hostname);
 
     let (tx, rx) = channel();
     let arx = Arc::new(Mutex::new(rx));
@@ -73,12 +82,12 @@ fn get_data_no_callback() {
             let mut msg_str = String::new();
             let msg_split: Vec<&str> = msg.split("\n").collect();
             let mut msg_syscall_type = msg_split[1];
-            let mut argv_res = String::with_capacity(2048);
+            let mut argv_res = String::with_capacity(4096);
 
-            let mut syscall_execve_msg = ["{".to_string(), "\"type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"path\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"argv\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"stdin\":\"".to_string(),",\"stdout\":\"".to_string(),",\"username\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), "}".to_string()];
-            let mut syscall_init_msg = ["{".to_string(), "\"type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"cwd\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"username\":\"".to_string(), ",\"time\":\"".to_string(), ",\"CR0_check\":".to_string(), local_ip_str.to_string(), "}".to_string()];
-            let mut syscall_finit_msg = ["{".to_string(), "\"type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"cwd\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"username\":\"".to_string(), ",\"time\":\"".to_string(), ",\"CR0_check\":".to_string(), local_ip_str.to_string(), "}".to_string()];
-            let mut syscall_connect_msg = ["{".to_string(), "\"type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"sa_family\":\"".to_string(), ",\"fd\":\"".to_string(), ",\"dport\":\"".to_string(), ",\"dip\":\"".to_string(), ",\"path\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"sip\":\"".to_string(), ",\"sport\":\"".to_string(), ",\"username\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), "}".to_string()];
+            let mut syscall_execve_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"path\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"argv\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"stdin\":\"".to_string(),",\"stdout\":\"".to_string(),",\"username\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
+            let mut syscall_init_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"cwd\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"username\":\"".to_string(), ",\"time\":\"".to_string(), ",\"CR0_check\":".to_string(), local_ip_str.to_string(),hostname_str.to_string(), "}".to_string()];
+            let mut syscall_finit_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"cwd\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"username\":\"".to_string(), ",\"time\":\"".to_string(), ",\"CR0_check\":".to_string(), local_ip_str.to_string(),hostname_str.to_string(), "}".to_string()];
+            let mut syscall_connect_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"sa_family\":\"".to_string(), ",\"fd\":\"".to_string(), ",\"dport\":\"".to_string(), ",\"dip\":\"".to_string(), ",\"path\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"sip\":\"".to_string(), ",\"sport\":\"".to_string(), ",\"username\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(),hostname_str.to_string(), "}".to_string()];
 
             for mut s in msg_split {
                 if msg_syscall_type == "59" {
@@ -170,6 +179,13 @@ fn write_pid() {
 
 fn check_cr0(mut path: String) -> bool {
     false
+}
+
+fn get_hostname() -> String {
+    let output = Command::new("hostname")
+        .output()
+        .expect("GET_MACHINE_IP_ERROR");
+    String::from_utf8_lossy(&output.stdout).to_string().trim().to_string()
 }
 
 fn get_machine_ip() -> String {

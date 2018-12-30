@@ -7,6 +7,7 @@ use std::time::Duration;
 
 pub struct KafkaOutput {
     threads: u32,
+    fast_send: bool,
 }
 
 struct KafkaWorker<'a> {
@@ -89,22 +90,37 @@ impl<'a> KafkaWorker<'a> {
     fn run(&'a mut self) {
         self.run_coalesce();
     }
+
+    fn run_fast(&'a mut self) {
+        self.run_nocoalesce();
+    }
 }
 
 impl KafkaOutput {
-    pub fn new(threads: u32) -> KafkaOutput {
+    pub fn new(threads: u32,fast_send: bool) -> KafkaOutput {
         KafkaOutput {
             threads: threads,
+            fast_send: fast_send
         }
     }
 
     pub fn start(&self, arx: Arc<Mutex<Receiver<Vec<u8>>>>) {
-        for _ in 0..self.threads {
-            let arx = Arc::clone(&arx);
-            thread::spawn(move || {
-                let mut worker = KafkaWorker::new(arx);
-                worker.run();
-            });
+        if self.fast_send {
+            for _ in 0..self.threads {
+                let arx = Arc::clone(&arx);
+                thread::spawn(move || {
+                    let mut worker = KafkaWorker::new(arx);
+                    worker.run_fast();
+                });
+            }
+        } else {
+            for _ in 0..self.threads {
+                let arx = Arc::clone(&arx);
+                thread::spawn(move || {
+                    let mut worker = KafkaWorker::new(arx);
+                    worker.run();
+                });
+            }
         }
     }
 }
