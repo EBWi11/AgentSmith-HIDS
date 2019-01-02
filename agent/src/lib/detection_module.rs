@@ -6,10 +6,7 @@ use std::process::Command;
 use std::collections::HashMap;
 use serde_json::Error;
 use std::thread;
-use std::sync::{Arc, Mutex};
-use std::sync::mpsc::channel;
 use std::time;
-use lib::kafka_output::KafkaOutput;
 
 pub struct Detective { }
 
@@ -290,22 +287,13 @@ pub fn get_crontab_list() -> String {
     }
 }
 
-fn get_output_kafka(threads: u32) -> KafkaOutput {
-    KafkaOutput::new(threads,true)
-}
-
 impl Detective {
-    pub fn start(cmd:String) {
-        let (tx, rx) = channel();
-        let arx = Arc::new(Mutex::new(rx));
-        let output = get_output_kafka(1);
-        output.start(arx);
-
+    pub fn start(cmd:String) -> Vec<String> {
         let cmd_list: Vec<&str> = cmd.split(";").collect();
+        let mut res_list: Vec<String> = Vec::new();
+
         for i in cmd_list {
-
             let mut res = "".to_string();
-
             match i {
                 "FileSystemIntegrityCheck" => {
                     res = file_system_integrity_check();
@@ -331,10 +319,9 @@ impl Detective {
             }
 
             if(res != ""){
-                tx.send(res.as_bytes().to_vec()).expect("SEND_MSG_TO_KAFKA_ERROR(Detective)");
+                res_list.push(res);
             }
         }
-
-        thread::sleep(time::Duration::from_secs(3));
+        res_list
     }
 }
