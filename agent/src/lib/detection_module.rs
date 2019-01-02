@@ -68,7 +68,7 @@ fn get_timestamp() -> String{
 fn get_hostname() -> String {
     let output = Command::new("hostname")
         .output()
-        .expect("GET_MACHINE_IP_ERROR");
+        .expect("GET_HOSTNAME_ERROR");
     String::from_utf8_lossy(&output.stdout).to_string().trim().to_string()
 }
 
