@@ -370,9 +370,7 @@ static char *str_replace(char *orig, char *rep, char *with)
 
 static void exit_protect_action(void)
 {
-    preempt_disable();
-    __this_cpu_inc(THIS_MODULE->refptr->incs);
-    preempt_enable();
+    try_module_get(THIS_MODULE);
 }
 
 static void update_use_count(void)
@@ -381,9 +379,7 @@ static void update_use_count(void)
 
     if (use_count == 0)
     {
-        preempt_disable();
-        __this_cpu_inc(THIS_MODULE->refptr->incs);
-        preempt_enable();
+        try_module_get(THIS_MODULE);
     }
 
     use_count = use_count + 1;
@@ -397,9 +393,7 @@ static void del_use_count(void)
 
     if (use_count == 0)
     {
-        preempt_disable();
-        __this_cpu_dec(THIS_MODULE->refptr->incs);
-        preempt_enable();
+        module_put(THIS_MODULE);
     }
 
     write_use_count_unlock();
@@ -407,17 +401,23 @@ static void del_use_count(void)
 
 static struct socket *sockfd_lookup_light(int fd, int *err, int *fput_needed)
 {
-    struct file *file;
+    struct fd f = fdget(fd);
     struct socket *sock;
 
     *err = -EBADF;
-    file = fget_light(fd, fput_needed);
-    if (file)
+    if (f.file)
     {
-        sock = sock_from_file(file, err);
-        if (sock)
+        sock = sock_from_file(f.file, err);
+        if (likely(sock))
+        {  
+            #if  (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0))
+                *fput_needed = f.flags;
+            #else
+                *fput_needed = f.need_put;
+            #endif
             return sock;
-        fput_light(file, *fput_needed);
+        }
+        fdput(f);
     }
     return NULL;
 }
