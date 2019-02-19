@@ -38,7 +38,7 @@ For security engineers who have a certain understanding of Linux and need a func
 
 * We will keep the development of the AgentSmith-HIDS and following the latest release of stable version of Centos7.
 
-* Kernel4 is supported with support from [@shelterz] (https://github.com/shelterz), but is currently only tested on ubuntu 14.04, ubuntu 16.04, ubuntu 18.04.
+* Kernel4 is supported with support from ![@shelterz] (https://github.com/shelterz), but is currently only tested on ubuntu 14.04, ubuntu 16.04, ubuntu 18.04.
 
 
 
