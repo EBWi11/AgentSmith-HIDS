@@ -39,7 +39,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 * AgentSmith-HIDS 仅在**Centos7.2/7.3/7.4/7.5/7.6**上进行过充分的测试，关于Kernel版本仅在**3.10-327/3.10-514/3.10-693/3.10-862/3.10-957**上进行过充分测试。虽然理论上Smith支持更多的版本，但是由于未经过充分测试，在加载LKM的时候会对Kernel进行版本强制校验(>3.10)，如果有其他人在其他版本上进行过稳定性测试，可以随时联系我们（需附稳定性测试报告）。
 * 我们会对AgentSmith-HIDS进行长期维护，会追随Centos7的最新稳定版进行维护。
-* 在[@shelterz](https://github.com/shelterz)的支持下，支持了kernel > 3.14 ，不过目前仅在ubuntu 14.04，ubuntu 16.04，ubuntu 18.04下进行了测试。
+* 在[@shelterz](https://github.com/shelterz)的支持下，支持了kernel >= 3.14 ，不过目前仅在ubuntu 14.04，ubuntu 16.04，ubuntu 18.04下进行了测试。
 
 
 
