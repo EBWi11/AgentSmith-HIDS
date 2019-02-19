@@ -136,7 +136,7 @@ Before uninstalling the AgentSmith-HIDS, you need to close the user-mode agent p
 | WRITE_INDEX_TRY_LOCK        | Only functional when SEND_TYPE=2, which controls the method of write_index lock:<br />-1. Use write_lock()<br />1. Use write_trylock()<br />Default: -1 |
 | WRITE_INDEX_TRY_LOCK_NUM    | Only functional when WRITE_INDEX_TRY_LOCK=1, which sets the number of write_trylock()<br />Default: 3 |
 | CONNECT_TIME_TEST           | Test time consuming of connect():<br />0.Disable<br />1.Test time consuming of connect() without Hook<br />2.Test time consuming of connect() with Hook<br />Default: 0 |
-| EXECVE_TIME_TEST            | Test time consuming of Hook execve():<br />1.Disable;<br />2.Enable;<br />Default: -1 |
+| EXECVE_TIME_TEST            | Test time consuming of Hook execve():<br />-1.Disable;<br />1.Enable;<br />Default: -1 |
 | SAFE_EXIT                   | Safe rmmod:<br />-1.Disable, which will not stop rmmod, may leads to kernel crashed under some special circumstances;<br />1.Enable, which will stop rmmod when it may cause kernel crashed;<br />Default: 1 |
 | MAX_SIZE                    | Only functional when SEND_TYPE=2, which defines the the size of memory shared with the user mode. Must be consistent with the configuration in user mode and should be set to use whole pages.<br />Default: 2097152 (2M). |
 | CHECK_READ_INDEX_THRESHOLD  | Only functional when SEND_TYPE=2, which means the threshold of read_index. Any data captured by LKM and the size is less than the threshold will be discarded.<br />Default: 524288 |
