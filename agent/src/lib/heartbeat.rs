@@ -42,13 +42,12 @@ impl HeartBeat {
                     let tmp_res = &stream.write(self.msg.as_bytes());
                     match tmp_res {
                         Ok(_) => {
-                            stream.set_read_timeout(Some(Duration::new(5, 0))).expect("set_read_timeout call failed");
                             let mut buffer = String::new();
                             stream.read_to_string(&mut buffer).unwrap();
                             if buffer.trim().len() > 3 {
                                 let res_list = Detective::start(buffer.trim().to_string());
                                 for i in res_list {
-                                    tx.send(i.as_bytes().to_vec()).expect("SEND_MSG_TO_KAFKA_ERROR(Detective)");
+                                    tx.send(i.as_bytes().to_vec()).expect("READ_CMD_ERROR");
                                 }
                             }
                         }
