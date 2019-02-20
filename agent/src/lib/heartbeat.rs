@@ -42,6 +42,7 @@ impl HeartBeat {
                     let tmp_res = &stream.write(self.msg.as_bytes());
                     match tmp_res {
                         Ok(_) => {
+                            stream.set_read_timeout(Some(Duration::new(5, 0))).expect("READ_MSG_TIMEOUT");
                             let mut buffer = String::new();
                             stream.read_to_string(&mut buffer).unwrap();
                             if buffer.trim().len() > 3 {
