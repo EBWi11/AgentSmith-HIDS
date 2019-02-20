@@ -1,18 +1,17 @@
+extern crate chrono;
 extern crate daemonize;
 extern crate kafka;
 extern crate libc;
-extern crate chrono;
-
+extern crate serde;
 #[macro_use]
 extern crate serde_derive;
-extern crate serde;
 extern crate serde_json;
 
 use conf::*;
 use daemonize::Daemonize;
+use lib::detection_module::Detective;
 use lib::heartbeat::HeartBeat;
 use lib::kafka_output::KafkaOutput;
-use lib::detection_module::Detective;
 use libc::c_char;
 use std::collections::HashSet;
 use std::ffi::CStr;
@@ -84,10 +83,10 @@ fn get_data_no_callback() {
             let mut msg_syscall_type = msg_split[1];
             let mut argv_res = String::with_capacity(4096);
 
-            let mut syscall_execve_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"path\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"argv\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"stdin\":\"".to_string(),",\"stdout\":\"".to_string(),",\"username\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
-            let mut syscall_init_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"cwd\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"username\":\"".to_string(), ",\"time\":\"".to_string(), ",\"CR0_check\":".to_string(), local_ip_str.to_string(),hostname_str.to_string(), "}".to_string()];
-            let mut syscall_finit_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"cwd\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"username\":\"".to_string(), ",\"time\":\"".to_string(), ",\"CR0_check\":".to_string(), local_ip_str.to_string(),hostname_str.to_string(), "}".to_string()];
-            let mut syscall_connect_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"sa_family\":\"".to_string(), ",\"fd\":\"".to_string(), ",\"dport\":\"".to_string(), ",\"dip\":\"".to_string(), ",\"path\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"sip\":\"".to_string(), ",\"sport\":\"".to_string(), ",\"username\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(),hostname_str.to_string(), "}".to_string()];
+            let mut syscall_execve_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"path\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"argv\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"stdin\":\"".to_string(), ",\"stdout\":\"".to_string(), ",\"username\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
+            let mut syscall_init_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"cwd\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"username\":\"".to_string(), ",\"time\":\"".to_string(), ",\"CR0_check\":".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
+            let mut syscall_finit_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"cwd\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"username\":\"".to_string(), ",\"time\":\"".to_string(), ",\"CR0_check\":".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
+            let mut syscall_connect_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"sa_family\":\"".to_string(), ",\"fd\":\"".to_string(), ",\"dport\":\"".to_string(), ",\"dip\":\"".to_string(), ",\"path\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"sip\":\"".to_string(), ",\"sport\":\"".to_string(), ",\"username\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
 
             for mut s in msg_split {
                 if msg_syscall_type == "59" {
@@ -221,14 +220,21 @@ fn get_kernel_version() -> String {
     String::from_utf8_lossy(&output.stdout).to_string().trim().to_string()
 }
 
+fn start_hreatbread() {
+    loop {
+        let mut hb_msg = get_machine_ip();
+        hb_msg.push_str("|ok");
+        let hb = get_heartbeat(hb_msg);
+        let handle = thread::spawn(move || { hb.run(); });
+        handle.join();
+    }
+}
+
 fn action() {
     write_pid();
 
     if settings::HEARTBEAT {
-        let mut hb_msg = get_machine_ip();
-        hb_msg.push_str("|ok");
-        let hb = get_heartbeat(hb_msg);
-        thread::spawn(|| { hb.run(); });
+        thread::spawn(|| test_hreatbread());
     }
 
     unsafe { init(); };
