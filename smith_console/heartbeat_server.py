@@ -24,7 +24,7 @@ while True:
     if client_data:
         tmp = client_data.split("|")
         redis_helper.delete("HIDSHOST-{0}".format(tmp[0]))
-        redis_helper.set("HIDSHOST-{0}".format(tmp[0]), 1, ex=65)
+        redis_helper.set("HIDSHOST-{0}".format(tmp[0]), 1, ex=35)
         handle_request(conn,tmp[0])
         try:
             conn.close()
