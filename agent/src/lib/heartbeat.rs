@@ -1,11 +1,11 @@
+use lib::detection_module::Detective;
 use std::io::prelude::*;
-use std::time::Duration;
 use std::net::{Shutdown, TcpStream};
-use std::thread;
-use std::time;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::Sender;
-use lib::detection_module::Detective;
+use std::thread;
+use std::time;
+use std::time::Duration;
 
 pub struct HeartBeat {
     server: String,
@@ -20,10 +20,9 @@ impl HeartBeat {
         }
     }
 
-    pub fn run(self,tx: Sender<Vec<u8>>) {
+    pub fn run(self, tx: Sender<Vec<u8>>) {
         loop {
             match TcpStream::connect(self.server.clone()) {
-
                 Err(e) => {
                     println!("CONNECT_HEARTBEAT_ERROR:{}", e);
                 }
@@ -49,7 +48,6 @@ impl HeartBeat {
                     }
                     let _ = stream.shutdown(Shutdown::Both);
                 }
-
             }
 
             thread::sleep(time::Duration::from_secs(15));

@@ -97,10 +97,10 @@ impl<'a> KafkaWorker<'a> {
 }
 
 impl KafkaOutput {
-    pub fn new(threads: u32,fast_send: bool) -> KafkaOutput {
+    pub fn new(threads: u32, fast_send: bool) -> KafkaOutput {
         KafkaOutput {
             threads: threads,
-            fast_send: fast_send
+            fast_send: fast_send,
         }
     }
 

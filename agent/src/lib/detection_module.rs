@@ -1,63 +1,64 @@
 extern crate pipers;
 
 use chrono::prelude::*;
-use self::pipers::*;
-use std::process::Command;
 use std::collections::HashMap;
+use std::process::Command;
 
-pub struct Detective { }
+use self::pipers::*;
+
+pub struct Detective {}
 
 #[derive(Serialize, Deserialize)]
 pub struct FileSystemIntegrityCheck {
-    data_type : String,
-    detection_name : String,
-    ip : String,
-    hostname : String,
-    time : String,
-    file_list :Vec<String>,
+    data_type: String,
+    detection_name: String,
+    ip: String,
+    hostname: String,
+    time: String,
+    file_list: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct ListeningSockets {
-    data_type : String,
-    detection_name : String,
-    ip : String,
-    hostname : String,
-    time : String,
-    list : Vec<HashMap<String,String>>
+    data_type: String,
+    detection_name: String,
+    ip: String,
+    hostname: String,
+    time: String,
+    list: Vec<HashMap<String, String>>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct RPMList {
-    data_type : String,
-    detection_name : String,
-    ip : String,
-    hostname : String,
-    time : String,
-    rpm_list : Vec<String>,
+    data_type: String,
+    detection_name: String,
+    ip: String,
+    hostname: String,
+    time: String,
+    rpm_list: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct SystemUser {
-    data_type : String,
-    detection_name : String,
-    ip : String,
-    hostname : String,
-    time : String,
-    user_list : Vec<String>
+    data_type: String,
+    detection_name: String,
+    ip: String,
+    hostname: String,
+    time: String,
+    user_list: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct CrontabList {
-    data_type : String,
-    detection_name : String,
-    ip : String,
-    hostname : String,
-    time : String,
-    crontab_list : Vec<String>
+    data_type: String,
+    detection_name: String,
+    ip: String,
+    hostname: String,
+    time: String,
+    crontab_list: Vec<String>,
 }
 
-fn get_timestamp() -> String{
+fn get_timestamp() -> String {
     let dt = Local::now();
     dt.timestamp_millis().to_string()
 }
@@ -92,9 +93,9 @@ pub fn file_system_integrity_check() -> String {
 
     for i in &res_split {
         let mut t: Vec<&str> = i.split(" ").collect();
-        if(t[0].find("5") != None){
-            let tmp_res = t[t.len()-1];
-            if(tmp_res.starts_with("/bin") || tmp_res.starts_with("/sbin") ||tmp_res.starts_with("/usr/bin") ||tmp_res.starts_with("/usr/sbin") ||tmp_res.starts_with("/usr/local/bin") ||tmp_res.starts_with("/lib") ||tmp_res.starts_with("/usr/lib")||tmp_res.starts_with("/lib64")){
+        if (t[0].find("5") != None) {
+            let tmp_res = t[t.len() - 1];
+            if (tmp_res.starts_with("/bin") || tmp_res.starts_with("/sbin") || tmp_res.starts_with("/usr/bin") || tmp_res.starts_with("/usr/sbin") || tmp_res.starts_with("/usr/local/bin") || tmp_res.starts_with("/lib") || tmp_res.starts_with("/usr/lib") || tmp_res.starts_with("/lib64")) {
                 target_res.push(tmp_res.to_string());
             }
         }
@@ -103,17 +104,17 @@ pub fn file_system_integrity_check() -> String {
     let target_res_len = target_res.len();
 
     let res_ori = FileSystemIntegrityCheck {
-        data_type : String::from("detection_module"),
-        detection_name : String::from("FileSystemIntegrityCheck"),
-        ip : get_machine_ip(),
-        hostname : get_hostname(),
-        file_list : target_res,
-        time : get_timestamp()
+        data_type: String::from("detection_module"),
+        detection_name: String::from("FileSystemIntegrityCheck"),
+        ip: get_machine_ip(),
+        hostname: get_hostname(),
+        file_list: target_res,
+        time: get_timestamp(),
     };
 
     let res = serde_json::to_string(&res_ori).unwrap();
 
-    if(target_res_len == 0){
+    if (target_res_len == 0) {
         return String::new();
     } else {
         return res;
@@ -132,8 +133,8 @@ pub fn check_listening_sockets() -> String {
 
     tmp_res = String::from_utf8_lossy(&output.stdout).trim().to_string();
     let res_split: Vec<&str> = tmp_res.split("\n").collect();
-    for i in res_split{
-        if(index == 0){
+    for i in res_split {
+        if (index == 0) {
             index = index + 1;
             continue;
         } else {
@@ -141,25 +142,25 @@ pub fn check_listening_sockets() -> String {
             let mut tmp_split = i.split_whitespace();
             let mut tmp_one_res = HashMap::new();
 
-            tmp_one_res.insert("Netid".to_string(),tmp_split.next().unwrap().to_string());
-            tmp_one_res.insert("State".to_string(),tmp_split.next().unwrap().to_string());
-            tmp_one_res.insert("Recv-Q".to_string(),tmp_split.next().unwrap().to_string());
-            tmp_one_res.insert("Send-Q".to_string(),tmp_split.next().unwrap().to_string());
-            tmp_one_res.insert("Local_Address".to_string(),tmp_split.next().unwrap().to_string());
-            tmp_one_res.insert("Peer_Address".to_string(),tmp_split.next().unwrap().to_string());
-            tmp_one_res.insert("Process_info".to_string(),tmp_split.next().unwrap().to_string());
+            tmp_one_res.insert("Netid".to_string(), tmp_split.next().unwrap().to_string());
+            tmp_one_res.insert("State".to_string(), tmp_split.next().unwrap().to_string());
+            tmp_one_res.insert("Recv-Q".to_string(), tmp_split.next().unwrap().to_string());
+            tmp_one_res.insert("Send-Q".to_string(), tmp_split.next().unwrap().to_string());
+            tmp_one_res.insert("Local_Address".to_string(), tmp_split.next().unwrap().to_string());
+            tmp_one_res.insert("Peer_Address".to_string(), tmp_split.next().unwrap().to_string());
+            tmp_one_res.insert("Process_info".to_string(), tmp_split.next().unwrap().to_string());
 
             socket_list.push(tmp_one_res);
         }
     }
 
     let res_ori = ListeningSockets {
-        data_type : String::from("detection_module"),
-        detection_name : String::from("ListeningSockets"),
-        ip : get_machine_ip(),
-        hostname : get_hostname(),
-        list : socket_list,
-        time : get_timestamp()
+        data_type: String::from("detection_module"),
+        detection_name: String::from("ListeningSockets"),
+        ip: get_machine_ip(),
+        hostname: get_hostname(),
+        list: socket_list,
+        time: get_timestamp(),
     };
 
     let res = serde_json::to_string(&res_ori).unwrap();
@@ -179,17 +180,17 @@ pub fn get_rpm_list() -> String {
     tmp_res = String::from_utf8_lossy(&output.stdout).trim().to_string();
     let tmp_res_split: Vec<&str> = tmp_res.split("\n").collect();
 
-    for i in tmp_res_split{
+    for i in tmp_res_split {
         rpm_list.push(i.to_string());
     }
 
-    let res_ori =  RPMList{
-        data_type : String::from("detection_module"),
-        detection_name : String::from("RPMList"),
-        ip : get_machine_ip(),
-        hostname : get_hostname(),
-        rpm_list : rpm_list,
-        time : get_timestamp()
+    let res_ori = RPMList {
+        data_type: String::from("detection_module"),
+        detection_name: String::from("RPMList"),
+        ip: get_machine_ip(),
+        hostname: get_hostname(),
+        rpm_list: rpm_list,
+        time: get_timestamp(),
     };
 
     let res = serde_json::to_string(&res_ori).unwrap();
@@ -214,17 +215,17 @@ pub fn get_system_user() -> String {
     tmp_res = String::from_utf8_lossy(&output.stdout).trim().to_string();
     let tmp_res_split: Vec<&str> = tmp_res.split("\n").collect();
 
-    for i in tmp_res_split{
+    for i in tmp_res_split {
         user_list.push(i.to_string());
     }
 
-    let res_ori =  SystemUser {
-        data_type : String::from("detection_module"),
-        detection_name : String::from("SystemUser"),
-        ip : get_machine_ip(),
-        hostname : get_hostname(),
-        time : get_timestamp(),
-        user_list : user_list
+    let res_ori = SystemUser {
+        data_type: String::from("detection_module"),
+        detection_name: String::from("SystemUser"),
+        ip: get_machine_ip(),
+        hostname: get_hostname(),
+        time: get_timestamp(),
+        user_list: user_list,
     };
 
     let res = serde_json::to_string(&res_ori).unwrap();
@@ -248,7 +249,7 @@ pub fn get_crontab_list() -> String {
 
     for i in &res_split {
         let tmp_user_split: Vec<&str> = i.split(":").collect();
-        if(tmp_user_split.len() > 2) {
+        if (tmp_user_split.len() > 2) {
             let user = tmp_user_split[0];
 
             let user_crontab_output = Command::new("crontab")
@@ -259,25 +260,25 @@ pub fn get_crontab_list() -> String {
             let mut user_contab_res = String::from_utf8_lossy(&user_crontab_output.stdout).to_string().trim().to_string();
             let tmp_res_split: Vec<&str> = tmp_res.split("\n").collect();
             for i2 in tmp_res_split {
-                cron_list.push(format!("{}:{}",user, i2));
+                cron_list.push(format!("{}:{}", user, i2));
             }
         }
     }
 
     let cron_list_len = cron_list.len();
 
-    let res_ori =  CrontabList {
-        data_type : String::from("detection_module"),
-        detection_name : String::from("CrontabList"),
-        ip : get_machine_ip(),
-        hostname : get_hostname(),
-        time : get_timestamp(),
-        crontab_list : cron_list
+    let res_ori = CrontabList {
+        data_type: String::from("detection_module"),
+        detection_name: String::from("CrontabList"),
+        ip: get_machine_ip(),
+        hostname: get_hostname(),
+        time: get_timestamp(),
+        crontab_list: cron_list,
     };
 
     let res = serde_json::to_string(&res_ori).unwrap();
 
-    if(cron_list_len == 0){
+    if (cron_list_len == 0) {
         return String::new();
     } else {
         return res;
@@ -285,7 +286,7 @@ pub fn get_crontab_list() -> String {
 }
 
 impl Detective {
-    pub fn start(cmd:String) -> Vec<String> {
+    pub fn start(cmd: String) -> Vec<String> {
         let cmd_list: Vec<&str> = cmd.split(";").collect();
         let mut res_list: Vec<String> = Vec::new();
 
@@ -312,10 +313,10 @@ impl Detective {
                     res = get_crontab_list();
                 }
 
-                _ => {},
+                _ => {}
             }
 
-            if(res != ""){
+            if (res != "") {
                 res_list.push(res);
             }
         }
