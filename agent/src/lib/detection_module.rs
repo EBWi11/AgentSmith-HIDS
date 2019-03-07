@@ -4,9 +4,6 @@ use chrono::prelude::*;
 use self::pipers::*;
 use std::process::Command;
 use std::collections::HashMap;
-use serde_json::Error;
-use std::thread;
-use std::time;
 
 pub struct Detective { }
 

@@ -1,15 +1,15 @@
-extern crate chrono;
 extern crate daemonize;
 extern crate kafka;
 extern crate libc;
-extern crate serde;
+extern crate chrono;
+
 #[macro_use]
 extern crate serde_derive;
+extern crate serde;
 extern crate serde_json;
 
 use conf::*;
 use daemonize::Daemonize;
-use lib::detection_module::Detective;
 use lib::heartbeat::HeartBeat;
 use lib::kafka_output::KafkaOutput;
 use libc::c_char;
@@ -20,7 +20,7 @@ use std::io::prelude::*;
 use std::process;
 use std::process::Command;
 use std::sync::{Arc, Mutex};
-use std::sync::mpsc::channel;
+use std::sync::mpsc::{channel,Sender};
 use std::thread;
 use std::time;
 
@@ -36,14 +36,14 @@ extern { fn shm_close(); }
 extern { fn shm_run_no_callback() -> *const c_char; }
 
 fn get_output_kafka(threads: u32) -> KafkaOutput {
-    KafkaOutput::new(threads, false)
+    KafkaOutput::new(threads, settings::SEND_KAFKA_FAST_TYPE)
 }
 
 fn get_heartbeat(msg: String) -> HeartBeat {
     HeartBeat::new(settings::HEARTBEAT_SERVER.to_string(), msg)
 }
 
-fn get_data_no_callback() {
+fn get_data_no_callback(tx: Sender<Vec<u8>>) {
     let tmp = "\"";
     let kafka_test_data = "0".as_bytes();
     let mut connect_white_list = HashSet::new();
@@ -63,11 +63,6 @@ fn get_data_no_callback() {
     let local_ip_str = format!(",\"local_ip\":\"{}\"", local_ip);
     let hostname_str = format!(",\"hostname\":\"{}\"", hostname);
 
-    let (tx, rx) = channel();
-    let arx = Arc::new(Mutex::new(rx));
-    let output = get_output_kafka(settings::DEFAULT_KAFKA_THREADS);
-    output.start(arx);
-
     thread::sleep(time::Duration::from_secs(1));
     tx.send(kafka_test_data.to_vec()).expect("KAFKA_INIT_ERROR");
 
@@ -83,10 +78,10 @@ fn get_data_no_callback() {
             let mut msg_syscall_type = msg_split[1];
             let mut argv_res = String::with_capacity(4096);
 
-            let mut syscall_execve_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"path\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"argv\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"stdin\":\"".to_string(), ",\"stdout\":\"".to_string(), ",\"username\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
-            let mut syscall_init_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"cwd\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"username\":\"".to_string(), ",\"time\":\"".to_string(), ",\"CR0_check\":".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
-            let mut syscall_finit_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"cwd\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"username\":\"".to_string(), ",\"time\":\"".to_string(), ",\"CR0_check\":".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
-            let mut syscall_connect_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"sa_family\":\"".to_string(), ",\"fd\":\"".to_string(), ",\"dport\":\"".to_string(), ",\"dip\":\"".to_string(), ",\"path\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"sip\":\"".to_string(), ",\"sport\":\"".to_string(), ",\"username\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
+            let mut syscall_execve_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"path\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"argv\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"stdin\":\"".to_string(),",\"stdout\":\"".to_string(),",\"username\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
+            let mut syscall_init_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"cwd\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"username\":\"".to_string(), ",\"time\":\"".to_string(), ",\"CR0_check\":".to_string(), local_ip_str.to_string(),hostname_str.to_string(), "}".to_string()];
+            let mut syscall_finit_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"cwd\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"username\":\"".to_string(), ",\"time\":\"".to_string(), ",\"CR0_check\":".to_string(), local_ip_str.to_string(),hostname_str.to_string(), "}".to_string()];
+            let mut syscall_connect_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"sa_family\":\"".to_string(), ",\"fd\":\"".to_string(), ",\"dport\":\"".to_string(), ",\"dip\":\"".to_string(), ",\"path\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"sip\":\"".to_string(), ",\"sport\":\"".to_string(), ",\"username\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(),hostname_str.to_string(), "}".to_string()];
 
             for mut s in msg_split {
                 if msg_syscall_type == "59" {
@@ -203,10 +198,10 @@ fn check_lkm() -> bool {
     out_str.contains("syshook")
 }
 
-fn run() {
+fn run(tx: Sender<Vec<u8>>) {
     if check_lkm() {
         println!("SMITH_START");
-        get_data_no_callback();
+        get_data_no_callback(tx);
     } else {
         println!("NEED_INSTALL_LKM");
     }
@@ -220,27 +215,21 @@ fn get_kernel_version() -> String {
     String::from_utf8_lossy(&output.stdout).to_string().trim().to_string()
 }
 
-fn start_hreatbread() {
+fn start_hreatbread(tx: Sender<Vec<u8>>) {
     loop {
+        let tx = tx.clone();
         let mut hb_msg = get_machine_ip();
         hb_msg.push_str("|ok");
         let hb = get_heartbeat(hb_msg);
-        let handle = thread::spawn(move || { hb.run(); });
+        let handle = thread::spawn(move || { hb.run(tx);});
         handle.join();
     }
 }
 
-fn action() {
-    write_pid();
-
-    if settings::HEARTBEAT {
-        thread::spawn(|| test_hreatbread());
-    }
-
-    unsafe { init(); };
+fn action_wapper() {
     loop {
-        let handle = thread::spawn(|| { run(); });
-
+        unsafe { init(); };
+        let handle = thread::spawn(move || action());
         match handle.join() {
             Err(_) => {
                 println!("MAIN_ERROR");
@@ -249,6 +238,22 @@ fn action() {
         }
         unsafe { shm_close(); };
     }
+}
+
+fn action() {
+    write_pid();
+
+    let (tx, rx) = channel();
+    let arx = Arc::new(Mutex::new(rx));
+    let output = get_output_kafka(settings::DEFAULT_KAFKA_THREADS);
+    output.start(arx);
+
+    if settings::HEARTBEAT {
+        let tx = tx.clone();
+        thread::spawn(move || start_hreatbread(tx));
+    }
+
+    run(tx);
 }
 
 fn main_daemon() {

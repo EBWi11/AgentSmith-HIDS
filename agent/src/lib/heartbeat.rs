@@ -4,17 +4,12 @@ use std::net::{Shutdown, TcpStream};
 use std::thread;
 use std::time;
 use std::sync::{Arc, Mutex};
-use std::sync::mpsc::channel;
-use lib::kafka_output::KafkaOutput;
+use std::sync::mpsc::Sender;
 use lib::detection_module::Detective;
 
 pub struct HeartBeat {
     server: String,
     msg: String,
-}
-
-fn get_output_kafka(threads: u32) -> KafkaOutput {
-    KafkaOutput::new(threads,true)
 }
 
 impl HeartBeat {
@@ -25,12 +20,7 @@ impl HeartBeat {
         }
     }
 
-    pub fn run(self) {
-        let (tx, rx) = channel();
-        let arx = Arc::new(Mutex::new(rx));
-        let output = get_output_kafka(1);
-        output.start(arx);
-
+    pub fn run(self,tx: Sender<Vec<u8>>) {
         loop {
             match TcpStream::connect(self.server.clone()) {
 
@@ -52,6 +42,7 @@ impl HeartBeat {
                                 }
                             }
                         }
+
                         Err(e) => {
                             println!("SEND_HEARTBEAT_ERROR:{}", e);
                         }
