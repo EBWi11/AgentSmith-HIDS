@@ -1,10 +1,10 @@
-import readline
 import random
 import re
 import redis
 import signal
 from IPy import IP
 from pyfiglet import Figlet
+
 import cprint
 import setting
 
