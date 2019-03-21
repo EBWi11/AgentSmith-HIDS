@@ -1,10 +1,9 @@
 extern crate pipers;
 
 use chrono::prelude::*;
+use self::pipers::*;
 use std::collections::HashMap;
 use std::process::Command;
-
-use self::pipers::*;
 
 pub struct Detective {}
 
