@@ -168,8 +168,7 @@ Credits to [@yuzunzhi](https://github.com/yuzunzhi) and [@hapood](https://github
 
 ### Author WeChat
 
-![wechat](wechat.jpg)
-
+<img src="./wechat.jpg" width="50%" height="50%"/>
 
 
 ## License
