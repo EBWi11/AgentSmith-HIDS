@@ -167,6 +167,11 @@ In fact, Smith LKM will automatically turn off almost all of its functions witho
 Credits to [@yuzunzhi](https://github.com/yuzunzhi) and [@hapood](https://github.com/hapood) and thank you for all the support provided during our development.
 
 
+### Author WeChat
+
+![wechat](wechat.jpg)
+
+
 
 ## License
 

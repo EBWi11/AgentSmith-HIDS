@@ -169,6 +169,10 @@ AgentSmith-HIDS 目前已经在点融经过压力测试/稳定性测试，目前
 
 
 
+### 作者微信
+
+![wechat](wechat.jpg)
+
 
 ## License
 
