@@ -1,7 +1,6 @@
 extern crate pipers;
 
 use chrono::prelude::*;
-use self::pipers::*;
 use std::collections::HashMap;
 use std::process::Command;
 
@@ -199,14 +198,9 @@ pub fn get_rpm_list() -> String {
 pub fn get_system_user() -> String {
     let mut tmp_res = String::new();
 
-    let output = Pipe::new("cat /etc/passwd")
-        .then("grep -v nologin")
-        .then("grep -v halt")
-        .then("grep -v shutdown")
-        .then("grep -v false")
-        .finally()
-        .expect("DETECTION get_rpm_list() ERROR:PIPE")
-        .wait_with_output()
+    let output = Command::new("cat")
+        .arg("/etc/passwd")
+        .output()
         .expect("DETECTION get_rpm_list() ERROR");
 
     let mut user_list = Vec::new();
@@ -232,14 +226,9 @@ pub fn get_system_user() -> String {
 }
 
 pub fn get_crontab_list() -> String {
-    let output = Pipe::new("cat /etc/passwd")
-        .then("grep -v nologin")
-        .then("grep -v halt")
-        .then("grep -v shutdown")
-        .then("grep -v false")
-        .finally()
-        .expect("DETECTION get_crontab_list() ERROR:PIPE")
-        .wait_with_output()
+    let output = Command::new("cat")
+        .arg("/etc/passwd")
+        .output()
         .expect("DETECTION get_crontab_list() ERROR");
 
     let tmp_res = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -253,13 +242,17 @@ pub fn get_crontab_list() -> String {
 
             let user_crontab_output = Command::new("crontab")
                 .arg("-l")
+                .arg("-u")
+                .arg(user)
                 .output()
                 .expect("DETECTION get_crontab_list() ERROR");
 
             let mut user_contab_res = String::from_utf8_lossy(&user_crontab_output.stdout).to_string().trim().to_string();
-            let tmp_res_split: Vec<&str> = tmp_res.split("\n").collect();
+            let tmp_res_split: Vec<&str> = user_contab_res.split("\n").collect();
             for i2 in tmp_res_split {
-                cron_list.push(format!("{}:{}", user, i2));
+                if(i2!="") {
+                    cron_list.push(format!("{}:{}", user, i2));
+                }
             }
         }
     }
@@ -312,7 +305,7 @@ impl Detective {
                     res = get_crontab_list();
                 }
 
-                _ => {}
+                _ => {},
             }
 
             if (res != "") {
