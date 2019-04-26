@@ -6,8 +6,13 @@
 
 [![License](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://github.com/DianrongSecurity/AgentSmith-HIDS/blob/master/LICENSE)
 
-
 [English](README.md) | 简体中文
+
+
+
+**(注:关于hook syscall方案的稳定性问题,如果出现任何不稳定的问题,欢迎issue或者微信交流.但是没有进行过稳定性测试甚至没有测试过的朋友还请不要见到该方案就大肆宣扬不稳定.AgentSmith-HIDS测试已经上了核心生产,测试周期是研发周期的3倍.关于为何不选择Audit请移步issue)**
+
+
 
 
 ### 关于AgentSmith-HIDS
