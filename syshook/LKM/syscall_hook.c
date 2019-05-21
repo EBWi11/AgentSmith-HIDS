@@ -370,7 +370,9 @@ static char *str_replace(char *orig, char *rep, char *with)
 
 static void exit_protect_action(void)
 {
-    try_module_get(THIS_MODULE);
+    preempt_disable();
+    __this_cpu_inc(THIS_MODULE->refptr->incs);
+    preempt_enable();
 }
 
 static void update_use_count(void)
@@ -379,7 +381,9 @@ static void update_use_count(void)
 
     if (use_count == 0)
     {
-        try_module_get(THIS_MODULE);
+        preempt_disable();
+        __this_cpu_inc(THIS_MODULE->refptr->incs);
+        preempt_enable();
     }
 
     use_count = use_count + 1;
@@ -393,7 +397,9 @@ static void del_use_count(void)
 
     if (use_count == 0)
     {
-        module_put(THIS_MODULE);
+        preempt_disable();
+        __this_cpu_dec(THIS_MODULE->refptr->incs);
+        preempt_enable();
     }
 
     write_use_count_unlock();
@@ -401,23 +407,17 @@ static void del_use_count(void)
 
 static struct socket *sockfd_lookup_light(int fd, int *err, int *fput_needed)
 {
-    struct fd f = fdget(fd);
+    struct file *file;
     struct socket *sock;
 
     *err = -EBADF;
-    if (f.file)
+    file = fget_light(fd, fput_needed);
+    if (file)
     {
-        sock = sock_from_file(f.file, err);
-        if (likely(sock))
-        {  
-            #if  (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0))
-                *fput_needed = f.flags;
-            #else
-                *fput_needed = f.need_put;
-            #endif
+        sock = sock_from_file(file, err);
+        if (sock)
             return sock;
-        }
-        fdput(f);
+        fput_light(file, *fput_needed);
     }
     return NULL;
 }
@@ -1089,7 +1089,7 @@ static int lkm_init(void)
 {
     int i = 0;
 
-    if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0))
+    if (LINUX_VERSION_CODE != KERNEL_VERSION(3, 10, 0))
     {
         pr_err("KERNEL_VERSION_DON'T_SUPPORT\n");
         return -1;
