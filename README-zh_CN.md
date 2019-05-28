@@ -139,7 +139,7 @@ AgentSmith-HIDS 目前已经在点融经过压力测试/稳定性测试，目前
 | SEND_TYPE                   | LKM传输到用户态方案：<br />1:NETLINK;<br />2:SHERE_MEM；<br />默认：2 |
 | HOOK_EXECVE                 | execve() hook 开关:<br />1:开启; <br />默认:  1              |
 | HOOK_CONNECT                | connect() hook 开关:<br />1:开启; <br />默认:  1             |
-| HOOK_ACCEPT                 | accept() hook 开关:<br />1:开启; <br />默认:  1              |
+| HOOK_ACCEPT                 | accept()/accept4() hook 开关:<br />1:开启; <br />默认:  1              |
 | HOOK_INIT_MODULE            | init_module() hook 开关:<br />1:开启; <br />默认:  1         |
 | HOOK_FINIT_MODULE           | finit_module() hook 开关:<br />1:开启; <br />默认:  1        |
 | KERNEL_PRINT                | debug输出：<br />-1:不输出;<br />1:输出共享内存时index信息;<br />2:输出捕获到的信息；<br />默认：-1 |
@@ -157,7 +157,7 @@ AgentSmith-HIDS 目前已经在点融经过压力测试/稳定性测试，目前
 
 
 
-关于HOOK_ACCEPT,开启后可能会有一定的性能影响(视情况而定),如果使用AgentSmith仅是作为安全需求使用,那么可以关闭该Hook.
+关于HOOK_ACCEPT,开启后可能会有一定的性能影响(如:在负载较高的主机上安装agent,由于accept太过频繁导致网络IO负载较高),如果使用AgentSmith仅是作为安全需求使用,那么可以关闭该Hook.该HOOK在需要梳理网络通讯关系时可以开启,帮助分析资产间访问关系.
 
 关于SAFE_EXIT，当在Hook connect情况下，如果在rmmod时有connect还未返回，那么rmmod后connect将会返回到错误的内存地址上，将会引起kernel crash。开启SAFE_EXIT会通过增加引用的方式来阻止这种情况的发生，但是可能会导致无法立即rmmod LKM。如果关闭SAFE_EXIT，需要注意如果想卸载Smith LKM需要通过重启的方式，否则可能会造成生产事故。
 
