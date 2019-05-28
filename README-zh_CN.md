@@ -31,7 +31,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ### AgentSmith-HIDS实现了以下的功能：
 
-* 通过加载LKM的方式Hook了**execve,connect,init_module,finit_module**的system_call；
+* 通过加载LKM的方式Hook了**execve,connect,accept,accept4,init_module,finit_module**的system_call；
 * 通过对Linux namespace兼容的方式实现了对Docker容器行为的情报收集；
 * 实现了两种将Hook Info从内核态传输到用户态的方式：netlink和共享内存，共享内存传输损耗相较于netlink减小30%，在测试服务器上Hook connect耗时中位数8478ns，更详细的AgentSmith-HIDS BencherMark请见:https://github.com/DianrongSecurity/AgentSmith-HIDS/tree/master/doc **(注:经过其他小伙伴提醒，我们的压力测试方法有一定问题，并不是极限测试，我们会尽快发布更"压力"的测试报告)**
 * **系统文件完整性检测**，**系统用户列表查询**，**系统端口监听列表查询**，**系统RPM LIST查询**，**系统定时任务查询**功能；
@@ -42,7 +42,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ### 关于兼容系统及内核版本
 
-* AgentSmith-HIDS 仅在**Centos7.2/7.3/7.4/7.5/7.6**上进行过充分的测试，关于Kernel版本仅在**3.10-327/3.10-514/3.10-693/3.10-862/3.10-957**上进行过充分测试。虽然理论上Smith支持更多的版本，但是由于未经过充分测试，在加载LKM的时候会对Kernel进行版本强制校验(>3.10)，如果有其他人在其他版本上进行过稳定性测试，可以随时联系我们（需附稳定性测试报告）。
+* AgentSmith-HIDS 仅在**Centos7.2/7.3/7.4/7.5/7.6**上进行过充分的测试，关于Kernel版本仅在**3.10-327/3.10-514/3.10-693/3.10-862/3.10-957**上进行过充分测试。虽然理论上Smith支持更多的版本，但是由于未经过充分测试，在加载LKM的时候会对Kernel进行版本强制校验(=3.10)，如果有其他人在其他版本上进行过稳定性测试，可以随时联系我们（需附稳定性测试报告）。
 * 我们会对AgentSmith-HIDS进行长期维护，会追随Centos7的最新稳定版进行维护。
 * 在[@shelterz](https://github.com/shelterz)的支持下，支持了kernel >= 3.14 ，不过目前仅在ubuntu 14.04，ubuntu 16.04，ubuntu 18.04下进行了测试。
 
@@ -136,21 +136,28 @@ AgentSmith-HIDS 目前已经在点融经过压力测试/稳定性测试，目前
 
 | define                      | 说明                                                         |
 | --------------------------- | ------------------------------------------------------------ |
-| SEND_TYPE                   | LKM传输到用户态方案：1:NETLINK，2:SHERE_MEM；默认：2         |
-| KERNEL_PRINT                | debug输出：-1:不输出，1:输出共享内存时index信息，2:输出捕获到的信息；默认：-1 |
-| DELAY_TEST                  | 测试传输方案延迟：-1:关闭，1:开启；默认：-1                  |
-| WRITE_INDEX_TRY_LOCK        | 仅在SEND_TYPE=2时有意义，是控制对write_index lock方式：-1:使用write_lock()，1:使用write_trylock()；默认：-1 |
+| SEND_TYPE                   | LKM传输到用户态方案：<br />1:NETLINK;<br />2:SHERE_MEM；<br />默认：2 |
+| HOOK_EXECVE                 | execve() hook 开关:<br />1:开启; <br />默认:  1              |
+| HOOK_CONNECT                | connect() hook 开关:<br />1:开启; <br />默认:  1             |
+| HOOK_ACCEPT                 | accept() hook 开关:<br />1:开启; <br />默认:  1              |
+| HOOK_INIT_MODULE            | init_module() hook 开关:<br />1:开启; <br />默认:  1         |
+| HOOK_FINIT_MODULE           | finit_module() hook 开关:<br />1:开启; <br />默认:  1        |
+| KERNEL_PRINT                | debug输出：<br />-1:不输出;<br />1:输出共享内存时index信息;<br />2:输出捕获到的信息；<br />默认：-1 |
+| DELAY_TEST                  | 测试传输方案延迟：<br />-1:关闭;<br />1:开启；<br />默认：-1 |
+| WRITE_INDEX_TRY_LOCK        | 仅在SEND_TYPE=2时有意义，是控制对write_index lock方式：<br />-1:使用write_lock();<br />1:使用write_trylock()；<br />默认：-1 |
 | WRITE_INDEX_TRY_LOCK_NUM    | 仅在WRITE_INDEX_TRY_LOCK=1时有意义，设置write_trylock()次数，默认：3 |
-| CONNECT_TIME_TEST           | 测试connect()耗时：0:关闭测试，1:测试无Hook情况下耗时，2:测试Hook情况下的耗时，默认：0 |
-| EXECVE_TIME_TEST            | 测试Hook execve()耗时，-1:关闭，1:开启，默认：-1             |
-| SAFE_EXIT                   | 安全rmmod：-1:关闭，不会阻止rmmod，但是特殊情况会导致crash kernel，1:开启，在会导致crash kernel的情况下会阻止rmmod，默认：1 |
+| CONNECT_TIME_TEST           | 测试connect()耗时：<br />0:关闭测试;<br />1:测试无Hook情况下耗时;<br />2:测试Hook情况下的耗时;<br />默认：0 |
+| EXECVE_TIME_TEST            | 测试Hook execve()耗时:-<br />1:关闭;<br />1:开启;<br />默认：-1 |
+| SAFE_EXIT                   | 安全rmmod：<br />-1:关闭，不会阻止rmmod，但是特殊情况会导致crash kernel;<br />1:开启，在会导致crash kernel的情况下会阻止rmmod;<br />默认：1 |
 | MAX_SIZE                    | 仅在SEND_TYPE=2时有意义，表示与用户态共享内存大小，需要是整页数，默认：2097152（2M），用户态程序需一致 |
 | CHECK_READ_INDEX_THRESHOLD  | 仅在SEND_TYPE=2时有意义，表示检测read_index的阈值，小于该阈值LKM将会丢弃捕获到的数据，默认：524288 |
 | CHECK_WRITE_INDEX_THRESHOLD | 仅在SEND_TYPE=2时有意义，表示检测write_index距离共享内存区域边界阈值，超过阈值将会重置write_index，默认：32768 |
-| DATA_ALIGMENT               | 尝试对需要传输的数据进行4字节对齐：-1:关闭，1:开启，默认：-1 |
-| EXIT_PROTECT                | 阻止自身被rmmod：-1:关闭，1:开启，默认：-1                   |
+| DATA_ALIGMENT               | 尝试对需要传输的数据进行4字节对齐：<br />-1:关闭;<br />1:开启;<br />默认：-1 |
+| EXIT_PROTECT                | 阻止自身被rmmod：<br />-1:关闭;<br />1:开启;<br />默认：-1   |
 
 
+
+关于HOOK_ACCEPT,开启后可能会有一定的性能影响(视情况而定),如果使用AgentSmith仅是作为安全需求使用,那么可以关闭该Hook.
 
 关于SAFE_EXIT，当在Hook connect情况下，如果在rmmod时有connect还未返回，那么rmmod后connect将会返回到错误的内存地址上，将会引起kernel crash。开启SAFE_EXIT会通过增加引用的方式来阻止这种情况的发生，但是可能会导致无法立即rmmod LKM。如果关闭SAFE_EXIT，需要注意如果想卸载Smith LKM需要通过重启的方式，否则可能会造成生产事故。
 

@@ -63,8 +63,15 @@
 #define CLASS_NAME "smith"
 #define EXECVE_TYPE "59"
 #define CONNECT_TYPE "42"
+#define ACCEPT_TYPE "43"
 #define INIT_MODULE_TYPE "175"
 #define FINIT_MODULE_TYPE "313"
+
+#define HOOK_EXECVE 1
+#define HOOK_CONNECT 1
+#define HOOK_ACCEPT 1
+#define HOOK_INIT_MODULE 1
+#define HOOK_FINIT_MODULE 1
 
 unsigned long **sys_call_table_ptr;
 void *orig_sys_call_table[NR_syscalls];
@@ -83,10 +90,18 @@ typedef unsigned long int uint32;
 
 asmlinkage long (*orig_connect)(int fd, struct sockaddr __user *dirp,
                                 int addrlen);
+
+asmlinkage long (*orig_accept4)(int fd, struct sockaddr __user *dirp, 
+                                int addrlen, int flags);
+
+asmlinkage long (*orig_accept)(int fd, struct sockaddr __user *dirp,
+                                int addrlen);
+
 asmlinkage long (*orig_finit_module)(int fd, const char __user *uargs,
-                                     int flags);
+                                int flags);
+
 asmlinkage long (*orig_init_module)(void __user *umod, unsigned long len,
-                                    const char __user *uargs);
+                                const char __user *uargs);
 
 static int flen = 256;
 static int use_count = 0;
@@ -946,6 +961,210 @@ asmlinkage long monitor_connect_no_hook_time_test(int fd, struct sockaddr __user
     return ori_connect_syscall_res;
 }
 
+asmlinkage long monitor_accept_module_hook(int fd, struct sockaddr __user *dirp, int addrlen)
+{
+    int flag = 0;
+    int sa_family = 0;
+    int err, fput_needed;
+    int result_str_len;
+    char dip[64];
+    char dport[16];
+    char sip[64] = "-1";
+    char sport[16] = "-1";
+    char *final_path = NULL;
+    char *result_str = NULL;
+    struct socket *sock;
+    struct sockaddr tmp_dirp;
+    struct sockaddr_in *sin;
+    struct sockaddr_in6 *sin6;
+    struct sockaddr_in source_addr;
+    struct sockaddr_in6 source_addr6;
+    long ori_accept_syscall_res = orig_accept(fd, dirp, addrlen);
+
+#if (SAFE_EXIT == 1)
+    update_use_count();
+#endif
+
+    if (ori_accept_syscall_res > 0)
+    {
+        int copy_res = copy_from_user(&tmp_dirp, dirp, 16);
+        if(copy_res == 0) {
+        if(tmp_dirp.sa_family == AF_INET) 
+        {
+            flag = 1;
+            sa_family = 4;
+            sock = sockfd_lookup_light(ori_accept_syscall_res, &err, &fput_needed);
+            if (sock)
+            {
+                kernel_getsockname(sock, (struct sockaddr *)&source_addr, &addrlen);
+                snprintf(sport, 16, "%d", Ntohs(source_addr.sin_port));
+                snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(source_addr.sin_addr));
+                fput_light(sock->file, fput_needed);
+            }
+            sin = (struct sockaddr_in *)&tmp_dirp;
+            snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr.s_addr));
+            snprintf(dport, 16, "%d", Ntohs(sin->sin_port));
+        } 
+        else if (tmp_dirp.sa_family == AF_INET6)
+        {
+            flag = 1;
+            sa_family = 6;
+            sock = sockfd_lookup_light(ori_accept_syscall_res, &err, &fput_needed);
+            if (sock)
+            {
+                kernel_getsockname(sock, (struct sockaddr *)&source_addr6, &addrlen);
+                snprintf(sport, 16, "%d", Ntohs(source_addr6.sin6_port));
+                snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(source_addr6.sin6_addr));
+                fput_light(sock->file, fput_needed);
+            }
+            sin6 = (struct sockaddr_in6 *)&tmp_dirp;
+            snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sin6->sin6_addr));
+            snprintf(dport, 16, "%d", Ntohs(sin6->sin6_port));
+        }
+
+        if (flag == 1)
+        {
+            if (current->active_mm)
+            {
+                if (current->mm->exe_file)
+                {
+                    if (pathname)
+                    {
+                        pathname = memset(pathname, '\0', PATH_MAX);
+                        final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
+                    }
+                    else
+                    {
+                        pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
+                    }
+                }
+            }
+            result_str_len = get_data_alignment(strlen(current->comm) +
+                                   strlen(current->nsproxy->uts_ns->name.nodename) +
+                                   strlen(current->comm) + strlen(final_path) + 172);
+            result_str = kzalloc(result_str_len, GFP_ATOMIC);
+            snprintf(result_str, result_str_len,
+                     "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s",
+                     current->real_cred->uid.val, "\n", ACCEPT_TYPE, "\n", sa_family,
+                     "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
+                     current->pid, "\n", current->real_parent->pid, "\n",
+                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                     current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
+                     sip, "\n", sport);
+            send_msg_to_user(SEND_TYPE, result_str, 1);
+        }
+    }
+    }
+
+#if (SAFE_EXIT == 1)
+    del_use_count();
+#endif
+
+    return ori_accept_syscall_res;
+}
+
+asmlinkage long monitor_accept4_module_hook(int fd, struct sockaddr __user *dirp, int addrlen, int flags)
+{
+    int flag = 0;
+    int sa_family = 0;
+    int err, fput_needed;
+    int result_str_len;
+    char dip[64];
+    char dport[16];
+    char sip[64] = "-1";
+    char sport[16] = "-1";
+    char *final_path = NULL;
+    char *result_str = NULL;
+    struct socket *sock;
+    struct sockaddr tmp_dirp;
+    struct sockaddr_in *sin;
+    struct sockaddr_in6 *sin6;
+    struct sockaddr_in source_addr;
+    struct sockaddr_in6 source_addr6;
+    long ori_accept_syscall_res = orig_accept4(fd, dirp, addrlen,flags);
+
+#if (SAFE_EXIT == 1)
+    update_use_count();
+#endif
+
+    if (ori_accept_syscall_res > 0)
+    {
+        int copy_res = copy_from_user(&tmp_dirp, dirp, 16);
+        if(copy_res == 0) {
+        if(tmp_dirp.sa_family == AF_INET) 
+        {
+            flag = 1;
+            sa_family = 4;
+            sock = sockfd_lookup_light(ori_accept_syscall_res, &err, &fput_needed);
+            if (sock)
+            {
+                kernel_getsockname(sock, (struct sockaddr *)&source_addr, &addrlen);
+                snprintf(sport, 16, "%d", Ntohs(source_addr.sin_port));
+                snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(source_addr.sin_addr));
+                fput_light(sock->file, fput_needed);
+            }
+            sin = (struct sockaddr_in *)&tmp_dirp;
+            snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr.s_addr));
+            snprintf(dport, 16, "%d", Ntohs(sin->sin_port));
+        } 
+        else if (tmp_dirp.sa_family == AF_INET6)
+        {
+            flag = 1;
+            sa_family = 6;
+            sock = sockfd_lookup_light(ori_accept_syscall_res, &err, &fput_needed);
+            if (sock)
+            {
+                kernel_getsockname(sock, (struct sockaddr *)&source_addr6, &addrlen);
+                snprintf(sport, 16, "%d", Ntohs(source_addr6.sin6_port));
+                snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(source_addr6.sin6_addr));
+                fput_light(sock->file, fput_needed);
+            }
+            sin6 = (struct sockaddr_in6 *)&tmp_dirp;
+            snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sin6->sin6_addr));
+            snprintf(dport, 16, "%d", Ntohs(sin6->sin6_port));
+        }
+
+        if (flag == 1)
+        {
+            if (current->active_mm)
+            {
+                if (current->mm->exe_file)
+                {
+                    if (pathname)
+                    {
+                        pathname = memset(pathname, '\0', PATH_MAX);
+                        final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
+                    }
+                    else
+                    {
+                        pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
+                    }
+                }
+            }
+            result_str_len = get_data_alignment(strlen(current->comm) +
+                                   strlen(current->nsproxy->uts_ns->name.nodename) +
+                                   strlen(current->comm) + strlen(final_path) + 172);
+            result_str = kzalloc(result_str_len, GFP_ATOMIC);
+            snprintf(result_str, result_str_len,
+                     "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s",
+                     current->real_cred->uid.val, "\n", ACCEPT_TYPE, "\n", sa_family,
+                     "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
+                     current->pid, "\n", current->real_parent->pid, "\n",
+                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                     current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
+                     sip, "\n", sport);
+            send_msg_to_user(SEND_TYPE, result_str, 1);
+        }
+    }
+    }
+
+#if (SAFE_EXIT == 1)
+    del_use_count();
+#endif
+
+    return ori_accept_syscall_res;
+}
+
 asmlinkage long monitor_connect_hook(int fd, struct sockaddr __user *dirp, int addrlen)
 {
     char dip[64];
@@ -966,15 +1185,12 @@ asmlinkage long monitor_connect_hook(int fd, struct sockaddr __user *dirp, int a
     struct socket *sock;
     struct sockaddr_in source_addr;
     struct sockaddr_in6 source_addr6;
-    int len = sizeof(source_addr);
     int copy_res = copy_from_user(&tmp_dirp, dirp, 16);
-    long ori_connect_syscall_res = 0;
+    long ori_connect_syscall_res = orig_connect(fd, dirp, addrlen);
 
 #if (SAFE_EXIT == 1)
     update_use_count();
 #endif
-
-    ori_connect_syscall_res = orig_connect(fd, dirp, addrlen);
 
     if (netlink_pid == -1 && share_mem_flag == -1)
     {
@@ -996,7 +1212,7 @@ asmlinkage long monitor_connect_hook(int fd, struct sockaddr __user *dirp, int a
             sock = sockfd_lookup_light(fd, &err, &fput_needed);
             if (sock)
             {
-                kernel_getsockname(sock, (struct sockaddr *)&source_addr, &len);
+                kernel_getsockname(sock, (struct sockaddr *)&source_addr, &addrlen);
                 snprintf(sport, 16, "%d", Ntohs(source_addr.sin_port));
                 snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(source_addr.sin_addr));
                 fput_light(sock->file, fput_needed);
@@ -1012,7 +1228,7 @@ asmlinkage long monitor_connect_hook(int fd, struct sockaddr __user *dirp, int a
             sock = sockfd_lookup_light(fd, &err, &fput_needed);
             if (sock)
             {
-                kernel_getsockname(sock, (struct sockaddr *)&source_addr6, &len);
+                kernel_getsockname(sock, (struct sockaddr *)&source_addr6, &addrlen);
                 snprintf(sport, 16, "%d", Ntohs(source_addr6.sin6_port));
                 snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(source_addr6.sin6_addr));
                 fput_light(sock->file, fput_needed);
@@ -1193,19 +1409,30 @@ static int lkm_init(void)
 
 #if (CONNECT_TIME_TEST == 1)
     sys_call_table_ptr[__NR_connect] = (void *)monitor_connect_no_hook_time_test;
-#else
+#elif (HOOK_CONNECT == 1)
     sys_call_table_ptr[__NR_connect] = (void *)monitor_connect_hook;
 #endif
 
 #if (CONNECT_TIME_TEST == 0)
+#if (HOOK_ACCEPT == 1)
+    orig_accept = (void *)(sys_call_table_ptr[__NR_accept]);
+    sys_call_table_ptr[__NR_accept] = (void *)monitor_accept_module_hook;
+
+    orig_accept4 = (void *)(sys_call_table_ptr[__NR_accept4]);
+    sys_call_table_ptr[__NR_accept4] = (void *)monitor_accept4_module_hook;
+#endif
+#if (HOOK_FINIT_MODULE == 1)
     orig_finit_module = (void *)(sys_call_table_ptr[__NR_finit_module]);
     sys_call_table_ptr[__NR_finit_module] = (void *)monitor_finit_module_hook;
-
+#endif
+#if (HOOK_INIT_MODULE == 1)
     orig_init_module = (void *)(sys_call_table_ptr[__NR_init_module]);
     sys_call_table_ptr[__NR_init_module] = (void *)monitor_init_module_hook;
-
+#endif
+#if (HOOK_EXECVE == 1)
     orig_stub_execve = (void *)(sys_call_table_ptr[__NR_execve]);
     sys_call_table_ptr[__NR_execve] = (void *)monitor_stub_execve_hook;
+#endif
 #endif
 
     enable_write_protection();
@@ -1224,9 +1451,19 @@ static void lkm_exit(void)
     sys_call_table_ptr[__NR_connect] = (void *)orig_connect;
 
 #if (CONNECT_TIME_TEST == 0)
+#if (HOOK_ACCEPT == 1)
+    sys_call_table_ptr[__NR_accept] = (void *)orig_accept;
+    sys_call_table_ptr[__NR_accept4] = (void *)orig_accept4;
+#endif
+#if (HOOK_FINIT_MODULE == 1)
     sys_call_table_ptr[__NR_finit_module] = (void *)orig_finit_module;
+#endif
+#if (HOOK_INIT_MODULE == 1)
     sys_call_table_ptr[__NR_init_module] = (void *)orig_init_module;
+#endif
+#if (HOOK_EXECVE == 1)
     sys_call_table_ptr[__NR_execve] = (void *)orig_stub_execve;
+#endif
 #endif
 
     sys_call_table_ptr = NULL;

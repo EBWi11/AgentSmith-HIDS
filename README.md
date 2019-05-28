@@ -24,7 +24,7 @@ For security engineers who have a certain understanding of Linux and need a func
 
 
 ### What does the AgentSmith-HIDS achieved:
-* Hook the system_call of **execve, connect, init_module, finit_module** by loading LKM;
+* Hook the system_call of **execve, connect,accept,accept4, init_module, finit_module** by loading LKM;
 
 * Being compatible with Linux namespace so that information of Docker container can be collected;
 
@@ -130,6 +130,11 @@ Before uninstalling the AgentSmith-HIDS, you need to close the user-mode agent p
 | Define                      | Description                                                  |
 | --------------------------- | ------------------------------------------------------------ |
 | SEND_TYPE                   | LKM to user mode transmission method: <br />1. NETLINK; <br />2. SHERE_MEM;<br /> Default: 2 |
+| HOOK_EXECVE                 | execve() Hook Switch:<br />1. Enable;<br />Default:1         |
+| HOOK_CONNECT                | connect() Hook Switch:<br />1. Enable;<br />Default:1        |
+| HOOK_ACCEPT                 | accept() Hook Switch:<br />1. Enable;<br />Default:1         |
+| HOOK_INIT_MODULE            | init_module() Hook Switch:<br />1. Enable;<br />Default:1    |
+| HOOK_FINIT_MODULE           | finit_module() Hook Switch:<br />1. Enable;<br />Default:1   |
 | KERNEL_PRINT                | Debug output:<br />-1. no output;<br />1. index information in shared memory;<br />2. captured information;<br />Default: -1 |
 | DELAY_TEST                  | Delay during transmission:<br />-1. Disable<br />1. Enable<br />Default: -1 |
 | WRITE_INDEX_TRY_LOCK        | Only functional when SEND_TYPE=2, which controls the method of write_index lock:<br />-1. Use write_lock()<br />1. Use write_trylock()<br />Default: -1 |
