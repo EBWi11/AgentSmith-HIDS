@@ -39,6 +39,10 @@
 #include <linux/utsname.h>
 #include <linux/version.h>
 #include <net/inet_sock.h>
+#include <linux/fs.h>
+#include <asm/segment.h>
+#include <asm/uaccess.h>
+#include <linux/buffer_head.h>
 #include <net/sock.h>
 
 #define NETLINK_USER 31
@@ -248,6 +252,31 @@ unsigned short int Ntohs(unsigned short int n)
 static void get_start_time(ktime_t *start)
 {
     *start = ktime_get();
+}
+
+static int *file_open(const char *path, int flags, int rights)
+{
+    struct file *filp = NULL;
+    mm_segment_t oldfs;
+    int err = 0;
+
+    oldfs = get_fs();
+    set_fs(get_ds());
+    filp = filp_open(path, flags, rights);
+    set_fs(oldfs);
+    if (IS_ERR(filp)) {
+        err = PTR_ERR(filp);
+        return 0;
+    }
+    filp_close(filp,NULL);
+    return 1;
+}
+
+static int *check_file_exist(int pid)
+{
+    char path[18];
+    snprintf(path,18,"/proc/%d",pid);
+    return file_open(path,O_RDONLY,0);
 }
 
 static char *get_timespec(void)
