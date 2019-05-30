@@ -39,11 +39,6 @@
 #include <linux/utsname.h>
 #include <linux/version.h>
 #include <net/inet_sock.h>
-#include <linux/fs.h>
-#include <asm/segment.h>
-#include <asm/uaccess.h>
-#include <linux/buffer_head.h>
-#include <net/sock.h>
 
 #define NETLINK_USER 31
 #define NETLINK 1
@@ -76,6 +71,8 @@
 #define HOOK_ACCEPT 1
 #define HOOK_INIT_MODULE 1
 #define HOOK_FINIT_MODULE 1
+
+#define EXECVE_ROOTKIT_CHECK 1
 
 unsigned long **sys_call_table_ptr;
 void *orig_sys_call_table[NR_syscalls];
@@ -252,31 +249,6 @@ unsigned short int Ntohs(unsigned short int n)
 static void get_start_time(ktime_t *start)
 {
     *start = ktime_get();
-}
-
-static int *file_open(const char *path, int flags, int rights)
-{
-    struct file *filp = NULL;
-    mm_segment_t oldfs;
-    int err = 0;
-
-    oldfs = get_fs();
-    set_fs(get_ds());
-    filp = filp_open(path, flags, rights);
-    set_fs(oldfs);
-    if (IS_ERR(filp)) {
-        err = PTR_ERR(filp);
-        return 0;
-    }
-    filp_close(filp,NULL);
-    return 1;
-}
-
-static int *check_file_exist(int pid)
-{
-    char path[18];
-    snprintf(path,18,"/proc/%d",pid);
-    return file_open(path,O_RDONLY,0);
 }
 
 static char *get_timespec(void)
@@ -532,6 +504,41 @@ static const struct file_operations mchar_fops = {
     .mmap = device_mmap,
 };
 
+static int check_file(char *path)
+{
+    int len = strlen(path);
+    int i = len -1;
+    char *file_name;
+    char cmd_path[] = "/usr/bin/find";
+    
+    for(i;i>=0;i--)
+    {
+        if(path[i] == 47)
+        {
+            file_name = &path[i+1];
+            break;
+        }
+    }
+
+    char file_dir[i+2];
+    snprintf(file_dir, i+2,"%s", &path[0]);
+
+    char *cmd_argv[] = {cmd_path, file_dir,"-maxdepth","1","-name",file_name, NULL};
+    int result = call_usermodehelper(cmd_path, cmd_argv, NULL, UMH_WAIT_PROC);  
+    return result;
+} 
+
+static int check_pid(int pid)
+{
+    char pid_str[8];
+    char cmd_path[] = "/usr/bin/find";
+
+    snprintf(pid_str, 8,"%d", pid);
+    char *cmd_argv[] = {cmd_path, "/proc","-maxdepth","1","-name",pid_str, NULL};
+    int result = call_usermodehelper(cmd_path, cmd_argv, NULL, UMH_WAIT_PROC);  
+    return result;
+}
+
 static int get_read_index(void)
 {
     int i;
@@ -755,8 +762,10 @@ static void nl_recv_msg(struct sk_buff *skb)
 
 asmlinkage long monitor_execve_hook(const char __user *filename, const char __user *const __user *argv, const char __user *const __user *envp)
 {
-
     char *result_str;
+    int pid_check_res = -1;
+    int ppid_check_res = -1;
+    int file_check_res = -1;
     int result_str_len;
     int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0;
     struct filename *path;
@@ -852,13 +861,20 @@ asmlinkage long monitor_execve_hook(const char __user *filename, const char __us
 
     result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
+#if (EXECVE_ROOTKIT_CHECK == 1)
+    pid_check_res = check_pid(current->pid);
+    ppid_check_res = check_pid(current->real_parent->pid);
+    file_check_res = check_file(abs_path);
+#endif
+
     snprintf(result_str, result_str_len,
-             "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s",
+             "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d",
              current->real_cred->uid.val, "\n", EXECVE_TYPE, "\n", pname, "\n",
              abs_path, "\n", argv_res_tmp, "\n", current->pid, "\n",
              current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
              "\n", current->tgid, "\n", current->comm, "\n",
-             current->nsproxy->uts_ns->name.nodename,"\n",tmp_stdin,"\n",tmp_stdout);
+             current->nsproxy->uts_ns->name.nodename,"\n",tmp_stdin,"\n",tmp_stdout,
+             "\n",pid_check_res, "\n",ppid_check_res, "\n",file_check_res);
 
     send_msg_to_user(SEND_TYPE, result_str, 1);
 
@@ -1284,6 +1300,7 @@ asmlinkage long monitor_connect_hook(int fd, struct sockaddr __user *dirp, int a
                     }
                 }
             }
+
             result_str_len =
                 get_data_alignment(strlen(current->comm) +
                                    strlen(current->nsproxy->uts_ns->name.nodename) +
@@ -1470,7 +1487,7 @@ static int lkm_init(void)
     exit_protect_action()
 #endif
 
-        return 0;
+    return 0;
 }
 
 static void lkm_exit(void)
