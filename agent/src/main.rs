@@ -245,7 +245,12 @@ fn start_hreatbread(tx: Sender<Vec<u8>>) {
         hb_msg.push_str("|ok");
         let hb = get_heartbeat(hb_msg);
         let handle = thread::spawn(move || { hb.run(tx); });
-        handle.join();
+        match handle.join() {
+            Err(_) => {
+                println!("HREATBREAD_ERROR");
+            }
+            Ok(_) => {}
+        }
     }
 }
 
