@@ -486,9 +486,7 @@ static char *str_replace(char *orig, char *rep, char *with)
 #if EXIT_PROTECT == 1
 static void exit_protect_action(void)
 {
-    preempt_disable();
-    __this_cpu_inc(THIS_MODULE->refptr->incs);
-    preempt_enable();
+    try_module_get(THIS_MODULE);
 }
 #endif
 
@@ -498,9 +496,7 @@ static void update_use_count(void)
 
     if (use_count == 0)
     {
-       preempt_disable();
-       __this_cpu_inc(THIS_MODULE->refptr->incs);
-       preempt_enable();
+        try_module_get(THIS_MODULE);
     }
 
     use_count = use_count + 1;
@@ -514,9 +510,7 @@ static void del_use_count(void)
 
     if (use_count == 0)
     {
-         preempt_disable();
-         __this_cpu_dec(THIS_MODULE->refptr->incs);
-         preempt_enable();
+         module_put(THIS_MODULE);
     }
 
     write_use_count_unlock();
@@ -1147,11 +1141,12 @@ asmlinkage long monitor_accept_module_hook(int fd, struct sockaddr __user *dirp,
     struct sockaddr_in6 *sin6;
     struct sockaddr_in source_addr;
     struct sockaddr_in6 source_addr6;
-    long ori_accept_syscall_res = orig_accept(fd, dirp, addrlen);
 
 #if (SAFE_EXIT == 1)
     update_use_count();
 #endif
+
+    long ori_accept_syscall_res = orig_accept(fd, dirp, addrlen);
 
     if (ori_accept_syscall_res > 0)
     {
@@ -1260,11 +1255,12 @@ asmlinkage long monitor_accept4_module_hook(int fd, struct sockaddr __user *dirp
     struct sockaddr_in6 *sin6;
     struct sockaddr_in source_addr;
     struct sockaddr_in6 source_addr6;
-    long ori_accept_syscall_res = orig_accept4(fd, dirp, addrlen,flags);
 
 #if (SAFE_EXIT == 1)
     update_use_count();
 #endif
+
+    long ori_accept_syscall_res = orig_accept4(fd, dirp, addrlen,flags);
 
     if (ori_accept_syscall_res > 0)
     {
@@ -1374,11 +1370,12 @@ asmlinkage long monitor_connect_hook(int fd, struct sockaddr __user *dirp, int a
     struct sockaddr_in source_addr;
     struct sockaddr_in6 source_addr6;
     int copy_res = copy_from_user(&tmp_dirp, dirp, 16);
-    long ori_connect_syscall_res = orig_connect(fd, dirp, addrlen);
 
 #if (SAFE_EXIT == 1)
     update_use_count();
 #endif
+
+    long ori_connect_syscall_res = orig_connect(fd, dirp, addrlen);
 
     if (netlink_pid == -1 && share_mem_flag == -1)
     {
