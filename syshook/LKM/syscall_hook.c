@@ -486,7 +486,9 @@ static char *str_replace(char *orig, char *rep, char *with)
 #if EXIT_PROTECT == 1
 static void exit_protect_action(void)
 {
-    try_module_get(THIS_MODULE);
+    preempt_disable();
+    __this_cpu_inc(THIS_MODULE->refptr->incs);
+    preempt_enable();
 }
 #endif
 
@@ -496,7 +498,9 @@ static void update_use_count(void)
 
     if (use_count == 0)
     {
-       try_module_get(THIS_MODULE);
+       preempt_disable();
+       __this_cpu_inc(THIS_MODULE->refptr->incs);
+       preempt_enable();
     }
 
     use_count = use_count + 1;
@@ -510,7 +514,9 @@ static void del_use_count(void)
 
     if (use_count == 0)
     {
-         module_put(THIS_MODULE);
+         preempt_disable();
+         __this_cpu_dec(THIS_MODULE->refptr->incs);
+         preempt_enable();
     }
 
     write_use_count_unlock();
