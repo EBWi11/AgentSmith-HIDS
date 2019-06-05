@@ -6,7 +6,6 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <errno.h>
-#include <time.h>
 #include <netinet/in.h>
 
 #define NLMSG_ALIGNTO	4U
@@ -30,11 +29,6 @@ char user_id[16] = {0};
 char shm_res[NLMSG_SPACE(4096)] = {0};
 char *tmp_slot_len;
 char *sh_mem;
-
-struct timeval {
-	long tv_sec;
-	long tv_usec;
-};
 
 struct msg_slot
 {
@@ -217,4 +211,12 @@ char *shm_run_no_callback(void)
             nanosleep((const struct timespec[]){{0, 50000}}, NULL);
         }
     }
+}
+
+void main()
+{
+    init();
+    shm_init();
+    while (1)
+        shm_run_no_callback();
 }

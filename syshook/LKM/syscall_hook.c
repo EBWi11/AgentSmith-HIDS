@@ -79,27 +79,23 @@ void *orig_sys_call_table[NR_syscalls];
 struct filename *(*tmp_getname)(const char __user *filename);
 void (*tmp_putname)(struct filename *name);
 struct sockaddr_in *sad;
-extern asmlinkage long monitor_stub_execve_hook(
-    const char __user *, const char __user *const __user *,
-    const char __user *const __user *);
 
-typedef asmlinkage long (*func_execve)(const char __user *,
-                                       const char __user *const __user *,
-                                       const char __user *const __user *);
 typedef unsigned short int uint16;
 typedef unsigned long int uint32;
 
 asmlinkage long (*orig_connect)(int fd, struct sockaddr __user *dirp,
                                 int addrlen);
 
-asmlinkage long (*orig_accept4)(int fd, struct sockaddr __user *dirp, 
+asmlinkage long (*orig_accept4)(int fd, struct sockaddr __user *dirp,
                                 int addrlen, int flags);
 
 asmlinkage long (*orig_accept)(int fd, struct sockaddr __user *dirp,
                                 int addrlen);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
 asmlinkage long (*orig_finit_module)(int fd, const char __user *uargs,
                                 int flags);
+#endif
 
 asmlinkage long (*orig_init_module)(void __user *umod, unsigned long len,
                                 const char __user *uargs);
@@ -123,16 +119,17 @@ static struct class *class;
 static struct device *device;
 static int major;
 static char *sh_mem = NULL;
-static func_execve orig_stub_execve;
 static DEFINE_MUTEX(mchar_mutex);
 
 static rwlock_t _write_index_lock;
 static rwlock_t _write_use_count_lock;
 
+#if WRITE_INDEX_TRY_LOCK == 1
 static int write_index_trylock(void)
 {
     return write_trylock(&_write_index_lock);
 }
+#endif
 
 static inline void write_index_lock(void)
 {
@@ -154,37 +151,19 @@ static inline void write_use_count_unlock(void)
     write_unlock(&_write_use_count_lock);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
 struct user_arg_ptr
 {
-#ifdef CONFIG_COMPAT
-    bool is_compat;
-#endif
-    union {
-        const char __user *const __user *native;
-#ifdef CONFIG_COMPAT
-        const compat_uptr_t __user *compat;
-#endif
-    } ptr;
+    #ifdef CONFIG_COMPAT
+        bool is_compat;
+    #endif
+        union {
+            const char __user *const __user *native;
+    #ifdef CONFIG_COMPAT
+            const compat_uptr_t __user *compat;
+            #endif
+            } ptr;
 };
-
-#define NIPQUAD(addr)                \
-    ((unsigned char *)&addr)[0],     \
-        ((unsigned char *)&addr)[1], \
-        ((unsigned char *)&addr)[2], \
-        ((unsigned char *)&addr)[3]
-
-#define NIP6(addr)                  \
-    ntohs((addr).s6_addr16[0]),     \
-        ntohs((addr).s6_addr16[1]), \
-        ntohs((addr).s6_addr16[2]), \
-        ntohs((addr).s6_addr16[3]), \
-        ntohs((addr).s6_addr16[4]), \
-        ntohs((addr).s6_addr16[5]), \
-        ntohs((addr).s6_addr16[6]), \
-        ntohs((addr).s6_addr16[7])
-
-#define BigLittleSwap16(A) ((((uint16)(A)&0xff00) >> 8) | \
-                            (((uint16)(A)&0x10ff) << 8))
 
 static const char __user *get_user_arg_ptr(struct user_arg_ptr argv, int nr)
 {
@@ -208,6 +187,48 @@ static const char __user *get_user_arg_ptr(struct user_arg_ptr argv, int nr)
     return native;
 }
 
+extern asmlinkage long monitor_stub_execve_hook(const char __user *,
+                                                const char __user *const __user *,
+                                                const char __user *const __user *);
+
+typedef asmlinkage long (*func_execve)(const char __user *,
+                                       const char __user *const __user *,
+                                       const char __user *const __user *);
+
+#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
+    typedef asmlinkage long (*func_execve)(const char __user *,
+                                           const char __user * const __user *,
+                                           const char __user *const  __user *,
+                                           struct pt_regs *);
+
+    extern asmlinkage long monitor_stub_execve_hook(const char __user *,
+                                                    const char __user * const __user *,
+                                                    const char __user *const  __user *,
+                                                    struct pt_regs *);
+#endif
+
+func_execve orig_stub_execve;
+
+#define NIPQUAD(addr)                \
+    ((unsigned char *)&addr)[0],     \
+        ((unsigned char *)&addr)[1], \
+        ((unsigned char *)&addr)[2], \
+        ((unsigned char *)&addr)[3]
+
+#define NIP6(addr)                  \
+    ntohs((addr).s6_addr16[0]),     \
+        ntohs((addr).s6_addr16[1]), \
+        ntohs((addr).s6_addr16[2]), \
+        ntohs((addr).s6_addr16[3]), \
+        ntohs((addr).s6_addr16[4]), \
+        ntohs((addr).s6_addr16[5]), \
+        ntohs((addr).s6_addr16[6]), \
+        ntohs((addr).s6_addr16[7])
+
+#define BigLittleSwap16(A) ((((uint16)(A)&0xff00) >> 8) | \
+                            (((uint16)(A)&0x10ff) << 8))
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
 static int count(struct user_arg_ptr argv, int max)
 {
     int i = 0;
@@ -230,6 +251,83 @@ static int count(struct user_arg_ptr argv, int max)
     }
     return i;
 }
+#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
+static int count(char __user * __user * argv, int max)
+{
+    int i = 0;
+
+    if (argv != NULL) {
+        for (;;) {
+            char __user * p;
+
+            if (get_user(p, argv))
+                return -EFAULT;
+            if (!p)
+                break;
+            argv++;
+            if (i++ >= max)
+                return -E2BIG;
+
+            if (fatal_signal_pending(current))
+                return -ERESTARTNOHAND;
+            cond_resched();
+        }
+    }
+    return i;
+}
+#endif
+
+#if LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
+    static int sock_no_open(struct inode *irrelevant, struct file *dontcare);
+    static ssize_t sock_aio_read(struct kiocb *iocb, const struct iovec *iov,
+                         unsigned long nr_segs, loff_t pos);
+    static ssize_t sock_aio_write(struct kiocb *iocb, const struct iovec *iov,
+                          unsigned long nr_segs, loff_t pos);
+    static int sock_mmap(struct file *file, struct vm_area_struct *vma);
+    static int sock_close(struct inode *inode, struct file *file);
+    static unsigned int sock_poll(struct file *file,
+                              struct poll_table_struct *wait);
+    static long sock_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
+#ifdef CONFIG_COMPAT
+    static long compat_sock_ioctl(struct file *file,
+                              unsigned int cmd, unsigned long arg);
+#endif
+    static int sock_fasync(int fd, struct file *filp, int on);
+    static ssize_t sock_sendpage(struct file *file, struct page *page,
+                             int offset, size_t size, loff_t *ppos, int more);
+    static ssize_t sock_splice_read(struct file *file, loff_t *ppos,
+                                struct pipe_inode_info *pipe, size_t len,
+                                unsigned int flags);
+
+    static const struct file_operations socket_file_ops = {
+        .owner =        THIS_MODULE,
+        .llseek =       no_llseek,
+        .aio_read =     sock_aio_read,
+        .aio_write =    sock_aio_write,
+        .poll =         sock_poll,
+        .unlocked_ioctl = sock_ioctl,
+#ifdef CONFIG_COMPAT
+        .compat_ioctl = compat_sock_ioctl,
+#endif
+        .mmap =         sock_mmap,
+        .open =         sock_no_open,   /* special open code to disallow open via /proc */
+        .release =      sock_close,
+        .fasync =       sock_fasync,
+        .sendpage =     sock_sendpage,
+        .splice_write = generic_splice_sendpage,
+        .splice_read =  sock_splice_read,
+};
+
+static struct socket *sock_from_file(struct file *file, int *err)
+{
+    if (file->f_op == &socket_file_ops)
+        return file->private_data;    /* set in sock_map_fd */
+
+    *err = -ENOTSOCK;
+    return NULL;
+}
+
+#endif
 
 int checkCPUendian(void)
 {
@@ -251,6 +349,7 @@ static void get_start_time(ktime_t *start)
     *start = ktime_get();
 }
 
+#if DELAY_TEST == 1
 static char *get_timespec(void)
 {
     char *res = NULL;
@@ -260,6 +359,7 @@ static char *get_timespec(void)
     snprintf(res, 64, "%lu.%lu", tmp_time.tv_sec, tmp_time.tv_nsec);
     return res;
 }
+#endif
 
 static long get_time_interval(ktime_t starttime)
 {
@@ -282,11 +382,10 @@ static void disable_write_protection(void)
 
 static int get_data_alignment(int len)
 {
-    int tmp = 0;
-
 #if (DATA_ALIGMENT == -1)
     return len;
 #else
+    int tmp = 0;
     tmp = len % 4;
 
     if (tmp == 0)
@@ -384,12 +483,12 @@ static char *str_replace(char *orig, char *rep, char *with)
     return result;
 }
 
+#if EXIT_PROTECT == 1
 static void exit_protect_action(void)
 {
-    preempt_disable();
-    __this_cpu_inc(THIS_MODULE->refptr->incs);
-    preempt_enable();
+    try_module_get(THIS_MODULE);
 }
+#endif
 
 static void update_use_count(void)
 {
@@ -397,9 +496,7 @@ static void update_use_count(void)
 
     if (use_count == 0)
     {
-        preempt_disable();
-        __this_cpu_inc(THIS_MODULE->refptr->incs);
-        preempt_enable();
+       try_module_get(THIS_MODULE);
     }
 
     use_count = use_count + 1;
@@ -413,9 +510,7 @@ static void del_use_count(void)
 
     if (use_count == 0)
     {
-        preempt_disable();
-        __this_cpu_dec(THIS_MODULE->refptr->incs);
-        preempt_enable();
+         module_put(THIS_MODULE);
     }
 
     write_use_count_unlock();
@@ -506,11 +601,12 @@ static const struct file_operations mchar_fops = {
 
 static int check_file(char *path)
 {
+    int gap = 2;
     int len = strlen(path);
     int i = len -1;
     char *file_name;
     char cmd_path[] = "/usr/bin/find";
-    
+
     for(i;i>=0;i--)
     {
         if(path[i] == 47)
@@ -520,22 +616,23 @@ static int check_file(char *path)
         }
     }
 
-    char file_dir[i+2];
-    snprintf(file_dir, i+2,"%s", &path[0]);
+    char file_dir[i+gap];
+    snprintf(file_dir, i+gap,"%s", &path[0]);
 
     char *cmd_argv[] = {cmd_path, file_dir,"-maxdepth","1","-name",file_name, NULL};
-    int result = call_usermodehelper(cmd_path, cmd_argv, NULL, UMH_WAIT_PROC);  
+    int result = call_usermodehelper(cmd_path, cmd_argv, NULL, UMH_WAIT_PROC);
     return result;
-} 
+}
 
 static int check_pid(int pid)
 {
+    int gap = 8;
     char pid_str[8];
     char cmd_path[] = "/usr/bin/find";
 
-    snprintf(pid_str, 8,"%d", pid);
+    snprintf(pid_str, gap, "%d", pid);
     char *cmd_argv[] = {cmd_path, "/proc","-maxdepth","1","-name",pid_str, NULL};
-    int result = call_usermodehelper(cmd_path, cmd_argv, NULL, UMH_WAIT_PROC);  
+    int result = call_usermodehelper(cmd_path, cmd_argv, NULL, UMH_WAIT_PROC);
     return result;
 }
 
@@ -569,7 +666,6 @@ static struct msg_slot get_solt(int len, int next)
 
 static int send_msg_to_user_memshare(char *msg, int kfree_flag)
 {
-    int i;
     int raw_data_len = 0;
     int write_index_lock_flag = 0;
     int curr_write_index = -1;
@@ -581,6 +677,7 @@ static int send_msg_to_user_memshare(char *msg, int kfree_flag)
     {
 
 #if (WRITE_INDEX_TRY_LOCK == 1)
+        int i;
         for (i = 0; i < WRITE_INDEX_TRY_LOCK_NUM; i++)
         {
             if (write_index_trylock())
@@ -673,6 +770,30 @@ out:
     return 0;
 }
 
+#if (SEND_TYPE == NETLINK)
+static void nl_recv_msg(struct sk_buff *skb)
+{
+    int recv_msg_len;
+    char *recv_msg;
+    struct nlmsghdr *nlh;
+    nlh = (struct nlmsghdr *)skb->data;
+    netlink_pid = nlh->nlmsg_pid;
+    recv_msg_len = strlen((char *)nlmsg_data(nlh)) + 1;
+    recv_msg = kzalloc(recv_msg_len, GFP_ATOMIC);
+    if (recv_msg)
+    {
+        snprintf(recv_msg, recv_msg_len, (char *)nlmsg_data(nlh));
+        if (strcmp("NIDS_AGENT_UP", recv_msg) != 0)
+        {
+            send_msg_to_user(NETLINK, "DOWN_SUCCESS", 0);
+            netlink_pid = -1;
+        }
+        else
+            send_msg_to_user(NETLINK, "UP_SUCCESS", 0);
+        kfree(recv_msg);
+    }
+}
+
 static int send_msg_to_user_netlink(char *msg, int kfree_flag)
 {
     int msg_size;
@@ -704,6 +825,7 @@ err:
         kfree(msg);
     return -1;
 }
+#endif
 
 static int send_msg_to_user(int type, char *msg, int kfree_flag)
 {
@@ -737,29 +859,7 @@ static int send_msg_to_user(int type, char *msg, int kfree_flag)
     return 0;
 }
 
-static void nl_recv_msg(struct sk_buff *skb)
-{
-    int recv_msg_len;
-    char *recv_msg;
-    struct nlmsghdr *nlh;
-    nlh = (struct nlmsghdr *)skb->data;
-    netlink_pid = nlh->nlmsg_pid;
-    recv_msg_len = strlen((char *)nlmsg_data(nlh)) + 1;
-    recv_msg = kzalloc(recv_msg_len, GFP_ATOMIC);
-    if (recv_msg)
-    {
-        snprintf(recv_msg, recv_msg_len, (char *)nlmsg_data(nlh));
-        if (strcmp("NIDS_AGENT_UP", recv_msg) != 0)
-        {
-            send_msg_to_user(NETLINK, "DOWN_SUCCESS", 0);
-            netlink_pid = -1;
-        }
-        else
-            send_msg_to_user(NETLINK, "UP_SUCCESS", 0);
-        kfree(recv_msg);
-    }
-}
-
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
 asmlinkage long monitor_execve_hook(const char __user *filename, const char __user *const __user *argv, const char __user *const __user *envp)
 {
     char *result_str;
@@ -770,12 +870,10 @@ asmlinkage long monitor_execve_hook(const char __user *filename, const char __us
     int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0;
     struct filename *path;
     const char __user *native;
-    const char *abs_path = NULL;
+    char *abs_path = NULL;
     char *argv_res = NULL;
     char *argv_res_tmp = NULL;
     char *pname = NULL;
-    ktime_t stime;
-    char *ktime_result_str = NULL;
     char *tmp_stdin = NULL;
     char *tmp_stdout = NULL;
     struct fdtable *files;
@@ -785,6 +883,7 @@ asmlinkage long monitor_execve_hook(const char __user *filename, const char __us
         return 0;
 
 #if (EXECVE_TIME_TEST == 1)
+    ktime_t stime;
     get_start_time(&stime);
 #endif
 
@@ -890,6 +989,7 @@ asmlinkage long monitor_execve_hook(const char __user *filename, const char __us
     tmp_putname(path);
 
 #if (EXECVE_TIME_TEST == 1)
+    char *ktime_result_str = NULL;
     ktime_result_str = kzalloc(16, GFP_ATOMIC);
     snprintf(ktime_result_str, 16, "%ld", get_time_interval(stime));
     send_msg_to_user(SEND_TYPE, ktime_result_str, 1);
@@ -911,6 +1011,7 @@ err:
 
     return -1;
 }
+#endif
 
 asmlinkage long monitor_init_module_hook(void __user *umod, unsigned long len, const char __user *uargs)
 {
@@ -939,16 +1040,24 @@ asmlinkage long monitor_init_module_hook(void __user *umod, unsigned long len, c
     cwd = d_path(&files_path, init_module_buf, 256);
     result_str_len = get_data_alignment(strlen(cwd) + 4);
     result_str = kzalloc(result_str_len, GFP_ATOMIC);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
     snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s",
              current->real_cred->uid.val, "\n", INIT_MODULE_TYPE, "\n", cwd,
              "\n", current->pid, "\n", current->real_parent->pid, "\n",
              pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
              current->comm, "\n", current->nsproxy->uts_ns->name.nodename);
-
+#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 3)
+    snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s",
+             current->real_cred->uid.val, "\n", INIT_MODULE_TYPE, "\n", cwd,
+             "\n", current->pid, "\n", current->real_parent->pid, "\n",
+             pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+             current->comm, "\n", current->nsproxy->uts_ns->name.nodename);
+#endif
     send_msg_to_user(SEND_TYPE, result_str, 1);
     return orig_init_module(umod, len, uargs);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
 asmlinkage long monitor_finit_module_hook(int fd, const char __user *uargs, int flags)
 {
     char *result_str;
@@ -976,15 +1085,23 @@ asmlinkage long monitor_finit_module_hook(int fd, const char __user *uargs, int 
     cwd = d_path(&files_path, init_module_buf, 256);
     result_str_len = get_data_alignment(strlen(cwd) + 4);
     result_str = kzalloc(result_str_len, GFP_ATOMIC);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
     snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s",
              current->real_cred->uid.val, "\n", FINIT_MODULE_TYPE, "\n", cwd,
              "\n", current->pid, "\n", current->real_parent->pid, "\n",
              pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
              current->comm, "\n", current->nsproxy->uts_ns->name.nodename);
-
+#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 3)
+    snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s",
+             current->real_cred->uid, "\n", FINIT_MODULE_TYPE, "\n", cwd,
+             "\n", current->pid, "\n", current->real_parent->pid, "\n",
+             pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+             current->comm, "\n", current->nsproxy->uts_ns->name.nodename);
+#endif
     send_msg_to_user(SEND_TYPE, result_str, 1);
     return orig_finit_module(fd, uargs, flags);
 }
+#endif
 
 asmlinkage long monitor_connect_no_hook_time_test(int fd, struct sockaddr __user *dirp, int addrlen)
 {
@@ -1034,7 +1151,7 @@ asmlinkage long monitor_accept_module_hook(int fd, struct sockaddr __user *dirp,
     {
         int copy_res = copy_from_user(&tmp_dirp, dirp, 16);
         if(copy_res == 0) {
-        if(tmp_dirp.sa_family == AF_INET) 
+        if(tmp_dirp.sa_family == AF_INET)
         {
             flag = 1;
             sa_family = 4;
@@ -1049,7 +1166,7 @@ asmlinkage long monitor_accept_module_hook(int fd, struct sockaddr __user *dirp,
             sin = (struct sockaddr_in *)&tmp_dirp;
             snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr.s_addr));
             snprintf(dport, 16, "%d", Ntohs(sin->sin_port));
-        } 
+        }
         else if (tmp_dirp.sa_family == AF_INET6)
         {
             flag = 1;
@@ -1088,6 +1205,7 @@ asmlinkage long monitor_accept_module_hook(int fd, struct sockaddr __user *dirp,
                                    strlen(current->nsproxy->uts_ns->name.nodename) +
                                    strlen(current->comm) + strlen(final_path) + 172);
             result_str = kzalloc(result_str_len, GFP_ATOMIC);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
             snprintf(result_str, result_str_len,
                      "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s",
                      current->real_cred->uid.val, "\n", ACCEPT_TYPE, "\n", sa_family,
@@ -1096,6 +1214,16 @@ asmlinkage long monitor_accept_module_hook(int fd, struct sockaddr __user *dirp,
                      pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
                      current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
                      sip, "\n", sport);
+#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 3)
+            snprintf(result_str, result_str_len,
+                     "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s",
+                     current->real_cred->uid, "\n", ACCEPT_TYPE, "\n", sa_family,
+                     "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
+                     current->pid, "\n", current->real_parent->pid, "\n",
+                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                     current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
+                     sip, "\n", sport);
+#endif
             send_msg_to_user(SEND_TYPE, result_str, 1);
         }
     }
@@ -1136,7 +1264,7 @@ asmlinkage long monitor_accept4_module_hook(int fd, struct sockaddr __user *dirp
     {
         int copy_res = copy_from_user(&tmp_dirp, dirp, 16);
         if(copy_res == 0) {
-        if(tmp_dirp.sa_family == AF_INET) 
+        if(tmp_dirp.sa_family == AF_INET)
         {
             flag = 1;
             sa_family = 4;
@@ -1151,7 +1279,7 @@ asmlinkage long monitor_accept4_module_hook(int fd, struct sockaddr __user *dirp
             sin = (struct sockaddr_in *)&tmp_dirp;
             snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr.s_addr));
             snprintf(dport, 16, "%d", Ntohs(sin->sin_port));
-        } 
+        }
         else if (tmp_dirp.sa_family == AF_INET6)
         {
             flag = 1;
@@ -1190,6 +1318,7 @@ asmlinkage long monitor_accept4_module_hook(int fd, struct sockaddr __user *dirp
                                    strlen(current->nsproxy->uts_ns->name.nodename) +
                                    strlen(current->comm) + strlen(final_path) + 172);
             result_str = kzalloc(result_str_len, GFP_ATOMIC);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
             snprintf(result_str, result_str_len,
                      "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s",
                      current->real_cred->uid.val, "\n", ACCEPT_TYPE, "\n", sa_family,
@@ -1198,6 +1327,16 @@ asmlinkage long monitor_accept4_module_hook(int fd, struct sockaddr __user *dirp
                      pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
                      current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
                      sip, "\n", sport);
+#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 0)
+            snprintf(result_str, result_str_len,
+                     "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s",
+                     current->real_cred->uid, "\n", ACCEPT_TYPE, "\n", sa_family,
+                     "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
+                     current->pid, "\n", current->real_parent->pid, "\n",
+                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                     current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
+                     sip, "\n", sport);
+#endif
             send_msg_to_user(SEND_TYPE, result_str, 1);
         }
     }
@@ -1218,12 +1357,10 @@ asmlinkage long monitor_connect_hook(int fd, struct sockaddr __user *dirp, int a
     char sport[16] = "-1";
     char *final_path = NULL;
     char *result_str = NULL;
-    char *ktime_result_str = NULL;
     int flag = 0;
     int sa_family = 0;
     int err, fput_needed;
     int result_str_len;
-    ktime_t stime;
     struct sockaddr tmp_dirp;
     struct sockaddr_in *sin;
     struct sockaddr_in6 *sin6;
@@ -1247,6 +1384,7 @@ asmlinkage long monitor_connect_hook(int fd, struct sockaddr __user *dirp, int a
     {
 
 #if (CONNECT_TIME_TEST == 2)
+        ktime_t stime;
         get_start_time(&stime);
 #endif
 
@@ -1306,6 +1444,7 @@ asmlinkage long monitor_connect_hook(int fd, struct sockaddr __user *dirp, int a
                                    strlen(current->nsproxy->uts_ns->name.nodename) +
                                    strlen(current->comm) + strlen(final_path) + 172);
             result_str = kzalloc(result_str_len, GFP_ATOMIC);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
             snprintf(result_str, result_str_len,
                      "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s",
                      current->real_cred->uid.val, "\n", CONNECT_TYPE, "\n", sa_family,
@@ -1314,10 +1453,20 @@ asmlinkage long monitor_connect_hook(int fd, struct sockaddr __user *dirp, int a
                      pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
                      current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
                      sip, "\n", sport);
-
+#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 3)
+            snprintf(result_str, result_str_len,
+                      "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s",
+                      current->real_cred->uid, "\n", CONNECT_TYPE, "\n", sa_family,
+                      "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
+                      current->pid, "\n", current->real_parent->pid, "\n",
+                      pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                      current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
+                      sip, "\n", sport);
+#endif
             send_msg_to_user(SEND_TYPE, result_str, 1);
 
 #if (CONNECT_TIME_TEST == 2)
+            char *ktime_result_str = NULL;
             ktime_result_str = kzalloc(16, GFP_ATOMIC);
             snprintf(ktime_result_str, 16, "%ld", get_time_interval(stime));
             send_msg_to_user(SEND_TYPE, ktime_result_str, 1);
@@ -1468,8 +1617,10 @@ static int lkm_init(void)
     sys_call_table_ptr[__NR_accept4] = (void *)monitor_accept4_module_hook;
 #endif
 #if (HOOK_FINIT_MODULE == 1)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
     orig_finit_module = (void *)(sys_call_table_ptr[__NR_finit_module]);
     sys_call_table_ptr[__NR_finit_module] = (void *)monitor_finit_module_hook;
+#endif
 #endif
 #if (HOOK_INIT_MODULE == 1)
     orig_init_module = (void *)(sys_call_table_ptr[__NR_init_module]);
@@ -1502,7 +1653,9 @@ static void lkm_exit(void)
     sys_call_table_ptr[__NR_accept4] = (void *)orig_accept4;
 #endif
 #if (HOOK_FINIT_MODULE == 1)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
     sys_call_table_ptr[__NR_finit_module] = (void *)orig_finit_module;
+#endif
 #endif
 #if (HOOK_INIT_MODULE == 1)
     sys_call_table_ptr[__NR_init_module] = (void *)orig_init_module;
