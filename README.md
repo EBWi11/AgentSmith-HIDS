@@ -11,7 +11,7 @@ English | [简体中文](README-zh_CN.md)
 
 #### About stability
 At present, AgentSmith-HIDS is in a period of rapid iteration. Recently, functions such as `hook accept/accept4`, `Anti Rootkit` have been added, and some unstable BUGs have also been introduced. Since the project currently has only one person to develop/test/maintain and is limited to free time, I hope everyone will use it carefully.
-For a stable version, turn off `hook accept/accept4` and turn off `Anti Rootkit`. When installing LKM, you need to open `SAFE_EXIT` and without the connection of `SYN_SEND` on you Linux.
+For a stable version, turn off `hook accept/accept4` and turn off `Anti Rootkit`. When installing LKM, you need to open `SAFE_EXIT` and without the connection of `SYN_SENT` on you Linux.
 And now we only support Centos7 - kernel 3.10
 
 

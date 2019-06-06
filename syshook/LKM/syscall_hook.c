@@ -83,21 +83,21 @@ struct sockaddr_in *sad;
 typedef unsigned short int uint16;
 typedef unsigned long int uint32;
 
-asmlinkage long (*orig_connect)(int fd, struct sockaddr __user *dirp,
+asmlinkage int (*orig_connect)(int fd, struct sockaddr __user *dirp,
                                 int addrlen);
 
-asmlinkage long (*orig_accept4)(int fd, struct sockaddr __user *dirp,
+asmlinkage int (*orig_accept4)(int fd, struct sockaddr __user *dirp,
                                 int addrlen, int flags);
 
-asmlinkage long (*orig_accept)(int fd, struct sockaddr __user *dirp,
+asmlinkage int (*orig_accept)(int fd, struct sockaddr __user *dirp,
                                 int addrlen);
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
-asmlinkage long (*orig_finit_module)(int fd, const char __user *uargs,
+asmlinkage int (*orig_finit_module)(int fd, const char __user *uargs,
                                 int flags);
 #endif
 
-asmlinkage long (*orig_init_module)(void __user *umod, unsigned long len,
+asmlinkage int (*orig_init_module)(void __user *umod, unsigned long len,
                                 const char __user *uargs);
 
 static int flen = 256;
@@ -1009,7 +1009,7 @@ err:
 }
 #endif
 
-asmlinkage long monitor_init_module_hook(void __user *umod, unsigned long len, const char __user *uargs)
+asmlinkage int monitor_init_module_hook(void __user *umod, unsigned long len, const char __user *uargs)
 {
     char *result_str;
     int i = 0;
@@ -1054,7 +1054,7 @@ asmlinkage long monitor_init_module_hook(void __user *umod, unsigned long len, c
 }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
-asmlinkage long monitor_finit_module_hook(int fd, const char __user *uargs, int flags)
+asmlinkage int monitor_finit_module_hook(int fd, const char __user *uargs, int flags)
 {
     char *result_str;
     int result_str_len;
@@ -1099,7 +1099,7 @@ asmlinkage long monitor_finit_module_hook(int fd, const char __user *uargs, int 
 }
 #endif
 
-asmlinkage long monitor_connect_no_hook_time_test(int fd, struct sockaddr __user *dirp, int addrlen)
+asmlinkage int monitor_connect_no_hook_time_test(int fd, struct sockaddr __user *dirp, int addrlen)
 {
     ktime_t stime;
     char *result_str = NULL;
@@ -1119,7 +1119,7 @@ asmlinkage long monitor_connect_no_hook_time_test(int fd, struct sockaddr __user
     return ori_connect_syscall_res;
 }
 
-asmlinkage long monitor_accept_module_hook(int fd, struct sockaddr __user *dirp, int addrlen)
+asmlinkage int monitor_accept_module_hook(int fd, struct sockaddr __user *dirp, int addrlen)
 {
     int flag = 0;
     int sa_family = 0;
@@ -1138,12 +1138,11 @@ asmlinkage long monitor_accept_module_hook(int fd, struct sockaddr __user *dirp,
     struct sockaddr_in source_addr;
     struct sockaddr_in6 source_addr6;
 
-    long ori_accept_syscall_res = orig_accept4(fd, dirp, addrlen,0);
-
 #if (SAFE_EXIT == 1)
     update_use_count();
 #endif
 
+    long ori_accept_syscall_res = orig_accept4(fd, dirp, addrlen,0);
     if (ori_accept_syscall_res > 0)
     {
         int copy_res = copy_from_user(&tmp_dirp, dirp, 16);
@@ -1234,7 +1233,7 @@ asmlinkage long monitor_accept_module_hook(int fd, struct sockaddr __user *dirp,
     return ori_accept_syscall_res;
 }
 
-asmlinkage long monitor_accept4_module_hook(int fd, struct sockaddr __user *dirp, int addrlen, int flags)
+asmlinkage int monitor_accept4_module_hook(int fd, struct sockaddr __user *dirp, int addrlen, int flags)
 {
     int flag = 0;
     int sa_family = 0;
@@ -1253,12 +1252,10 @@ asmlinkage long monitor_accept4_module_hook(int fd, struct sockaddr __user *dirp
     struct sockaddr_in source_addr;
     struct sockaddr_in6 source_addr6;
 
-    long ori_accept_syscall_res = orig_accept4(fd, dirp, addrlen,flags);
-
 #if (SAFE_EXIT == 1)
     update_use_count();
 #endif
-
+    long ori_accept_syscall_res = orig_accept4(fd, dirp, addrlen,flags);
     if (ori_accept_syscall_res > 0)
     {
         int copy_res = copy_from_user(&tmp_dirp, dirp, 16);
@@ -1349,7 +1346,7 @@ asmlinkage long monitor_accept4_module_hook(int fd, struct sockaddr __user *dirp
     return ori_accept_syscall_res;
 }
 
-asmlinkage long monitor_connect_hook(int fd, struct sockaddr __user *dirp, int addrlen)
+asmlinkage int monitor_connect_hook(int fd, struct sockaddr __user *dirp, int addrlen)
 {
     char dip[64];
     char dport[16];
