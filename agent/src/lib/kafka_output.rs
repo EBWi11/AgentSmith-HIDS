@@ -28,7 +28,10 @@ impl<'a> KafkaWorker<'a> {
                 _ => panic!("Unsupported compression method"),
             };
 
-        let producer = Producer::from_hosts(vec!(settings::BROKER.to_owned()))
+        let producer = Producer::from_hosts(settings::BROKER.to_owned()
+            .split(',')
+            .map(|s| s.trim().to_owned())
+            .collect())
             .with_ack_timeout(Duration::from_secs(1))
             .with_required_acks(RequiredAcks::One)
             .with_compression(compression)
