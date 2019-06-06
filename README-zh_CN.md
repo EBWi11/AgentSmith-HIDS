@@ -10,9 +10,10 @@
 
 
 
-**(注:关于hook syscall方案的稳定性问题,如果出现任何不稳定的问题,欢迎issue或者微信交流.但是没有进行过稳定性测试甚至没有测试过的朋友还请不要见到该方案就大肆宣扬不稳定.AgentSmith-HIDS测试已经上了核心生产,测试周期是研发周期的3倍.关于为何不选择Audit请移步issue)**
-
-
+#### 关于稳定性
+目前AgentSmith-HIDS正处于快速迭代时期，近期增加了如`hook accept/accept4`，`Anti Rootkit`等功能，也引入了一些不稳定的BUG。由于该项目目前仅有一人开发/测试/维护，且仅限于空闲时间，因此希望大家谨慎测试使用。
+关于稳定的版本，关闭`hook accept/accept4`，关闭`Anti Rootkit`。安装LKM时需要在无`SYN_SEND`的连接情况下，且开启`SAFE_EXIT`。
+关于版本目前仅在Centos7 - kernel 3.10上经过充分测试。关于支持Centos6 - Kernel 2.6.3正在进行中。
 
 
 ### 关于AgentSmith-HIDS
