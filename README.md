@@ -139,7 +139,7 @@ Before uninstalling the AgentSmith-HIDS, you need to close the user-mode agent p
 | SEND_TYPE                   | LKM to user mode transmission method: <br />1. NETLINK; <br />2. SHERE_MEM;<br /> Default: 2 |
 | HOOK_EXECVE                 | execve() Hook Switch:<br />1. Enable;<br />Default:1         |
 | HOOK_CONNECT                | connect() Hook Switch:<br />1. Enable;<br />Default:1        |
-| HOOK_ACCEPT                 | accept() Hook Switch:<br />1. Enable;<br />Default:1         |
+| HOOK_ACCEPT                 | accept() Hook Switch:<br />1. Enable;<br />Default:0         |
 | HOOK_INIT_MODULE            | init_module() Hook Switch:<br />1. Enable;<br />Default:1    |
 | HOOK_FINIT_MODULE           | finit_module() Hook Switch:<br />1. Enable;<br />Default:1   |
 | EXECVE_ROOTKIT_CHECK        | execve() Rootkit Detect Swith:<br />1. Enable;<br />Default:1 |

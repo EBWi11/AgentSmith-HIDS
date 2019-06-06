@@ -68,7 +68,7 @@
 
 #define HOOK_EXECVE 1
 #define HOOK_CONNECT 1
-#define HOOK_ACCEPT 1
+#define HOOK_ACCEPT 0
 #define HOOK_INIT_MODULE 1
 #define HOOK_FINIT_MODULE 1
 
@@ -229,55 +229,53 @@ func_execve orig_stub_execve;
                             (((uint16)(A)&0x10ff) << 8))
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
-static int count(struct user_arg_ptr argv, int max)
-{
-    int i = 0;
-    if (argv.ptr.native != NULL)
+    static int count(struct user_arg_ptr argv, int max)
     {
-        for (;;)
+        int i = 0;
+        if (argv.ptr.native != NULL)
         {
-            const char __user *p = get_user_arg_ptr(argv, i);
-            if (!p)
-                break;
-            if (IS_ERR(p))
-                return -EFAULT;
-            if (i >= max)
-                return -E2BIG;
-            ++i;
-            if (fatal_signal_pending(current))
-                return -ERESTARTNOHAND;
-            cond_resched();
+            for (;;)
+            {
+                const char __user *p = get_user_arg_ptr(argv, i);
+                if (!p)
+                    break;
+                if (IS_ERR(p))
+                    return -EFAULT;
+                if (i >= max)
+                    return -E2BIG;
+                ++i;
+                if (fatal_signal_pending(current))
+                    return -ERESTARTNOHAND;
+                cond_resched();
+            }
         }
+        return i;
     }
-    return i;
-}
 #elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
-static int count(char __user * __user * argv, int max)
-{
-    int i = 0;
+    static int count(char __user * __user * argv, int max)
+    {
+        int i = 0;
 
-    if (argv != NULL) {
-        for (;;) {
-            char __user * p;
+        if (argv != NULL) {
+            for (;;) {
+                char __user * p;
 
-            if (get_user(p, argv))
-                return -EFAULT;
-            if (!p)
-                break;
-            argv++;
-            if (i++ >= max)
-                return -E2BIG;
+                if (get_user(p, argv))
+                    return -EFAULT;
+                if (!p)
+                    break;
+                argv++;
+                if (i++ >= max)
+                    return -E2BIG;
 
-            if (fatal_signal_pending(current))
-                return -ERESTARTNOHAND;
-            cond_resched();
+                if (fatal_signal_pending(current))
+                    return -ERESTARTNOHAND;
+                cond_resched();
+            }
         }
+        return i;
     }
-    return i;
-}
-#endif
 
-#if LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
     static int sock_no_open(struct inode *irrelevant, struct file *dontcare);
     static ssize_t sock_aio_read(struct kiocb *iocb, const struct iovec *iov,
                          unsigned long nr_segs, loff_t pos);
@@ -318,15 +316,13 @@ static int count(char __user * __user * argv, int max)
         .splice_read =  sock_splice_read,
 };
 
-static struct socket *sock_from_file(struct file *file, int *err)
-{
-    if (file->f_op == &socket_file_ops)
-        return file->private_data;    /* set in sock_map_fd */
-
-    *err = -ENOTSOCK;
-    return NULL;
-}
-
+    static struct socket *sock_from_file(struct file *file, int *err)
+    {
+        if (file->f_op == &socket_file_ops)
+            return file->private_data;    /* set in sock_map_fd */
+        *err = -ENOTSOCK;
+        return NULL;
+    }
 #endif
 
 int checkCPUendian(void)
@@ -1141,12 +1137,11 @@ asmlinkage long monitor_accept_module_hook(int fd, struct sockaddr __user *dirp,
     struct sockaddr_in6 *sin6;
     struct sockaddr_in source_addr;
     struct sockaddr_in6 source_addr6;
+    long ori_accept_syscall_res = orig_accept(fd, dirp, addrlen);
 
 #if (SAFE_EXIT == 1)
     update_use_count();
 #endif
-
-    long ori_accept_syscall_res = orig_accept(fd, dirp, addrlen);
 
     if (ori_accept_syscall_res > 0)
     {
@@ -1255,12 +1250,11 @@ asmlinkage long monitor_accept4_module_hook(int fd, struct sockaddr __user *dirp
     struct sockaddr_in6 *sin6;
     struct sockaddr_in source_addr;
     struct sockaddr_in6 source_addr6;
+    long ori_accept_syscall_res = orig_accept4(fd, dirp, addrlen,flags);
 
 #if (SAFE_EXIT == 1)
     update_use_count();
 #endif
-
-    long ori_accept_syscall_res = orig_accept4(fd, dirp, addrlen,flags);
 
     if (ori_accept_syscall_res > 0)
     {
@@ -1379,7 +1373,9 @@ asmlinkage long monitor_connect_hook(int fd, struct sockaddr __user *dirp, int a
 
     if (netlink_pid == -1 && share_mem_flag == -1)
     {
+#if (SAFE_EXIT == 1)
         del_use_count();
+#endif
         return ori_connect_syscall_res;
     }
 

@@ -148,7 +148,7 @@ AgentSmith-HIDS 目前已经在点融经过压力测试/稳定性测试，目前
 | SEND_TYPE                   | LKM传输到用户态方案：<br />1:NETLINK;<br />2:SHERE_MEM；<br />默认：2 |
 | HOOK_EXECVE                 | execve() hook 开关:<br />1:开启; <br />默认:  1              |
 | HOOK_CONNECT                | connect() hook 开关:<br />1:开启; <br />默认:  1             |
-| HOOK_ACCEPT                 | accept()/accept4() hook 开关:<br />1:开启; <br />默认:  1    |
+| HOOK_ACCEPT                 | accept()/accept4() hook 开关:<br />1:开启; <br />默认:  0    |
 | HOOK_INIT_MODULE            | init_module() hook 开关:<br />1:开启; <br />默认:  1         |
 | HOOK_FINIT_MODULE           | finit_module() hook 开关:<br />1:开启; <br />默认:  1        |
 | EXECVE_ROOTKIT_CHECK        | execve rootkit检测开关:<br />1:开启;<br />默认: 1            |
