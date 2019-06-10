@@ -227,6 +227,7 @@ fn run(tx: Sender<Vec<u8>>) {
         get_data_no_callback(tx);
     } else {
         println!("NEED_INSTALL_LKM");
+        thread::sleep(time::Duration::from_secs(3));
     }
 }
 
@@ -248,6 +249,7 @@ fn start_hreatbread(tx: Sender<Vec<u8>>) {
         match handle.join() {
             Err(_) => {
                 println!("HREATBREAD_ERROR");
+                thread::sleep(time::Duration::from_secs(3));
             }
             Ok(_) => {}
         }
@@ -261,9 +263,11 @@ fn action_wapper() {
         match handle.join() {
             Err(_) => {
                 println!("MAIN_ERROR");
+                thread::sleep(time::Duration::from_secs(3));
             }
             Ok(_) => {}
         }
+        thread::sleep(time::Duration::from_secs(1));
         unsafe { shm_close(); };
     }
 }
