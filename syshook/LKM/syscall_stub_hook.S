@@ -1,5 +1,9 @@
 .text
+
 .global monitor_stub_execve_hook
+.global monitor_stub_accept_hook
+.global monitor_stub_accept4_hook
+
 monitor_stub_execve_hook:
     pushq   %rbx
     pushq   %rdi
@@ -22,3 +26,49 @@ monitor_stub_execve_hook:
     pop     %rbx
     movabs  $59, %rax
     jmp     *orig_sys_call_table(, %rax, 8)
+
+monitor_stub_accept_hook:
+    pushq   %rbx
+    pushq   %rdi
+    pushq   %rsi
+    pushq   %rdx
+    pushq   %rcx
+    pushq   %r8
+    pushq   %r9
+    pushq   %r10
+    pushq   %r11
+    call    accept_hook_update_use_count
+    pop     %r11
+    pop     %r10
+    pop     %r9
+    pop     %r8
+    pop     %rcx
+    pop     %rdx
+    pop     %rsi
+    pop     %rdi
+    pop     %rbx
+    movabs  $43, %rax
+    jmp     monitor_accept_hook
+
+monitor_stub_accept4_hook:
+    pushq   %rbx
+    pushq   %rdi
+    pushq   %rsi
+    pushq   %rdx
+    pushq   %rcx
+    pushq   %r8
+    pushq   %r9
+    pushq   %r10
+    pushq   %r11
+    call    accept_hook_update_use_count
+    pop     %r11
+    pop     %r10
+    pop     %r9
+    pop     %r8
+    pop     %rcx
+    pop     %rdx
+    pop     %rsi
+    pop     %rdi
+    pop     %rbx
+    movabs  $288, %rax
+    jmp     monitor_accept4_hook

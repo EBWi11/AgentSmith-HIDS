@@ -76,8 +76,6 @@
 
 unsigned long **sys_call_table_ptr;
 void *orig_sys_call_table[NR_syscalls];
-struct filename *(*tmp_getname)(const char __user *filename);
-void (*tmp_putname)(struct filename *name);
 struct sockaddr_in *sad;
 
 typedef unsigned short int uint16;
@@ -99,6 +97,12 @@ asmlinkage int (*orig_finit_module)(int fd, const char __user *uargs,
 
 asmlinkage int (*orig_init_module)(void __user *umod, unsigned long len,
                                 const char __user *uargs);
+
+extern asmlinkage int monitor_stub_accept_hook(int fd, struct sockaddr __user *dirp,
+                                                 int addrlen);
+
+extern asmlinkage int monitor_stub_accept4_hook(int fd, struct sockaddr __user *dirp,
+                                                 int addrlen, int flags);
 
 static int flen = 256;
 static int use_count = 0;
@@ -187,21 +191,21 @@ static inline void write_use_count_unlock(void)
         return native;
     }
 
-    extern asmlinkage long monitor_stub_execve_hook(const char __user *,
+    extern asmlinkage int monitor_stub_execve_hook(const char __user *,
                                                 const char __user *const __user *,
                                                 const char __user *const __user *);
 
-    typedef asmlinkage long (*func_execve)(const char __user *,
+    typedef asmlinkage int (*func_execve)(const char __user *,
                                        const char __user *const __user *,
                                        const char __user *const __user *);
 
 #elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
-    extern asmlinkage long monitor_stub_execve_hook(const char __user *,
+    extern asmlinkage int monitor_stub_execve_hook(const char __user *,
                                                     const char __user * const __user *,
                                                     const char __user *const  __user *,
                                                     struct pt_regs *);
 
-    typedef asmlinkage long (*func_execve)(const char __user *,
+    typedef asmlinkage int (*func_execve)(const char __user *,
                                            const char __user * const __user *,
                                            const char __user *const  __user *,
                                            struct pt_regs *);
@@ -229,6 +233,9 @@ func_execve orig_stub_execve;
                             (((uint16)(A)&0x10ff) << 8))
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+    struct filename *(*tmp_getname)(const char __user *filename);
+    void (*tmp_putname)(struct filename *name);
+
     static int count(struct user_arg_ptr argv, int max)
     {
         int i = 0;
@@ -1059,7 +1066,14 @@ asmlinkage int monitor_connect_no_hook_time_test(int fd, struct sockaddr __user 
     return ori_connect_syscall_res;
 }
 
-asmlinkage int monitor_accept_module_hook(int fd, struct sockaddr __user *dirp, int addrlen)
+asmlinkage void accept_hook_update_use_count()
+{
+    #if (SAFE_EXIT == 1)
+        update_use_count();
+    #endif
+}
+
+asmlinkage int monitor_accept_hook(int fd, struct sockaddr __user *dirp, int addrlen)
 {
     int flag = 0;
     int sa_family = 0;
@@ -1077,11 +1091,6 @@ asmlinkage int monitor_accept_module_hook(int fd, struct sockaddr __user *dirp, 
     struct sockaddr_in6 *sin6;
     struct sockaddr_in source_addr;
     struct sockaddr_in6 source_addr6;
-
-#if (SAFE_EXIT == 1)
-    update_use_count();
-#endif
-
     int ori_accept_syscall_res = orig_accept4(fd, dirp, addrlen, 0);
 
     if (netlink_pid == -1 && share_mem_flag == -1)
@@ -1184,7 +1193,7 @@ asmlinkage int monitor_accept_module_hook(int fd, struct sockaddr __user *dirp, 
     return ori_accept_syscall_res;
 }
 
-asmlinkage int monitor_accept4_module_hook(int fd, struct sockaddr __user *dirp, int addrlen, int flags)
+asmlinkage int monitor_accept4_hook(int fd, struct sockaddr __user *dirp, int addrlen, int flags)
 {
     int flag = 0;
     int sa_family = 0;
@@ -1202,11 +1211,6 @@ asmlinkage int monitor_accept4_module_hook(int fd, struct sockaddr __user *dirp,
     struct sockaddr_in6 *sin6;
     struct sockaddr_in source_addr;
     struct sockaddr_in6 source_addr6;
-
-#if (SAFE_EXIT == 1)
-    update_use_count();
-#endif
-
     int ori_accept_syscall_res = orig_accept4(fd, dirp, addrlen,flags);
 
     if (netlink_pid == -1 && share_mem_flag == -1)
@@ -1548,21 +1552,29 @@ static int lkm_init(void)
     kzalloc_init();
     lock_init();
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
     tmp_getname = (void *)kallsyms_lookup_name("getname");
+    if(!tmp_getname)
+    {
+            pr_err("UNKNOW_SYMBOL: getname()\n");
+            return -1;
+    }
     tmp_putname = (void *)kallsyms_lookup_name("putname");
 
-    if (!tmp_getname)
+    if(!tmp_putname)
     {
-        if (SEND_TYPE == SHERE_MEM)
-        {
-            mutex_destroy(&mchar_mutex);
-            device_destroy(class, MKDEV(major, 0));
-            class_destroy(class);
-            unregister_chrdev(major, DEVICE_NAME);
-        }
-        pr_err("UNKONW_SYMBOL_GETNAME\n");
-        return -1;
+            pr_err("UNKNOW_SYMBOL: putname()\n");
+            return -1;
     }
+
+    if(!tmp_putname || !tmp_getname)
+    {
+        mutex_destroy(&mchar_mutex);
+        device_destroy(class, MKDEV(major, 0));
+        class_destroy(class);
+        unregister_chrdev(major, DEVICE_NAME);
+    }
+#endif
 
     for (i = 0; i < NR_syscalls - 1; i++)
         orig_sys_call_table[i] = sys_call_table_ptr[i];
@@ -1578,10 +1590,10 @@ static int lkm_init(void)
 #if (CONNECT_TIME_TEST == 0)
 #if (HOOK_ACCEPT == 1)
     orig_accept = (void *)(sys_call_table_ptr[__NR_accept]);
-    sys_call_table_ptr[__NR_accept] = (void *)monitor_accept_module_hook;
+    sys_call_table_ptr[__NR_accept] = (void *)monitor_stub_accept_hook;
 
     orig_accept4 = (void *)(sys_call_table_ptr[__NR_accept4]);
-    sys_call_table_ptr[__NR_accept4] = (void *)monitor_accept4_module_hook;
+    sys_call_table_ptr[__NR_accept4] = (void *)monitor_stub_accept4_hook;
 #endif
 #if (HOOK_FINIT_MODULE == 1)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
