@@ -98,6 +98,9 @@ asmlinkage int (*orig_finit_module)(int fd, const char __user *uargs,
 asmlinkage int (*orig_init_module)(void __user *umod, unsigned long len,
                                 const char __user *uargs);
 
+extern asmlinkage int monitor_stub_connect_hook(int fd, struct sockaddr __user *dirp,
+                                                 int addrlen);
+
 extern asmlinkage int monitor_stub_accept_hook(int fd, struct sockaddr __user *dirp,
                                                  int addrlen);
 
@@ -213,21 +216,21 @@ static inline void write_use_count_unlock(void)
 
 func_execve orig_stub_execve;
 
-#define NIPQUAD(addr)                \
-    ((unsigned char *)&addr)[0],     \
-        ((unsigned char *)&addr)[1], \
-        ((unsigned char *)&addr)[2], \
-        ((unsigned char *)&addr)[3]
+#define NIPQUAD(addr) \
+    ((unsigned char *)&addr)[0], \
+    ((unsigned char *)&addr)[1], \
+    ((unsigned char *)&addr)[2], \
+    ((unsigned char *)&addr)[3]
 
-#define NIP6(addr)                  \
-    ntohs((addr).s6_addr16[0]),     \
-        ntohs((addr).s6_addr16[1]), \
-        ntohs((addr).s6_addr16[2]), \
-        ntohs((addr).s6_addr16[3]), \
-        ntohs((addr).s6_addr16[4]), \
-        ntohs((addr).s6_addr16[5]), \
-        ntohs((addr).s6_addr16[6]), \
-        ntohs((addr).s6_addr16[7])
+#define NIP6(addr) \
+    ntohs((addr).s6_addr16[0]), \
+    ntohs((addr).s6_addr16[1]), \
+    ntohs((addr).s6_addr16[2]), \
+    ntohs((addr).s6_addr16[3]), \
+    ntohs((addr).s6_addr16[4]), \
+    ntohs((addr).s6_addr16[5]), \
+    ntohs((addr).s6_addr16[6]), \
+    ntohs((addr).s6_addr16[7])
 
 #define BigLittleSwap16(A) ((((uint16)(A)&0xff00) >> 8) | \
                             (((uint16)(A)&0x10ff) << 8))
@@ -800,7 +803,7 @@ static int send_msg_to_user(int type, char *msg, int kfree_flag)
 }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
-asmlinkage long monitor_execve_hook(const char __user *filename, const char __user *const __user *argv, const char __user *const __user *envp)
+asmlinkage int monitor_execve_hook(const char __user *filename, const char __user *const __user *argv, const char __user *const __user *envp)
 {
     char *result_str;
     int pid_check_res = -1;
@@ -951,8 +954,9 @@ err:
 
     return -1;
 }
+
 #elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
-asmlinkage long monitor_execve_hook(char __user *name, char __user * __user *argv, char __user * __user *envp, struct pt_regs *regs)
+asmlinkage int monitor_execve_hook(char __user *name, char __user * __user *argv, char __user * __user *envp, struct pt_regs *regs)
 {}
 #endif
 
@@ -1051,10 +1055,9 @@ asmlinkage int monitor_connect_no_hook_time_test(int fd, struct sockaddr __user 
     ktime_t stime;
     char *result_str = NULL;
     struct sockaddr tmp_dirp;
-    long ori_connect_syscall_res;
     int copy_res = copy_from_user(&tmp_dirp, dirp, 16);
     get_start_time(&stime);
-    ori_connect_syscall_res = orig_connect(fd, dirp, addrlen);
+    int ori_connect_syscall_res = orig_connect(fd, dirp, addrlen);
     result_str = kzalloc(16, GFP_ATOMIC);
     snprintf(result_str, 16, "%ld", get_time_interval(stime));
     if (copy_res == 0)
@@ -1066,7 +1069,7 @@ asmlinkage int monitor_connect_no_hook_time_test(int fd, struct sockaddr __user 
     return ori_connect_syscall_res;
 }
 
-asmlinkage void accept_hook_update_use_count()
+asmlinkage void hook_update_use_count()
 {
     #if (SAFE_EXIT == 1)
         update_use_count();
@@ -1101,8 +1104,7 @@ asmlinkage int monitor_accept_hook(int fd, struct sockaddr __user *dirp, int add
         return ori_accept_syscall_res;
     }
 
-
-    if (ori_accept_syscall_res > 0)
+    if (ori_accept_syscall_res >= 0)
     {
         int copy_res = copy_from_user(&tmp_dirp, dirp, 16);
 
@@ -1221,7 +1223,7 @@ asmlinkage int monitor_accept4_hook(int fd, struct sockaddr __user *dirp, int ad
         return ori_accept_syscall_res;
     }
 
-    if (ori_accept_syscall_res > 0)
+    if (ori_accept_syscall_res >= 0)
     {
         int copy_res = copy_from_user(&tmp_dirp, dirp, 16);
 
@@ -1330,11 +1332,6 @@ asmlinkage int monitor_connect_hook(int fd, struct sockaddr __user *dirp, int ad
     struct socket *sock;
     struct sockaddr_in source_addr;
     struct sockaddr_in6 source_addr6;
-
-#if (SAFE_EXIT == 1)
-    update_use_count();
-#endif
-
     int ori_connect_syscall_res = orig_connect(fd, dirp, addrlen);
 
     if (netlink_pid == -1 && share_mem_flag == -1)
@@ -1345,7 +1342,7 @@ asmlinkage int monitor_connect_hook(int fd, struct sockaddr __user *dirp, int ad
         return ori_connect_syscall_res;
     }
 
-    if (ori_connect_syscall_res > 0 )
+    if (ori_connect_syscall_res >= 0 )
     {
 
         int copy_res = copy_from_user(&tmp_dirp, dirp, 16);
@@ -1443,12 +1440,12 @@ asmlinkage int monitor_connect_hook(int fd, struct sockaddr __user *dirp, int ad
 #endif
             }
         }
+    }
 
 #if (SAFE_EXIT == 1)
-        del_use_count();
+    del_use_count();
 #endif
 
-    }
     return ori_connect_syscall_res;
 }
 
@@ -1584,7 +1581,7 @@ static int lkm_init(void)
 #if (CONNECT_TIME_TEST == 1)
     sys_call_table_ptr[__NR_connect] = (void *)monitor_connect_no_hook_time_test;
 #elif (HOOK_CONNECT == 1)
-    sys_call_table_ptr[__NR_connect] = (void *)monitor_connect_hook;
+    sys_call_table_ptr[__NR_connect] = (void *)monitor_stub_connect_hook;
 #endif
 
 #if (CONNECT_TIME_TEST == 0)
@@ -1661,6 +1658,6 @@ module_init(lkm_init);
 module_exit(lkm_exit);
 
 MODULE_LICENSE("GPL v2");
-MODULE_VERSION("0.1.6");
+MODULE_VERSION("0.1.7");
 MODULE_AUTHOR("E_Bwill <cy_sniper@yeah.net>");
 MODULE_DESCRIPTION("Monitor Syscall: execve,connect,acccept,accept4,init_module,finit_module;real-time detect rootkit");
