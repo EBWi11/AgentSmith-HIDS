@@ -95,7 +95,7 @@ asmlinkage int (*orig_accept4)(int fd, struct sockaddr __user *dirp,
 asmlinkage int (*orig_accept)(int fd, struct sockaddr __user *dirp,
                                 int addrlen);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+#if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
 asmlinkage int (*orig_finit_module)(int fd, const char __user *uargs,
                                 int flags);
 #endif
@@ -163,7 +163,7 @@ static inline void write_use_count_unlock(void)
     write_unlock(&_write_use_count_lock);
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+#if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
     struct user_arg_ptr
     {
         #ifdef CONFIG_COMPAT
@@ -240,7 +240,7 @@ func_execve orig_stub_execve;
 #define BigLittleSwap16(A) ((((uint16)(A)&0xff00) >> 8) | \
                             (((uint16)(A)&0x10ff) << 8))
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+#if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
     struct filename *(*tmp_getname)(const char __user *filename);
     void (*tmp_putname)(struct filename *name);
 
@@ -781,7 +781,7 @@ static int send_msg_to_user(int type, char *msg, int kfree_flag)
     return 0;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+#if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
 asmlinkage int monitor_execve_hook(const char __user *filename, const char __user *const __user *argv, const char __user *const __user *envp)
 {
     char *result_str;
@@ -964,7 +964,7 @@ asmlinkage int monitor_init_module_hook(void __user *umod, unsigned long len, co
     cwd = d_path(&files_path, init_module_buf, 256);
     result_str_len = get_data_alignment(strlen(cwd) + 4);
     result_str = kzalloc(result_str_len, GFP_ATOMIC);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+#if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
     snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s",
              current->real_cred->uid.val, "\n", INIT_MODULE_TYPE, "\n", cwd,
              "\n", current->pid, "\n", current->real_parent->pid, "\n",
@@ -981,7 +981,7 @@ asmlinkage int monitor_init_module_hook(void __user *umod, unsigned long len, co
     return orig_init_module(umod, len, uargs);
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+#if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
 asmlinkage int monitor_finit_module_hook(int fd, const char __user *uargs, int flags)
 {
     char *result_str;
@@ -1009,7 +1009,7 @@ asmlinkage int monitor_finit_module_hook(int fd, const char __user *uargs, int f
     cwd = d_path(&files_path, init_module_buf, 256);
     result_str_len = get_data_alignment(strlen(cwd) + 4);
     result_str = kzalloc(result_str_len, GFP_ATOMIC);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+#if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
     snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s",
              current->real_cred->uid.val, "\n", FINIT_MODULE_TYPE, "\n", cwd,
              "\n", current->pid, "\n", current->real_parent->pid, "\n",
@@ -1129,7 +1129,7 @@ asmlinkage int monitor_accept_hook(int fd, struct sockaddr __user *dirp, int add
                                    strlen(current->nsproxy->uts_ns->name.nodename) +
                                    strlen(current->comm) + strlen(final_path) + 172);
                 result_str = kzalloc(result_str_len, GFP_ATOMIC);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+#if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
                 snprintf(result_str, result_str_len,
                         "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s",
                         current->real_cred->uid.val, "\n", ACCEPT_TYPE, "\n", sa_family,
@@ -1234,7 +1234,7 @@ asmlinkage int monitor_accept4_hook(int fd, struct sockaddr __user *dirp, int ad
                                        strlen(current->nsproxy->uts_ns->name.nodename) +
                                      strlen(current->comm) + strlen(final_path) + 172);
                 result_str = kzalloc(result_str_len, GFP_ATOMIC);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+#if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
                 snprintf(result_str, result_str_len,
                         "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s",
                         current->real_cred->uid.val, "\n", ACCEPT_TYPE, "\n", sa_family,
@@ -1349,7 +1349,7 @@ asmlinkage int monitor_connect_hook(int fd, struct sockaddr __user *dirp, int ad
                                    strlen(current->nsproxy->uts_ns->name.nodename) +
                                    strlen(current->comm) + strlen(final_path) + 172);
                 result_str = kzalloc(result_str_len, GFP_ATOMIC);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+#if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
                 snprintf(result_str, result_str_len,
                      "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s",
                      current->real_cred->uid.val, "\n", CONNECT_TYPE, "\n", sa_family,
@@ -1424,7 +1424,7 @@ static int check_syn_send_recv(void)
         spin_unlock_bh(&ilb->lock);
     }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+#if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
     for (i = 0; i <= hashinfo->ehash_mask; i++) {
         struct inet_ehash_bucket *head = &hashinfo->ehash[i];
 		spinlock_t *lock = inet_ehash_lockp(hashinfo, i);
@@ -1545,7 +1545,7 @@ static int lkm_init(void)
     kzalloc_init();
     lock_init();
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+#if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
     tmp_getname = (void *)kallsyms_lookup_name("getname");
 
     if(!tmp_getname) {
@@ -1588,7 +1588,7 @@ static int lkm_init(void)
     sys_call_table_ptr[__NR_accept4] = (void *)monitor_stub_accept4_hook;
 #endif
 #if (HOOK_FINIT_MODULE == 1)
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+#if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
     orig_finit_module = (void *)(sys_call_table_ptr[__NR_finit_module]);
     sys_call_table_ptr[__NR_finit_module] = (void *)monitor_finit_module_hook;
 #endif
@@ -1624,7 +1624,7 @@ static void lkm_exit(void)
     sys_call_table_ptr[__NR_accept4] = (void *)orig_accept4;
 #endif
 #if (HOOK_FINIT_MODULE == 1)
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+#if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
     sys_call_table_ptr[__NR_finit_module] = (void *)orig_finit_module;
 #endif
 #endif
