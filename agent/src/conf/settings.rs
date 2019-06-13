@@ -4,7 +4,7 @@ pub const HEARTBEAT: bool = true;
 pub const SEND_KAFKA_FAST_TYPE : bool = false;
 
 pub const DAEMON: bool = true;
-pub const PID_FILE_PATH: &str = "/run/smith.pid";
+pub const PID_FILE_PATH: &str = "/var/run/smith.pid";
 pub const SMITH_LOG_FILE: &str = "/var/log/smith.log";
 
 pub const DEFAULT_KAFKA_THREADS: u32 = 5;

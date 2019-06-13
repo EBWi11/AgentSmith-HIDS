@@ -38,7 +38,12 @@
 #include <linux/syscalls.h>
 #include <linux/utsname.h>
 #include <linux/version.h>
+#include <linux/spinlock.h>
+#include <linux/types.h>
 #include <net/inet_sock.h>
+#include <net/tcp.h>
+#include <net/tcp.h>
+#include <net/inet_connection_sock.h>
 
 #define NETLINK_USER 31
 #define NETLINK 1
@@ -242,10 +247,8 @@ func_execve orig_stub_execve;
     static int count(struct user_arg_ptr argv, int max)
     {
         int i = 0;
-        if (argv.ptr.native != NULL)
-        {
-            for (;;)
-            {
+        if (argv.ptr.native != NULL) {
+            for (;;) {
                 const char __user *p = get_user_arg_ptr(argv, i);
                 if (!p)
                     break;
@@ -428,8 +431,7 @@ static char *str_replace(char *orig, char *rep, char *with)
     if (!result)
         return NULL;
 
-    while (count--)
-    {
+    while (count--) {
         ins = strstr(orig, rep);
         len_front = ins - orig;
         tmp = strncpy(tmp, orig, len_front) + len_front;
@@ -452,8 +454,7 @@ static void update_use_count(void)
 {
     write_use_count_lock();
 
-    if (use_count == 0)
-    {
+    if (use_count == 0) {
         __module_get(THIS_MODULE);
     }
 
@@ -466,8 +467,7 @@ static void del_use_count(void)
     write_use_count_lock();
     use_count = use_count - 1;
 
-    if (use_count == 0)
-    {
+    if (use_count == 0) {
          module_put(THIS_MODULE);
     }
 
@@ -482,16 +482,14 @@ static int device_mmap(struct file *filp, struct vm_area_struct *vma)
 
     vma->vm_flags |= 0;
 
-    if (size > MAX_SIZE)
-    {
+    if (size > MAX_SIZE) {
         ret = -EINVAL;
         goto out;
     }
 
     page = virt_to_page((unsigned long)sh_mem + (vma->vm_pgoff << PAGE_SHIFT));
     ret = remap_pfn_range(vma, vma->vm_start, page_to_pfn(page), size, vma->vm_page_prot);
-    if (ret != 0)
-    {
+    if (ret != 0) {
         goto out;
     }
 
@@ -509,12 +507,9 @@ static void init_share_mem(int type)
 
 static int device_open(struct inode *inode, struct file *file)
 {
-    if (!mutex_trylock(&mchar_mutex))
-    {
+    if (!mutex_trylock(&mchar_mutex)) {
         return -1;
-    }
-    else
-    {
+    } else {
         share_mem_flag = 1;
         write_index_lock();
         pre_slot_len = 0;
@@ -543,16 +538,14 @@ static const struct file_operations mchar_fops = {
 #if (EXECVE_ROOTKIT_CHECK == 1)
 static int check_file(char *path)
 {
+    int i;
     int gap = 2;
     int len = strlen(path);
-    int i = len -1;
     char *file_name;
     char cmd_path[] = "/usr/bin/find";
 
-    for(i;i>=0;i--)
-    {
-        if(path[i] == 47)
-        {
+    for(i = len - 1;i>=0;i--) {
+        if(path[i] == 47) {
             file_name = &path[i+1];
             break;
         }
@@ -616,15 +609,12 @@ static int send_msg_to_user_memshare(char *msg, int kfree_flag)
     int now_read_index = -1;
     struct msg_slot new_msg_slot;
 
-    if (share_mem_flag == 1)
-    {
+    if (share_mem_flag == 1) {
 
 #if (WRITE_INDEX_TRY_LOCK == 1)
         int i;
-        for (i = 0; i < WRITE_INDEX_TRY_LOCK_NUM; i++)
-        {
-            if (write_index_trylock())
-            {
+        for (i = 0; i < WRITE_INDEX_TRY_LOCK_NUM; i++) {
+            if (write_index_trylock()) {
                 write_index_lock_flag = 1;
                 break;
             }
@@ -634,13 +624,11 @@ static int send_msg_to_user_memshare(char *msg, int kfree_flag)
         write_index_lock_flag = 1;
 #endif
 
-        if (write_index_lock_flag)
-        {
+        if (write_index_lock_flag) {
 
             raw_data_len = strlen(msg);
 
-            if (raw_data_len == 0)
-            {
+            if (raw_data_len == 0) {
                 write_index_unlock();
                 if (msg && kfree_flag == 1)
                     kfree(msg);
@@ -655,21 +643,17 @@ static int send_msg_to_user_memshare(char *msg, int kfree_flag)
             else
                 now_write_index = curr_write_index;
 
-            if (check_read_index_flag == 1)
-            {
+            if (check_read_index_flag == 1) {
                 now_read_index = get_read_index();
-                if (now_read_index > curr_write_index + 1)
-                {
+                if (now_read_index > curr_write_index + 1) {
                     if ((curr_write_index + 1024 + raw_data_len) > now_read_index)
                         goto out;
                 }
             }
 
-            if ((curr_write_index + CHECK_WRITE_INDEX_THRESHOLD) >= MAX_SIZE)
-            {
+            if ((curr_write_index + CHECK_WRITE_INDEX_THRESHOLD) >= MAX_SIZE) {
                 now_read_index = get_read_index();
-                if (now_read_index <= CHECK_READ_INDEX_THRESHOLD)
-                {
+                if (now_read_index <= CHECK_READ_INDEX_THRESHOLD) {
 #if (KERNEL_PRINT == 1)
                     printk("READ IS TOO SLOW!! READ_INDEX:%d\n", now_read_index);
 #endif
@@ -687,9 +671,7 @@ static int send_msg_to_user_memshare(char *msg, int kfree_flag)
                 printk("curr_write_index:%d pre_slot_len:%d now_write_index:%d now_read_index:%d\n",
                        curr_write_index, pre_slot_len, now_write_index, now_read_index);
 #endif
-            }
-            else
-            {
+            } else {
                 new_msg_slot = get_solt(raw_data_len, -1);
                 memcpy(&sh_mem[now_write_index], &new_msg_slot, 8);
                 memcpy(&sh_mem[now_write_index + 8], msg, raw_data_len);
@@ -723,15 +705,13 @@ static void nl_recv_msg(struct sk_buff *skb)
     netlink_pid = nlh->nlmsg_pid;
     recv_msg_len = strlen((char *)nlmsg_data(nlh)) + 1;
     recv_msg = kzalloc(recv_msg_len, GFP_ATOMIC);
-    if (recv_msg)
-    {
+
+    if (recv_msg) {
         snprintf(recv_msg, recv_msg_len, (char *)nlmsg_data(nlh));
-        if (strcmp("NIDS_AGENT_UP", recv_msg) != 0)
-        {
+        if (strcmp("NIDS_AGENT_UP", recv_msg) != 0) {
             send_msg_to_user(NETLINK, "DOWN_SUCCESS", 0);
             netlink_pid = -1;
-        }
-        else
+        } else
             send_msg_to_user(NETLINK, "UP_SUCCESS", 0);
         kfree(recv_msg);
     }
@@ -777,8 +757,7 @@ static int send_msg_to_user(int type, char *msg, int kfree_flag)
 #endif
 
 #if (DELAY_TEST == 1)
-    if (kfree_flag == 1)
-    {
+    if (kfree_flag == 1) {
         if (type == SHERE_MEM)
             send_msg_to_user_memshare(get_timespec(), 1);
         else if (type == NETLINK)
@@ -854,8 +833,7 @@ asmlinkage int monitor_execve_hook(const char __user *filename, const char __use
     else
         abs_path = "-1";
 
-    if (pname_buf)
-    {
+    if (pname_buf) {
         pname_buf = memset(pname_buf, '\0', flen);
         pname = dentry_path_raw(current->fs->pwd.dentry, pname_buf, flen - 1);
     }
@@ -870,8 +848,7 @@ asmlinkage int monitor_execve_hook(const char __user *filename, const char __use
     if (!argv_res)
         goto err;
 
-    for (i = 0; i < argv_len; i++)
-    {
+    for (i = 0; i < argv_len; i++) {
         native = get_user_arg_ptr(argv_ptr, i);
         if (IS_ERR(native))
             goto err;
@@ -1060,8 +1037,8 @@ asmlinkage int monitor_connect_no_hook_time_test(int fd, struct sockaddr __user 
     int ori_connect_syscall_res = orig_connect(fd, dirp, addrlen);
     result_str = kzalloc(16, GFP_ATOMIC);
     snprintf(result_str, 16, "%ld", get_time_interval(stime));
-    if (copy_res == 0)
-    {
+
+    if (copy_res == 0) {
         if (tmp_dirp.sa_family == AF_INET)
             send_msg_to_user(SEND_TYPE, result_str, 1);
     }
@@ -1096,66 +1073,54 @@ asmlinkage int monitor_accept_hook(int fd, struct sockaddr __user *dirp, int add
     struct sockaddr_in6 source_addr6;
     int ori_accept_syscall_res = orig_accept4(fd, dirp, addrlen, 0);
 
-    if (netlink_pid == -1 && share_mem_flag == -1)
-    {
+    if (netlink_pid == -1 && share_mem_flag == -1) {
     #if (SAFE_EXIT == 1)
         del_use_count();
     #endif
         return ori_accept_syscall_res;
     }
 
-    if (ori_accept_syscall_res >= 0)
-    {
+    if (ori_accept_syscall_res >= 0) {
         int copy_res = copy_from_user(&tmp_dirp, dirp, 16);
 
-        if(copy_res == 0)
-        {
-            if(tmp_dirp.sa_family == AF_INET)
-            {
+        if(copy_res == 0) {
+            if(tmp_dirp.sa_family == AF_INET) {
                 flag = 1;
                 sa_family = 4;
                 sock = sockfd_lookup(ori_accept_syscall_res, &err);
-                if (sock)
-                {
+                if (sock) {
                     kernel_getsockname(sock, (struct sockaddr *)&source_addr, &addrlen);
                     snprintf(sport, 16, "%d", Ntohs(source_addr.sin_port));
                     snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(source_addr.sin_addr));
                     sockfd_put(sock);
                 }
+
                 sin = (struct sockaddr_in *)&tmp_dirp;
                 snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr.s_addr));
                 snprintf(dport, 16, "%d", Ntohs(sin->sin_port));
-            }
-            else if (tmp_dirp.sa_family == AF_INET6)
-            {
+            } else if (tmp_dirp.sa_family == AF_INET6) {
                 flag = 1;
                 sa_family = 6;
                 sock = sockfd_lookup(ori_accept_syscall_res, &err);
-                if (sock)
-                {
+                if (sock) {
                     kernel_getsockname(sock, (struct sockaddr *)&source_addr6, &addrlen);
                     snprintf(sport, 16, "%d", Ntohs(source_addr6.sin6_port));
                     snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(source_addr6.sin6_addr));
                     sockfd_put(sock);
                 }
+
                 sin6 = (struct sockaddr_in6 *)&tmp_dirp;
                 snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sin6->sin6_addr));
                 snprintf(dport, 16, "%d", Ntohs(sin6->sin6_port));
             }
 
-            if (flag == 1)
-            {
-                if (current->active_mm)
-                {
-                    if (current->mm->exe_file)
-                    {
-                        if (pathname)
-                        {
+            if (flag == 1) {
+                if (current->active_mm) {
+                    if (current->mm->exe_file) {
+                        if (pathname) {
                             pathname = memset(pathname, '\0', PATH_MAX);
                             final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
-                        }
-                        else
-                        {
+                        } else {
                             pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
                         }
                     }
@@ -1215,27 +1180,22 @@ asmlinkage int monitor_accept4_hook(int fd, struct sockaddr __user *dirp, int ad
     struct sockaddr_in6 source_addr6;
     int ori_accept_syscall_res = orig_accept4(fd, dirp, addrlen,flags);
 
-    if (netlink_pid == -1 && share_mem_flag == -1)
-    {
+    if (netlink_pid == -1 && share_mem_flag == -1) {
     #if (SAFE_EXIT == 1)
         del_use_count();
     #endif
         return ori_accept_syscall_res;
     }
 
-    if (ori_accept_syscall_res >= 0)
-    {
+    if (ori_accept_syscall_res >= 0) {
         int copy_res = copy_from_user(&tmp_dirp, dirp, 16);
 
-        if(copy_res == 0)
-        {
-            if(tmp_dirp.sa_family == AF_INET)
-            {
+        if(copy_res == 0) {
+            if(tmp_dirp.sa_family == AF_INET) {
                 flag = 1;
                 sa_family = 4;
                 sock = sockfd_lookup(ori_accept_syscall_res, &err);
-                if (sock)
-                {
+                if (sock) {
                     kernel_getsockname(sock, (struct sockaddr *)&source_addr, &addrlen);
                     snprintf(sport, 16, "%d", Ntohs(source_addr.sin_port));
                     snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(source_addr.sin_addr));
@@ -1244,14 +1204,11 @@ asmlinkage int monitor_accept4_hook(int fd, struct sockaddr __user *dirp, int ad
                 sin = (struct sockaddr_in *)&tmp_dirp;
                 snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr.s_addr));
                 snprintf(dport, 16, "%d", Ntohs(sin->sin_port));
-            }
-            else if (tmp_dirp.sa_family == AF_INET6)
-            {
+            } else if (tmp_dirp.sa_family == AF_INET6) {
                 flag = 1;
                 sa_family = 6;
                 sock = sockfd_lookup(ori_accept_syscall_res, &err);
-                if (sock)
-                {
+                if (sock) {
                     kernel_getsockname(sock, (struct sockaddr *)&source_addr6, &addrlen);
                     snprintf(sport, 16, "%d", Ntohs(source_addr6.sin6_port));
                     snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(source_addr6.sin6_addr));
@@ -1262,19 +1219,13 @@ asmlinkage int monitor_accept4_hook(int fd, struct sockaddr __user *dirp, int ad
                 snprintf(dport, 16, "%d", Ntohs(sin6->sin6_port));
             }
 
-            if (flag == 1)
-            {
-                if (current->active_mm)
-                {
-                    if (current->mm->exe_file)
-                    {
-                        if (pathname)
-                        {
+            if (flag == 1) {
+                if (current->active_mm) {
+                    if (current->mm->exe_file) {
+                        if (pathname) {
                             pathname = memset(pathname, '\0', PATH_MAX);
                             final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
-                        }
-                        else
-                        {
+                        } else {
                             pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
                         }
                     }
@@ -1316,16 +1267,16 @@ asmlinkage int monitor_accept4_hook(int fd, struct sockaddr __user *dirp, int ad
 
 asmlinkage int monitor_connect_hook(int fd, struct sockaddr __user *dirp, int addrlen)
 {
+    int err;
+    int flag = 0;
+    int sa_family = 0;
+    int result_str_len;
     char dip[64];
     char dport[16];
     char sip[64] = "-1";
     char sport[16] = "-1";
     char *final_path = NULL;
     char *result_str = NULL;
-    int flag = 0;
-    int sa_family = 0;
-    int err;
-    int result_str_len;
     struct sockaddr tmp_dirp;
     struct sockaddr_in *sin;
     struct sockaddr_in6 *sin6;
@@ -1334,34 +1285,30 @@ asmlinkage int monitor_connect_hook(int fd, struct sockaddr __user *dirp, int ad
     struct sockaddr_in6 source_addr6;
     int ori_connect_syscall_res = orig_connect(fd, dirp, addrlen);
 
-    if (netlink_pid == -1 && share_mem_flag == -1)
-    {
+    if (netlink_pid == -1 && share_mem_flag == -1) {
 #if (SAFE_EXIT == 1)
         del_use_count();
 #endif
+
         return ori_connect_syscall_res;
     }
 
-    if (ori_connect_syscall_res >= 0 )
-    {
+    if (ori_connect_syscall_res >= 0 ) {
 
         int copy_res = copy_from_user(&tmp_dirp, dirp, 16);
 
-        if (copy_res == 0)
-        {
+        if (copy_res == 0) {
 
 #if (CONNECT_TIME_TEST == 2)
             ktime_t stime;
             get_start_time(&stime);
 #endif
 
-            if (tmp_dirp.sa_family == AF_INET)
-            {
+            if (tmp_dirp.sa_family == AF_INET) {
                 flag = 1;
                 sa_family = 4;
                 sock = sockfd_lookup(fd, &err);
-                if (sock)
-                {
+                if (sock) {
                     kernel_getsockname(sock, (struct sockaddr *)&source_addr, &addrlen);
                     snprintf(sport, 16, "%d", Ntohs(source_addr.sin_port));
                     snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(source_addr.sin_addr));
@@ -1370,14 +1317,11 @@ asmlinkage int monitor_connect_hook(int fd, struct sockaddr __user *dirp, int ad
                 sin = (struct sockaddr_in *)&tmp_dirp;
                 snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr.s_addr));
                 snprintf(dport, 16, "%d", Ntohs(sin->sin_port));
-            }
-            else if (tmp_dirp.sa_family == AF_INET6)
-            {
+            } else if (tmp_dirp.sa_family == AF_INET6) {
                 flag = 1;
                 sa_family = 6;
                 sock = sockfd_lookup(fd, &err);
-                if (sock)
-                {
+                if (sock) {
                     kernel_getsockname(sock, (struct sockaddr *)&source_addr6, &addrlen);
                     snprintf(sport, 16, "%d", Ntohs(source_addr6.sin6_port));
                     snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(source_addr6.sin6_addr));
@@ -1388,19 +1332,13 @@ asmlinkage int monitor_connect_hook(int fd, struct sockaddr __user *dirp, int ad
                 snprintf(dport, 16, "%d", Ntohs(sin6->sin6_port));
             }
 
-            if (flag == 1)
-            {
-                if (current->active_mm)
-                {
-                    if (current->mm->exe_file)
-                    {
-                        if (pathname)
-                        {
+            if (flag == 1) {
+                if (current->active_mm) {
+                    if (current->mm->exe_file) {
+                        if (pathname) {
                             pathname = memset(pathname, '\0', PATH_MAX);
                             final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
-                        }
-                        else
-                        {
+                        } else {
                             pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
                         }
                     }
@@ -1455,8 +1393,7 @@ unsigned long **find_sys_call_table(void)
     unsigned long *p;
     for (ptr = (unsigned long)sys_close;
          ptr < (unsigned long)&loops_per_jiffy;
-         ptr += sizeof(void *))
-    {
+         ptr += sizeof(void *)) {
         p = (unsigned long *)ptr;
         if (p[__NR_close] == (unsigned long)sys_close)
             return (unsigned long **)p;
@@ -1464,36 +1401,98 @@ unsigned long **find_sys_call_table(void)
     return NULL;
 }
 
+static int check_syn_send_recv(void)
+{
+    int i;
+    struct inet_hashinfo *hashinfo = &tcp_hashinfo;
+
+    for(i = 0; i < INET_LHTABLE_SIZE; i++) {
+        struct sock *sk;
+        struct hlist_nulls_node *node;
+        struct inet_listen_hashbucket *ilb;
+
+        ilb = &hashinfo->listening_hash[i];
+        spin_lock_bh(&ilb->lock);
+
+        sk_nulls_for_each(sk, node, &ilb->head) {
+            if (sk->sk_state == TCP_SYN_SENT || sk->sk_state == TCP_SYN_SENT ) {
+                spin_unlock_bh(&ilb->lock);
+                return -1;
+            }
+        }
+
+        spin_unlock_bh(&ilb->lock);
+    }
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+    for (i = 0; i <= hashinfo->ehash_mask; i++) {
+        struct inet_ehash_bucket *head = &hashinfo->ehash[i];
+		spinlock_t *lock = inet_ehash_lockp(hashinfo, i);
+		struct sock *sk;
+		struct hlist_nulls_node *node;
+
+		spin_lock_bh(lock);
+		sk_nulls_for_each(sk, node, &head->chain) {
+            if (sk->sk_state == TCP_SYN_SENT || sk->sk_state == TCP_SYN_SENT ) {
+                spin_unlock_bh(lock);
+                return -1;
+            }
+		}
+		spin_unlock_bh(lock);
+    }
+#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
+    for (i = 0; i <= hashinfo->ehash_size; i++) {
+        struct inet_ehash_bucket *head = &hashinfo->ehash[i];
+		spinlock_t *lock = inet_ehash_lockp(hashinfo, i);
+		struct sock *sk;
+		struct hlist_nulls_node *node;
+
+		spin_lock_bh(lock);
+		sk_nulls_for_each(sk, node, &head->chain) {
+            if (sk->sk_state == TCP_SYN_SENT || sk->sk_state == TCP_SYN_SENT ) {
+                spin_unlock_bh(lock);
+                return -1;
+            }
+		}
+		spin_unlock_bh(lock);
+    }
+#endif
+
+    return 1;
+}
+
 static int lkm_init(void)
 {
     int i = 0;
 
-    if (LINUX_VERSION_CODE != KERNEL_VERSION(3, 10, 0))
-    {
+    if (LINUX_VERSION_CODE != KERNEL_VERSION(3, 10, 0)) {
         pr_err("KERNEL_VERSION_DON'T_SUPPORT\n");
+        return -1;
+    }
+
+    int syn_send_recv_check = check_syn_send_recv();
+    if (syn_send_recv_check != 1) {
+        pr_err("STILL HAVE SYN_SEND OR SYN_RECV SOCK\n");
         return -1;
     }
 
 #if (SEND_TYPE == SHERE_MEM)
     major = register_chrdev(0, DEVICE_NAME, &mchar_fops);
 
-    if (major < 0)
-    {
+    if (major < 0) {
         pr_err("REGISTER_CHRDEV_ERROR\n");
         return -1;
     }
 
     class = class_create(THIS_MODULE, CLASS_NAME);
-    if (IS_ERR(class))
-    {
+    if (IS_ERR(class)) {
         unregister_chrdev(major, DEVICE_NAME);
         pr_err("CLASS_CREATE_ERROR");
         return -1;
     }
 
     device = device_create(class, NULL, MKDEV(major, 0), NULL, DEVICE_NAME);
-    if (IS_ERR(device))
-    {
+    if (IS_ERR(device)) {
         class_destroy(class);
         unregister_chrdev(major, DEVICE_NAME);
         pr_err("DEVICE_CREATE_ERROR");
@@ -1501,19 +1500,19 @@ static int lkm_init(void)
     }
 
     sh_mem = kzalloc(MAX_SIZE, GFP_KERNEL);
-    if (sh_mem == NULL)
-    {
+
+    if (sh_mem == NULL) {
         device_destroy(class, MKDEV(major, 0));
         class_destroy(class);
         unregister_chrdev(major, DEVICE_NAME);
         pr_err("SHMEM_INIT_ERROR\n");
         return -ENOMEM;
     }
-    else
-    {
+    else {
         for (i = 0; i < MAX_SIZE; i += PAGE_SIZE)
             SetPageReserved(virt_to_page(((unsigned long)sh_mem) + i));
     }
+
     mutex_init(&mchar_mutex);
 #else
     struct netlink_kernel_cfg cfg = {
@@ -1521,10 +1520,9 @@ static int lkm_init(void)
     };
 
     nl_sk = netlink_kernel_create(&init_net, NETLINK_USER, &cfg);
-    if (!nl_sk)
-    {
-        if (SEND_TYPE == SHERE_MEM)
-        {
+
+    if (!nl_sk) {
+        if (SEND_TYPE == SHERE_MEM) {
             device_destroy(class, MKDEV(major, 0));
             class_destroy(class);
             unregister_chrdev(major, DEVICE_NAME);
@@ -1534,10 +1532,8 @@ static int lkm_init(void)
     }
 #endif
 
-    if (!(sys_call_table_ptr = find_sys_call_table()))
-    {
-        if (SEND_TYPE == SHERE_MEM)
-        {
+    if (!(sys_call_table_ptr = find_sys_call_table())) {
+        if (SEND_TYPE == SHERE_MEM) {
             device_destroy(class, MKDEV(major, 0));
             class_destroy(class);
             unregister_chrdev(major, DEVICE_NAME);
@@ -1551,21 +1547,19 @@ static int lkm_init(void)
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
     tmp_getname = (void *)kallsyms_lookup_name("getname");
-    if(!tmp_getname)
-    {
+
+    if(!tmp_getname) {
             pr_err("UNKNOW_SYMBOL: getname()\n");
             return -1;
     }
     tmp_putname = (void *)kallsyms_lookup_name("putname");
 
-    if(!tmp_putname)
-    {
+    if(!tmp_putname) {
             pr_err("UNKNOW_SYMBOL: putname()\n");
             return -1;
     }
 
-    if(!tmp_putname || !tmp_getname)
-    {
+    if(!tmp_putname || !tmp_getname) {
         mutex_destroy(&mchar_mutex);
         device_destroy(class, MKDEV(major, 0));
         class_destroy(class);
@@ -1575,6 +1569,7 @@ static int lkm_init(void)
 
     for (i = 0; i < NR_syscalls - 1; i++)
         orig_sys_call_table[i] = sys_call_table_ptr[i];
+
     disable_write_protection();
     orig_connect = (void *)(sys_call_table_ptr[__NR_connect]);
 
