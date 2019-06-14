@@ -15,9 +15,9 @@ def handle_request(conn, ip):
     res = redis_helper.get("HIDS-DETECTIVE-{0}".format(ip))
     if not res:
         redis_helper.set("HIDS-DETECTIVE-{0}".format(ip), 1, ex=1200)
-        conn.sendll("FileSystemIntegrityCheck;ListeningSockets;RPMList;SystemUser;CrontabList;\n")
+        conn.sendall("FileSystemIntegrityCheck;ListeningSockets;RPMList;SystemUser;CrontabList;\n")
     else:
-        conn.sendll(";\n")
+        conn.sendall(";\n")
 
 
 while True:
