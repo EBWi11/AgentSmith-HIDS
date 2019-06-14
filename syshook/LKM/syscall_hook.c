@@ -989,11 +989,7 @@ asmlinkage int monitor_execve_hook(char __user *filename, char __user * __user *
     else
         tmp_stdout = "-1";
 
-    path = getname(filename);
-    if (!IS_ERR(path))
-        abs_path = path->name;
-    else
-        abs_path = "-1";
+    abs_path = filename;
 
     if (pname_buf) {
         pname_buf = memset(pname_buf, '\0', flen);
@@ -1075,8 +1071,6 @@ asmlinkage int monitor_execve_hook(char __user *filename, char __user * __user *
     if (argv_res_tmp)
         kfree(argv_res_tmp);
 
-    putname(path);
-
 #if (EXECVE_TIME_TEST == 1)
     char *ktime_result_str = NULL;
     ktime_result_str = kzalloc(16, GFP_ATOMIC);
@@ -1092,8 +1086,6 @@ err:
 
     if (argv_res_tmp)
         kfree(argv_res_tmp);
-
-    putname(path);
 
     tmp_stdin_fd = memset(tmp_stdin_fd, '\0', 256);
     tmp_stdout_fd = memset(tmp_stdout_fd, '\0', 256);
