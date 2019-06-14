@@ -39,7 +39,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ### 关于兼容系统及内核版本
 
-* AgentSmith-HIDS 仅在**Centos6/7**上进行过充分的测试.如果有其他人在其他版本上进行过稳定性测试，可以随时联系我们（需附稳定性测试报告）。
+* AgentSmith-HIDS 仅在**Centos6/7 Kernel 2.6.32/3.10**上进行过充分的测试.如果有其他人在其他版本上进行过稳定性测试，可以随时联系我们（需附稳定性测试报告）。
 * 我们会对AgentSmith-HIDS进行长期维护，会追随Centos7的最新稳定版进行维护。
 
 
