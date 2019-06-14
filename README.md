@@ -9,10 +9,6 @@ A project which is named by inspiration from the movie ---The Matrix
 
 English | [简体中文](README-zh_CN.md)
 
-#### About stability
-At present, AgentSmith-HIDS is in a period of rapid iteration. Recently, functions such as `hook accept/accept4`, `Anti Rootkit` have been added, and some unstable BUGs have also been introduced. Since the project currently has only one person to develop/test/maintain and is limited to free time, I hope everyone will use it carefully.
-For a stable version, turn off `hook accept/accept4` and turn off `Anti Rootkit`. When installing LKM, you need to open `SAFE_EXIT` and without the connection of `SYN_SENT` on you Linux.
-And now we only support Centos7 - kernel 3.10
 
 
 
@@ -41,9 +37,8 @@ For security engineers who have a certain understanding of Linux and need a func
 
 ### About compatible systems and kernel versions
 
-* AgentSmith-HIDS has only been fully tested on Centos version 7.2/7.3/7.4/7.5/7.6 and Kernel version 3.10-327/3.10-514/3.10-693/3.10-862/3.10-957. Although theoretically the AgentSmith-HIDS should be compatible with more versions, due to lack of comprehensive tests, it is forced to check the Kernel version (>3.10) when loading LKM. Anyone who have tested the compatibility on other versions, Feel is always welcome and please do feel free to contact us (a stability test report will be required)
+* AgentSmith-HIDS has only been fully tested on Centos version 6/7 and Kernel version 3.10/2.6.32. Anyone who have tested the compatibility on other versions, Feel is always welcome and please do feel free to contact us (a stability test report will be required)
 * We will keep the development of the AgentSmith-HIDS and following the latest release of stable version of Centos7.
-* Kernel >= 3.14 is supported with support from [@shelterz](https://github.com/shelterz), but is currently only tested on ubuntu 14.04, ubuntu 16.04, ubuntu 18.04.
 * Real-time Rootkit Detect(Beta Feature)
 
 

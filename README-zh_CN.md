@@ -10,11 +10,6 @@
 
 
 
-#### 关于稳定性
-目前AgentSmith-HIDS正处于快速迭代时期，近期增加了如`hook accept/accept4`，`Anti Rootkit`等功能，也引入了一些不稳定的BUG。由于该项目目前仅有一人开发/测试/维护，且仅限于空闲时间，因此希望大家谨慎测试使用。
-关于稳定的版本，关闭`hook accept/accept4`，关闭`Anti Rootkit`。安装LKM时需要在无`SYN_SENT`的连接情况下，且开启`SAFE_EXIT`。
-关于版本目前仅在Centos7 - kernel 3.10上经过充分测试。关于支持Centos6 - Kernel 2.6.3正在进行中。
-
 
 ### 关于AgentSmith-HIDS
 
@@ -44,9 +39,8 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ### 关于兼容系统及内核版本
 
-* AgentSmith-HIDS 仅在**Centos7.2/7.3/7.4/7.5/7.6**上进行过充分的测试，关于Kernel版本仅在**3.10-327/3.10-514/3.10-693/3.10-862/3.10-957**上进行过充分测试。虽然理论上Smith支持更多的版本，但是由于未经过充分测试，在加载LKM的时候会对Kernel进行版本强制校验(=3.10)，如果有其他人在其他版本上进行过稳定性测试，可以随时联系我们（需附稳定性测试报告）。
+* AgentSmith-HIDS 仅在**Centos6/7**上进行过充分的测试.如果有其他人在其他版本上进行过稳定性测试，可以随时联系我们（需附稳定性测试报告）。
 * 我们会对AgentSmith-HIDS进行长期维护，会追随Centos7的最新稳定版进行维护。
-* 在[@shelterz](https://github.com/shelterz)的支持下，支持了kernel >= 3.14 ，不过目前仅在ubuntu 14.04，ubuntu 16.04，ubuntu 18.04下进行了测试。
 
 
 
