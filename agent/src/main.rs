@@ -227,7 +227,11 @@ fn run(tx: Sender<Vec<u8>>) {
         get_data_no_callback(tx);
     } else {
         println!("NEED_INSTALL_LKM");
-        thread::sleep(time::Duration::from_secs(3));
+        if settings::AUTO_INSTALL_LKM {
+            install_lkm();
+        } else {
+            thread::sleep(time::Duration::from_secs(3));
+        }
     }
 }
 
@@ -256,6 +260,13 @@ fn start_hreatbread(tx: Sender<Vec<u8>>) {
     }
 }
 
+fn install_lkm() {
+    Command::new("curl").arg("-o").arg(settings::LKM_TMP_PATH).arg(format!("{}lkm/release/{}/syshook.ko", settings::LKM_SERVER, get_kernel_version())).status().unwrap();
+    Command::new("insmod").arg(settings::LKM_TMP_PATH).status().unwrap();
+    Command::new("rm").arg("-rf").arg(settings::LKM_TMP_PATH).status().unwrap();
+    thread::sleep(time::Duration::from_secs(1));
+}
+
 fn action_wapper() {
     loop {
         unsafe { init(); };
@@ -267,7 +278,7 @@ fn action_wapper() {
             }
             Ok(_) => {}
         }
-        thread::sleep(time::Duration::from_secs(1));
+        thread::sleep(time::Duration::from_secs(3));
         unsafe { shm_close(); };
     }
 }
@@ -286,6 +297,7 @@ fn action() {
     }
 
     run(tx);
+    thread::sleep(time::Duration::from_secs(2));
 }
 
 fn main_daemon() {

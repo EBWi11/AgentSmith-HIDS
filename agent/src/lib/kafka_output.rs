@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::sync::mpsc::Receiver;
 use std::thread;
 use std::time::Duration;
+use std::time;
 
 pub struct KafkaOutput {
     threads: u32,
@@ -68,7 +69,10 @@ impl<'a> KafkaWorker<'a> {
         loop {
             let bytes = match { self.arx.lock().unwrap().recv() } {
                 Ok(line) => line,
-                Err(_) => continue,
+                Err(_) => {
+                    thread::sleep(time::Duration::from_millis(100));
+                    continue;
+                },
             };
             let message = Record {
                 key: (),
