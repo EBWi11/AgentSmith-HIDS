@@ -190,7 +190,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
 }
 
 fn write_pid() {
-    let mut file = File::create("/run/smith.pid").unwrap();
+    let mut file = File::create(settings::PID_FILE_PATH).unwrap();
     file.write_all(process::id().to_string().as_bytes()).unwrap();
 }
 
