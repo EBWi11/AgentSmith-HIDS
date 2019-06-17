@@ -37,7 +37,7 @@ For security engineers who have a certain understanding of Linux and need a func
 
 ### About compatible systems and kernel versions
 
-* AgentSmith-HIDS has only been fully tested on Centos version 6/7 and Kernel version 3.10/2.6.32. Anyone who have tested the compatibility on other versions, Feel is always welcome and please do feel free to contact us (a stability test report will be required)
+* AgentSmith-HIDS has only been fully tested on Centos version 6/7 and Kernel version 2.6.32/3.10. Anyone who have tested the compatibility on other versions, Feel is always welcome and please do feel free to contact us (a stability test report will be required)
 * We will keep the development of the AgentSmith-HIDS and following the latest release of stable version of Centos7.
 * Real-time Rootkit Detect(Beta Feature)
 
