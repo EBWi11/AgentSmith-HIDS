@@ -1280,10 +1280,16 @@ asmlinkage unsigned long monitor_accept_hook(int fd, struct sockaddr __user *dir
                             pathname = memset(pathname, '\0', PATH_MAX);
                             final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
                         } else {
+                            final_path = "-1";
                             pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
                         }
                     }
                 }
+
+                if (final_path == NULL) {
+                    final_path = "-1";
+                }
+
                 result_str_len = get_data_alignment(strlen(current->comm) +
                                    strlen(current->nsproxy->uts_ns->name.nodename) +
                                    strlen(current->comm) + strlen(final_path) + 172);
@@ -1386,10 +1392,16 @@ asmlinkage unsigned long monitor_accept4_hook(int fd, struct sockaddr __user *di
                             pathname = memset(pathname, '\0', PATH_MAX);
                             final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
                         } else {
+                            final_path = "-1";
                             pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
                         }
                     }
                 }
+
+                if (final_path == NULL) {
+                    final_path = "-1";
+                }
+
                 result_str_len = get_data_alignment(strlen(current->comm) +
                                        strlen(current->nsproxy->uts_ns->name.nodename) +
                                      strlen(current->comm) + strlen(final_path) + 172);
@@ -1502,6 +1514,10 @@ asmlinkage unsigned long monitor_connect_hook(int fd, struct sockaddr __user *di
                             pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
                         }
                     }
+                }
+
+                if (final_path == NULL) {
+                    final_path = "-1";
                 }
 
                 result_str_len =
