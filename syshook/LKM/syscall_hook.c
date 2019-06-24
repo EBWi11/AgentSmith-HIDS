@@ -1511,6 +1511,7 @@ asmlinkage unsigned long monitor_connect_hook(int fd, struct sockaddr __user *di
                             pathname = memset(pathname, '\0', PATH_MAX);
                             final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
                         } else {
+                            final_path = "-1";
                             pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
                         }
                     }
