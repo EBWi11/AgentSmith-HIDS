@@ -77,7 +77,7 @@
 #define HOOK_INIT_MODULE 1
 #define HOOK_FINIT_MODULE 1
 
-#define EXECVE_ROOTKIT_CHECK 1
+#define EXECVE_ROOTKIT_CHECK 0
 
 unsigned long **sys_call_table_ptr;
 void *orig_sys_call_table[NR_syscalls];
