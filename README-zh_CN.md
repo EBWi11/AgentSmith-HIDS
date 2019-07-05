@@ -26,7 +26,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ### 谁适合AgentSmith-HIDS？
 
-对Linux有一定了解，对HIDS有需求，对现有的HIDS性能/联动能力/二次开发难度不满意的安全工程师，AgentSmith-HIDS也许是你的选择，AgentSmith-HIDS是为了低性能损耗，异常行为检测和联动能力而生的项目。
+对Linux有一定了解，对HIDS有需求，对现有的HIDS性能/联动能力/误报漏报率/二次开发难度不满意的安全工程师，AgentSmith-HIDS也许是你的选择，AgentSmith-HIDS是为了低性能损耗，异常行为检测和联动能力而生的项目。
 
 
 
