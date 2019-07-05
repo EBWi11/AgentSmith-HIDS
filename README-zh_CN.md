@@ -14,13 +14,19 @@
 ### 关于AgentSmith-HIDS
 
 AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection System”，因为目前开源的部分来讲它缺乏了规则引擎和相关检测的功能，但是它可以作为一个高性能“主机情报收集工具”来构建属于你自己的HIDS。
+由于AgentSmit-HIDS的特点(从Kernel中获取尽可能全的数据)，对比用户态的HIDS拥有巨大的优势：
+* 性能更优，信息一次获取全面，无需诸如遍历/proc这样的行为进行数据补全；传输方案使用共享内存，拒绝netlink。
+* 难以绕过，比如：大多数用户态HIDS是通过进程名之类的来检测恶意行为，如反弹shell，极易绕过(cp /bin/bash abc)，且用户态HIDS面对Rootkit或者稍微有一定技巧的黑客往往显得极为无力，但是内核态HIDS不存在这些问题，我们关注的是syscall调用。
+* 为联动而生，我们不仅可以作为安全工具，也可以作为监控，内部资产梳理的利器。我们通过Hook Connect/Accept从而实现了对进程/用户/文件/网络连接的全面梳理。如果有CMDB的信息，那么联动后你将会得到一张从网络到主机/容器的调用/依赖关系图；如果你们还有DB Audit Tool，那么联动后你可以得到DB User/库表字段/应用/网络/主机容器的关系。
+* 面对Kernel级别Rootkit，无法绕过我们的Hook。
+* 其实我们也有用户态Agent,严格意义上说我们在用户态和内核态都可以做监控(目前用户态Agent主要是接收内核态Agent Hook的信息并转发到Server；保持心跳；接收Server指令运行一些自定义检测模块等)。
 
 
 
 
 ### 谁适合AgentSmith-HIDS？
 
-对Linux有一定了解，对HIDS有需求，对现有的HIDS性能/联动能力/二次开发难度不满意的安全工程师，AgentSmith-HIDS也许是你的选择，AgentSmith-HIDS是为了低性能损耗和联动能力(主要为了关联点融的AgentSmith-NIDS)而生的项目。
+对Linux有一定了解，对HIDS有需求，对现有的HIDS性能/联动能力/二次开发难度不满意的安全工程师，AgentSmith-HIDS也许是你的选择，AgentSmith-HIDS是为了低性能损耗，异常行为检测和联动能力而生的项目。
 
 
 
@@ -54,7 +60,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 ### 关于使用方式
 
 * AgentSmith-HIDS 有一个简陋的用户态demo进行接收LKM传输的信息，并将信息拼接为JSON后传输到Server端，该项目用Rust编写，需要有openssl lib的支持，传输方式采用Kafka传输。
-* AgentSmith-HIDS 的定位就是一款轻量级，高性能的情报采集工具，首先可以检测如:反弹shell，执行可以命令，下载恶意程序，一些Rootkit等等NIDS的死角。其次可以和NIDS/CMDB完成联动，达到：**PID+PPID+nodename+cmdline+cwd+user+exe+TCP/UDP五元组+部分协议的原始数据+业务相关信息+FW_RULE+NIDS/HIDS规则ID+威胁情报信息+等**的联动效果。
+* AgentSmith-HIDS 的定位就是一款轻量级，高性能的情报采集工具，首先可以检测如:反弹shell，执行命令，下载恶意程序，一些Rootkit等等NIDS的死角。其次可以和NIDS/CMDB完成联动，达到：**PID+PPID+nodename+cmdline+cwd+user+exe+TCP/UDP五元组+部分协议的原始数据+业务相关信息+FW_RULE+NIDS/HIDS规则ID+威胁情报信息+等**的联动效果。
 
 
 
@@ -62,6 +68,14 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 ### 关于项目进度和未来
 
 AgentSmith-HIDS 目前已经在点融经过压力测试/稳定性测试，目前正在内部线上测试环境进行更加全面的测试。
+
+(本人已从点融离职，目前就职于一家游戏公司，稳定性测试依然在进行)
+
+未来计划：
+* 持续稳定性/性能测试。
+* 对Connect行为后续传输的数据进行偏移量计算从而得到一些关键信息(部分协议，如HTTP)，如Host这样的信息。
+* 借鉴LKRG，对Kernel进行保护。
+* 增加Rootkit的Connect行为实时检测。
 
 
 
@@ -106,7 +120,7 @@ AgentSmith-HIDS 目前已经在点融经过压力测试/稳定性测试，目前
 
 
 
-## AntiRootkit(Beta Feature)
+### AntiRootkit(Beta Feature)
 
 目前AgentSmith-HIDS支持对execve()的进程/父进程/可执行文件做检测,可以有效的发现试图隐藏自己行踪的行为.
 
@@ -115,7 +129,7 @@ AgentSmith-HIDS 目前已经在点融经过压力测试/稳定性测试，目前
 
 
 
-### 流程图
+### 整体流程图
 
 ![simple_flow_chart](https://github.com/DianrongSecurity/AgentSmith-HIDS/blob/master/simple_flow_chart.png)
 
