@@ -857,7 +857,7 @@ asmlinkage int monitor_execve_hook(const char __user *filename, const char __use
     if (argv_len < 0)
         goto err;
 
-    argv_res = kzalloc(argv_res_len + 16 * argv_len, GFP_ATOMIC);
+    argv_res = kzalloc(argv_res_len + 128 * argv_len, GFP_ATOMIC);
     if (!argv_res)
         goto err;
 
@@ -870,7 +870,7 @@ asmlinkage int monitor_execve_hook(const char __user *filename, const char __use
         if (!len)
             goto err;
 
-        if (offset + len > argv_res_len + 16 * argv_len)
+        if (offset + len > argv_res_len + 128 * argv_len)
             break;
 
         if (copy_from_user(argv_res + offset, native, len))
@@ -1002,7 +1002,7 @@ asmlinkage int monitor_execve_hook(char __user *filename, char __user * __user *
     if (argv_len < 0)
         goto err;
 
-    argv_res = kzalloc(argv_res_len + 16 * argv_len, GFP_ATOMIC);
+    argv_res = kzalloc(argv_res_len + 128 * argv_len, GFP_ATOMIC);
     if (!argv_res)
         goto err;
 
@@ -1020,7 +1020,7 @@ asmlinkage int monitor_execve_hook(char __user *filename, char __user * __user *
             goto err;
         }
 
-        if(offset + len > argv_res_len + 16 * argv_len) {
+        if(offset + len > argv_res_len + 128 * argv_len) {
             break;
         }
 
