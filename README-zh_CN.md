@@ -80,7 +80,7 @@ AgentSmith-HIDS 目前已经在点融经过压力测试/稳定性测试，目前
 
 
 
-### 快速测试
+### 快速测试 （您可以参考[Quick-Start](https://github.com/DianrongSecurity/AgentSmith-HIDS/blob/master/Quick-Start.md)中更为详细的说明）
 
 1. 编译LKM，自己编译LKM需要安装Linux Kernel Source，编译目录在：`/syshook/LKM`，通过`make`得到`syshook.ko`LKM文件。
 
