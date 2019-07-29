@@ -80,7 +80,7 @@ AgentSmith-HIDS has passed stress testing/stability testing in Dianrong, and is 
 
 
 
-### Rapid Testing
+### Rapid Testing （You can refer to [Quick-Start](https://github.com/DianrongSecurity/AgentSmith-HIDS/blob/master/Quick-Start.md) for a detailed version）
 1. Compile LKM, To compile LKM yourself, you need to install Linux Kernel Source. The directory will be: `/syshook/LKM` and get the LKM file `syshook.ko` by `make`.
 
 2. Publish the compiled LKM file to your test server. Please pay attention that the Kernel version needs to be consistent with the server used for compiling.
