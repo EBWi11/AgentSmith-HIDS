@@ -1,4 +1,4 @@
-###一、生成内核态agent（LKM模块）
+### 一、生成内核态agent（LKM模块）
 
 1. clone项目到服务器
 
@@ -26,27 +26,27 @@
 
    `cd AgentSmith-HIDS/syshook/test`
 
-​	5.2 修改一个小地方
+   5.2 修改一个小地方
 
-​	`vim shm_user.c`
+   `vim shm_user.c`
 
-​	把文件末尾原来的shm_run_no_callback(); 替换为 printf("\n%s\n",shm_run_no_callback());  
+   把文件末尾原来的shm_run_no_callback(); 替换为 printf("\n%s\n",shm_run_no_callback());  
 
-​	5.3 编译测试文件，生成a.out可执行测试文件
+   5.3 编译测试文件，生成a.out可执行测试文件
 
-​	`gcc -g shm_user.c`
+   `gcc -g shm_user.c`
 
-​	5.4 执行a.out可执行测试文件
+   5.4 执行a.out可执行测试文件
 
-​	`nohup ./a.out &`
+   `nohup ./a.out &`
 
-​	5.5 查看结果（内核态的执行信息会打印到nohup.out文件中）
+   5.5 查看结果（内核态的执行信息会打印到nohup.out文件中）
 
-​	`tail -f nohup.out`
+   `tail -f nohup.out`
 
 
 
-###二、准备kafka消息队列环境
+### 二、准备kafka消息队列环境
 
 1. 安装zookeeper
 2. 安装kafka
