@@ -1,3 +1,5 @@
+本文对单机单实例场景下的测试进行了描述
+
 ### 一、生成内核态agent（LKM模块）
 
 1. clone项目到服务器
@@ -76,7 +78,7 @@
 修改其中的kafka配置信息
 
 ```pub const BROKER: &str = "localhost:9092";
-pub const TOPIC: &str = "hello_topic";
+pub const TOPIC: &str = "HIDS_TEST";
 pub const BROKER: &str = "localhost:9092";
 ```
 
