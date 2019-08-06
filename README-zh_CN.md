@@ -80,7 +80,7 @@ AgentSmith-HIDS 目前已经在点融经过压力测试/稳定性测试，目前
 
 
 
-### 快速测试
+### 快速测试 （您可以参考[Quick-Start](https://github.com/DianrongSecurity/AgentSmith-HIDS/blob/master/Quick-Start.md)中更为详细的说明）
 
 1. 编译LKM，自己编译LKM需要安装Linux Kernel Source，编译目录在：`/syshook/LKM`，通过`make`得到`syshook.ko`LKM文件。
 
@@ -92,7 +92,7 @@ AgentSmith-HIDS 目前已经在点融经过压力测试/稳定性测试，目前
 
 5. (可选)部署测试环境HIDS心跳Server，具体请看：https://github.com/DianrongSecurity/AgentSmith-HIDS/tree/master/smith_console 。
 
-6. 编译agent模块，需要提前安装rust环境。在目录：`/root/smithhids/agent/src/conf`下，先修改agent配置文件：`/root/smithhids/agent/src/conf/settings.rs`，修改相关的Kafka信息和心跳配置，通过`cargo build —-release`，在`/agent/target/release/ `下得到编译好的agent。(注：需要提前`yun install openssl` && `yun install openssl-devel`)
+6. 编译agent模块，需要提前安装rust环境。在目录：`/root/smithhids/agent/src/conf`下，先修改agent配置文件：`/root/smithhids/agent/src/conf/settings.rs`，修改相关的Kafka信息和心跳配置，通过`cargo build —-release`，在`/agent/target/release/ `下得到编译好的agent。(注：需要提前`yum install openssl` && `yum install openssl-devel`)
 
 7. 安装agent，下发agent到测试环境，直接执行即可。
 

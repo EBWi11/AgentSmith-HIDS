@@ -217,4 +217,6 @@ void main()
     shm_init();
     while (1)
         shm_run_no_callback();
+        // To do quick test, we need the following function call instead of the above one.
+        // printf("\n%s\n",shm_run_no_callback()); 
 }
