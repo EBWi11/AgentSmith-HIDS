@@ -203,7 +203,7 @@ char *shm_run_no_callback(void)
         }
         else
         {
-            nanosleep((const struct timespec[]){{0, 150000}}, NULL);
+            nanosleep((const struct timespec[]){{0, 500000}}, NULL);
         }
     }
 }
