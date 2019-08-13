@@ -1239,82 +1239,80 @@ asmlinkage unsigned long monitor_accept_hook(int fd, struct sockaddr __user *dir
         return ori_accept_syscall_res;
     }
 
-    if (ori_accept_syscall_res >= 0) {
-        int copy_res = copy_from_user(&tmp_dirp, dirp, 16);
+    int copy_res = copy_from_user(&tmp_dirp, dirp, 16);
 
-        if(copy_res == 0) {
-            if(tmp_dirp.sa_family == AF_INET) {
-                flag = 1;
-                sa_family = 4;
-                sock = sockfd_lookup(ori_accept_syscall_res, &err);
-                if (sock) {
-                    kernel_getsockname(sock, (struct sockaddr *)&source_addr, &addrlen);
-                    snprintf(sport, 16, "%d", Ntohs(source_addr.sin_port));
-                    snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(source_addr.sin_addr));
-                    sockfd_put(sock);
-                }
-
-                sin = (struct sockaddr_in *)&tmp_dirp;
-                snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr.s_addr));
-                snprintf(dport, 16, "%d", Ntohs(sin->sin_port));
-            } else if (tmp_dirp.sa_family == AF_INET6) {
-                flag = 1;
-                sa_family = 6;
-                sock = sockfd_lookup(ori_accept_syscall_res, &err);
-                if (sock) {
-                    kernel_getsockname(sock, (struct sockaddr *)&source_addr6, &addrlen);
-                    snprintf(sport, 16, "%d", Ntohs(source_addr6.sin6_port));
-                    snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(source_addr6.sin6_addr));
-                    sockfd_put(sock);
-                }
-
-                sin6 = (struct sockaddr_in6 *)&tmp_dirp;
-                snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sin6->sin6_addr));
-                snprintf(dport, 16, "%d", Ntohs(sin6->sin6_port));
+    if(copy_res == 0) {
+        if(tmp_dirp.sa_family == AF_INET) {
+            flag = 1;
+            sa_family = 4;
+            sock = sockfd_lookup(ori_accept_syscall_res, &err);
+            if (sock) {
+                kernel_getsockname(sock, (struct sockaddr *)&source_addr, &addrlen);
+                snprintf(sport, 16, "%d", Ntohs(source_addr.sin_port));
+                snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(source_addr.sin_addr));
+                sockfd_put(sock);
             }
 
-            if (flag == 1) {
-                if (current->active_mm) {
-                    if (current->mm->exe_file) {
-                        if (pathname) {
-                            pathname = memset(pathname, '\0', PATH_MAX);
-                            final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
-                        } else {
-                            final_path = "-1";
-                            pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
-                        }
+            sin = (struct sockaddr_in *)&tmp_dirp;
+            snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr.s_addr));
+            snprintf(dport, 16, "%d", Ntohs(sin->sin_port));
+        } else if (tmp_dirp.sa_family == AF_INET6) {
+            flag = 1;
+            sa_family = 6;
+            sock = sockfd_lookup(ori_accept_syscall_res, &err);
+            if (sock) {
+                kernel_getsockname(sock, (struct sockaddr *)&source_addr6, &addrlen);
+                snprintf(sport, 16, "%d", Ntohs(source_addr6.sin6_port));
+                snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(source_addr6.sin6_addr));
+                sockfd_put(sock);
+            }
+
+            sin6 = (struct sockaddr_in6 *)&tmp_dirp;
+            snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sin6->sin6_addr));
+            snprintf(dport, 16, "%d", Ntohs(sin6->sin6_port));
+        }
+
+        if (flag == 1) {
+            if (current->active_mm) {
+                if (current->mm->exe_file) {
+                    if (pathname) {
+                        pathname = memset(pathname, '\0', PATH_MAX);
+                        final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
+                    } else {
+                        final_path = "-1";
+                        pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
                     }
                 }
-
-                if (final_path == NULL) {
-                    final_path = "-1";
-                }
-
-                result_str_len = get_data_alignment(strlen(current->comm) +
-                                   strlen(current->nsproxy->uts_ns->name.nodename) +
-                                   strlen(current->comm) + strlen(final_path) + 172);
-                result_str = kzalloc(result_str_len, GFP_ATOMIC);
-#if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
-                snprintf(result_str, result_str_len,
-                        "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s",
-                        current->real_cred->uid.val, "\n", ACCEPT_TYPE, "\n", sa_family,
-                        "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
-                        current->pid, "\n", current->real_parent->pid, "\n",
-                        pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                        current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                         sip, "\n", sport);
-#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
-                snprintf(result_str, result_str_len,
-                        "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s",
-                        current->real_cred->uid, "\n", ACCEPT_TYPE, "\n", sa_family,
-                        "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
-                        current->pid, "\n", current->real_parent->pid, "\n",
-                        pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                         current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                         sip, "\n", sport);
-#endif
-                send_msg_to_user(SEND_TYPE, result_str, 1);
             }
+
+            if (final_path == NULL) {
+                final_path = "-1";
+            }
+
+            result_str_len = get_data_alignment(strlen(current->comm) +
+                               strlen(current->nsproxy->uts_ns->name.nodename) +
+                               strlen(current->comm) + strlen(final_path) + 172);
+            result_str = kzalloc(result_str_len, GFP_ATOMIC);
+#if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
+            snprintf(result_str, result_str_len,
+                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d",
+                    current->real_cred->uid.val, "\n", ACCEPT_TYPE, "\n", sa_family,
+                    "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
+                    current->pid, "\n", current->real_parent->pid, "\n",
+                    pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                    current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
+                     sip, "\n", sport, "\n", ori_accept_syscall_res);
+#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
+            snprintf(result_str, result_str_len,
+                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d",
+                    current->real_cred->uid, "\n", ACCEPT_TYPE, "\n", sa_family,
+                    "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
+                    current->pid, "\n", current->real_parent->pid, "\n",
+                    pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                    current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
+                    sip, "\n", sport, "\n", ori_accept_syscall_res);
+#endif
+            send_msg_to_user(SEND_TYPE, result_str, 1);
         }
     }
 
@@ -1353,80 +1351,78 @@ asmlinkage unsigned long monitor_accept4_hook(int fd, struct sockaddr __user *di
         return ori_accept_syscall_res;
     }
 
-    if (ori_accept_syscall_res >= 0) {
-        int copy_res = copy_from_user(&tmp_dirp, dirp, 16);
+    int copy_res = copy_from_user(&tmp_dirp, dirp, 16);
 
-        if(copy_res == 0) {
-            if(tmp_dirp.sa_family == AF_INET) {
-                flag = 1;
-                sa_family = 4;
-                sock = sockfd_lookup(ori_accept_syscall_res, &err);
-                if (sock) {
-                    kernel_getsockname(sock, (struct sockaddr *)&source_addr, &addrlen);
-                    snprintf(sport, 16, "%d", Ntohs(source_addr.sin_port));
-                    snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(source_addr.sin_addr));
-                    sockfd_put(sock);
-                }
-                sin = (struct sockaddr_in *)&tmp_dirp;
-                snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr.s_addr));
-                snprintf(dport, 16, "%d", Ntohs(sin->sin_port));
-            } else if (tmp_dirp.sa_family == AF_INET6) {
-                flag = 1;
-                sa_family = 6;
-                sock = sockfd_lookup(ori_accept_syscall_res, &err);
-                if (sock) {
-                    kernel_getsockname(sock, (struct sockaddr *)&source_addr6, &addrlen);
-                    snprintf(sport, 16, "%d", Ntohs(source_addr6.sin6_port));
-                    snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(source_addr6.sin6_addr));
-                    sockfd_put(sock);
-                }
-                sin6 = (struct sockaddr_in6 *)&tmp_dirp;
-                snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sin6->sin6_addr));
-                snprintf(dport, 16, "%d", Ntohs(sin6->sin6_port));
+    if(copy_res == 0) {
+        if(tmp_dirp.sa_family == AF_INET) {
+            flag = 1;
+            sa_family = 4;
+            sock = sockfd_lookup(ori_accept_syscall_res, &err);
+            if (sock) {
+                kernel_getsockname(sock, (struct sockaddr *)&source_addr, &addrlen);
+                snprintf(sport, 16, "%d", Ntohs(source_addr.sin_port));
+                snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(source_addr.sin_addr));
+                sockfd_put(sock);
             }
+            sin = (struct sockaddr_in *)&tmp_dirp;
+            snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr.s_addr));
+            snprintf(dport, 16, "%d", Ntohs(sin->sin_port));
+        } else if (tmp_dirp.sa_family == AF_INET6) {
+            flag = 1;
+            sa_family = 6;
+            sock = sockfd_lookup(ori_accept_syscall_res, &err);
+            if (sock) {
+                kernel_getsockname(sock, (struct sockaddr *)&source_addr6, &addrlen);
+                snprintf(sport, 16, "%d", Ntohs(source_addr6.sin6_port));
+                snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(source_addr6.sin6_addr));
+                sockfd_put(sock);
+            }
+            sin6 = (struct sockaddr_in6 *)&tmp_dirp;
+            snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sin6->sin6_addr));
+            snprintf(dport, 16, "%d", Ntohs(sin6->sin6_port));
+        }
 
-            if (flag == 1) {
-                if (current->active_mm) {
-                    if (current->mm->exe_file) {
-                        if (pathname) {
-                            pathname = memset(pathname, '\0', PATH_MAX);
-                            final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
-                        } else {
-                            final_path = "-1";
-                            pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
-                        }
+        if (flag == 1) {
+            if (current->active_mm) {
+                if (current->mm->exe_file) {
+                    if (pathname) {
+                        pathname = memset(pathname, '\0', PATH_MAX);
+                        final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
+                    } else {
+                        final_path = "-1";
+                        pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
                     }
                 }
-
-                if (final_path == NULL) {
-                    final_path = "-1";
-                }
-
-                result_str_len = get_data_alignment(strlen(current->comm) +
-                                       strlen(current->nsproxy->uts_ns->name.nodename) +
-                                     strlen(current->comm) + strlen(final_path) + 172);
-                result_str = kzalloc(result_str_len, GFP_ATOMIC);
-#if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
-                snprintf(result_str, result_str_len,
-                        "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s",
-                        current->real_cred->uid.val, "\n", ACCEPT_TYPE, "\n", sa_family,
-                        "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
-                         current->pid, "\n", current->real_parent->pid, "\n",
-                         pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                         current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                         sip, "\n", sport);
-#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
-               snprintf(result_str, result_str_len,
-                        "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s",
-                        current->real_cred->uid, "\n", ACCEPT_TYPE, "\n", sa_family,
-                        "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
-                         current->pid, "\n", current->real_parent->pid, "\n",
-                         pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                         current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                         sip, "\n", sport);
-#endif
-                send_msg_to_user(SEND_TYPE, result_str, 1);
             }
+
+            if (final_path == NULL) {
+                final_path = "-1";
+            }
+
+            result_str_len = get_data_alignment(strlen(current->comm) +
+                                   strlen(current->nsproxy->uts_ns->name.nodename) +
+                                 strlen(current->comm) + strlen(final_path) + 172);
+            result_str = kzalloc(result_str_len, GFP_ATOMIC);
+#if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
+            snprintf(result_str, result_str_len,
+                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d",
+                    current->real_cred->uid.val, "\n", ACCEPT_TYPE, "\n", sa_family,
+                    "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
+                    current->pid, "\n", current->real_parent->pid, "\n",
+                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                     current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
+                     sip, "\n", sport, "\n", ori_accept_syscall_res);
+#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
+          snprintf(result_str, result_str_len,
+                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d",
+                    current->real_cred->uid, "\n", ACCEPT_TYPE, "\n", sa_family,
+                    "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
+                     current->pid, "\n", current->real_parent->pid, "\n",
+                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                    current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
+                    sip, "\n", sport, "\n", ori_accept_syscall_res);
+#endif
+           send_msg_to_user(SEND_TYPE, result_str, 1);
         }
     }
 
@@ -1465,95 +1461,92 @@ asmlinkage unsigned long monitor_connect_hook(int fd, struct sockaddr __user *di
         return ori_connect_syscall_res;
     }
 
-    if (ori_connect_syscall_res >= 0 ) {
+    int copy_res = copy_from_user(&tmp_dirp, dirp, 16);
 
-        int copy_res = copy_from_user(&tmp_dirp, dirp, 16);
-
-        if (copy_res == 0) {
+    if (copy_res == 0) {
 
 #if (CONNECT_TIME_TEST == 2)
-            ktime_t stime;
-            get_start_time(&stime);
+        ktime_t stime;
+        get_start_time(&stime);
 #endif
 
-            if (tmp_dirp.sa_family == AF_INET) {
-                flag = 1;
-                sa_family = 4;
-                sock = sockfd_lookup(fd, &err);
-                if (sock) {
-                    kernel_getsockname(sock, (struct sockaddr *)&source_addr, &addrlen);
-                    snprintf(sport, 16, "%d", Ntohs(source_addr.sin_port));
-                    snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(source_addr.sin_addr));
-                    sockfd_put(sock);
-                }
-                sin = (struct sockaddr_in *)&tmp_dirp;
-                snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr.s_addr));
-                snprintf(dport, 16, "%d", Ntohs(sin->sin_port));
-            } else if (tmp_dirp.sa_family == AF_INET6) {
-                flag = 1;
-                sa_family = 6;
-                sock = sockfd_lookup(fd, &err);
-                if (sock) {
-                    kernel_getsockname(sock, (struct sockaddr *)&source_addr6, &addrlen);
-                    snprintf(sport, 16, "%d", Ntohs(source_addr6.sin6_port));
-                    snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(source_addr6.sin6_addr));
-                    sockfd_put(sock);
-                }
-                sin6 = (struct sockaddr_in6 *)&tmp_dirp;
-                snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sin6->sin6_addr));
-                snprintf(dport, 16, "%d", Ntohs(sin6->sin6_port));
+        if (tmp_dirp.sa_family == AF_INET) {
+            flag = 1;
+            sa_family = 4;
+            sock = sockfd_lookup(fd, &err);
+            if (sock) {
+                kernel_getsockname(sock, (struct sockaddr *)&source_addr, &addrlen);
+                snprintf(sport, 16, "%d", Ntohs(source_addr.sin_port));
+                snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(source_addr.sin_addr));
+                sockfd_put(sock);
             }
+            sin = (struct sockaddr_in *)&tmp_dirp;
+            snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr.s_addr));
+            snprintf(dport, 16, "%d", Ntohs(sin->sin_port));
+        } else if (tmp_dirp.sa_family == AF_INET6) {
+            flag = 1;
+            sa_family = 6;
+            sock = sockfd_lookup(fd, &err);
+            if (sock) {
+                kernel_getsockname(sock, (struct sockaddr *)&source_addr6, &addrlen);
+                snprintf(sport, 16, "%d", Ntohs(source_addr6.sin6_port));
+                snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(source_addr6.sin6_addr));
+                sockfd_put(sock);
+            }
+            sin6 = (struct sockaddr_in6 *)&tmp_dirp;
+            snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sin6->sin6_addr));
+            snprintf(dport, 16, "%d", Ntohs(sin6->sin6_port));
+        }
 
-            if (flag == 1) {
-                if (current->active_mm) {
-                    if (current->mm->exe_file) {
-                        if (pathname) {
-                            pathname = memset(pathname, '\0', PATH_MAX);
-                            final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
-                        } else {
-                            final_path = "-1";
-                            pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
-                        }
+        if (flag == 1) {
+            if (current->active_mm) {
+                if (current->mm->exe_file) {
+                    if (pathname) {
+                        pathname = memset(pathname, '\0', PATH_MAX);
+                        final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
+                    } else {
+                        final_path = "-1";
+                        pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
                     }
                 }
+            }
 
-                if (final_path == NULL) {
-                    final_path = "-1";
-                }
+            if (final_path == NULL) {
+                final_path = "-1";
+            }
 
-                result_str_len =
-                    get_data_alignment(strlen(current->comm) +
-                                   strlen(current->nsproxy->uts_ns->name.nodename) +
-                                   strlen(current->comm) + strlen(final_path) + 172);
-                result_str = kzalloc(result_str_len, GFP_ATOMIC);
+            result_str_len =
+                get_data_alignment(strlen(current->comm) +
+                               strlen(current->nsproxy->uts_ns->name.nodename) +
+                               strlen(current->comm) + strlen(final_path) + 172);
+            result_str = kzalloc(result_str_len, GFP_ATOMIC);
 #if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
                 snprintf(result_str, result_str_len,
-                     "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s",
-                     current->real_cred->uid.val, "\n", CONNECT_TYPE, "\n", sa_family,
-                     "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
-                     current->pid, "\n", current->real_parent->pid, "\n",
-                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                     current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                     sip, "\n", sport);
+                 "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d",
+                 current->real_cred->uid.val, "\n", CONNECT_TYPE, "\n", sa_family,
+                 "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
+                 current->pid, "\n", current->real_parent->pid, "\n",
+                 pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                 current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
+                 sip, "\n", sport, "\n", ori_connect_syscall_res);
 #elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
                 snprintf(result_str, result_str_len,
-                        "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s",
-                        current->real_cred->uid, "\n", CONNECT_TYPE, "\n", sa_family,
-                        "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
-                        current->pid, "\n", current->real_parent->pid, "\n",
-                        pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                        current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                        sip, "\n", sport);
+                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s",
+                    current->real_cred->uid, "\n", CONNECT_TYPE, "\n", sa_family,
+                    "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
+                    current->pid, "\n", current->real_parent->pid, "\n",
+                    pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                    current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
+                    sip, "\n", sport, "\n", ori_connect_syscall_res);
 #endif
-                send_msg_to_user(SEND_TYPE, result_str, 1);
+            send_msg_to_user(SEND_TYPE, result_str, 1);
 
 #if (CONNECT_TIME_TEST == 2)
-                char *ktime_result_str = NULL;
-                ktime_result_str = kzalloc(16, GFP_ATOMIC);
-                snprintf(ktime_result_str, 16, "%ld", get_time_interval(stime));
-                send_msg_to_user(SEND_TYPE, ktime_result_str, 1);
+            char *ktime_result_str = NULL;
+            ktime_result_str = kzalloc(16, GFP_ATOMIC);
+            snprintf(ktime_result_str, 16, "%ld", get_time_interval(stime));
+            send_msg_to_user(SEND_TYPE, ktime_result_str, 1);
 #endif
-            }
         }
     }
 
