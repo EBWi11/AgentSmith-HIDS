@@ -895,18 +895,17 @@ asmlinkage int monitor_execve_hook(const char __user *filename, const char __use
 
 #if (EXECVE_ROOTKIT_CHECK == 1)
     pid_check_res = check_pid(current->pid);
-    ppid_check_res = check_pid(current->real_parent->pid);
     file_check_res = check_file(abs_path);
 #endif
 
     snprintf(result_str, result_str_len,
-             "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d",
+             "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d",
              current->real_cred->uid.val, "\n", EXECVE_TYPE, "\n", pname, "\n",
              abs_path, "\n", argv_res_tmp, "\n", current->pid, "\n",
              current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
              "\n", current->tgid, "\n", current->comm, "\n",
              current->nsproxy->uts_ns->name.nodename,"\n",tmp_stdin,"\n",tmp_stdout,
-             "\n",pid_check_res, "\n",ppid_check_res, "\n",file_check_res);
+             "\n",pid_check_res, "\n",file_check_res);
 
     send_msg_to_user(SEND_TYPE, result_str, 1);
 
@@ -1047,18 +1046,17 @@ asmlinkage int monitor_execve_hook(char __user *filename, char __user * __user *
 
 #if (EXECVE_ROOTKIT_CHECK == 1)
     pid_check_res = check_pid(current->pid);
-    ppid_check_res = check_pid(current->real_parent->pid);
     file_check_res = check_file(abs_path);
 #endif
 
     snprintf(result_str, result_str_len,
-             "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d",
+             "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d",
              current->real_cred->uid, "\n", EXECVE_TYPE, "\n", pname, "\n",
              abs_path, "\n", argv_res_tmp, "\n", current->pid, "\n",
              current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
              "\n", current->tgid, "\n", current->comm, "\n",
              current->nsproxy->uts_ns->name.nodename,"\n",tmp_stdin,"\n",tmp_stdout,
-             "\n",pid_check_res, "\n",ppid_check_res, "\n",file_check_res);
+             "\n",pid_check_res, "\n",file_check_res);
 
     send_msg_to_user(SEND_TYPE, result_str, 1);
 
