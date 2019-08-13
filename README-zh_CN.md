@@ -160,7 +160,7 @@ AgentSmith-HIDS 目前已经在点融经过压力测试/稳定性测试，目前
 | HOOK_ACCEPT                 | accept()/accept4() hook 开关:<br />1:开启; <br />默认:  0    |
 | HOOK_INIT_MODULE            | init_module() hook 开关:<br />1:开启; <br />默认:  1         |
 | HOOK_FINIT_MODULE           | finit_module() hook 开关:<br />1:开启; <br />默认:  1        |
-| EXECVE_ROOTKIT_CHECK        | execve rootkit检测开关:<br />1:开启;<br />默认: 1            |
+| EXECVE_ROOTKIT_CHECK        | execve rootkit检测开关:<br />1:开启;<br />默认: 0            |
 | KERNEL_PRINT                | debug输出：<br />-1:不输出;<br />1:输出共享内存时index信息;<br />2:输出捕获到的信息；<br />默认：-1 |
 | DELAY_TEST                  | 测试传输方案延迟：<br />-1:关闭;<br />1:开启；<br />默认：-1 |
 | WRITE_INDEX_TRY_LOCK        | 仅在SEND_TYPE=2时有意义，是控制对write_index lock方式：<br />-1:使用write_lock();<br />1:使用write_trylock()；<br />默认：-1 |
