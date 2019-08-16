@@ -1529,7 +1529,7 @@ asmlinkage unsigned long monitor_connect_hook(int fd, struct sockaddr __user *di
                  sip, "\n", sport, "\n", ori_connect_syscall_res);
 #elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
                 snprintf(result_str, result_str_len,
-                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%d",
+                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d",
                     current->real_cred->uid, "\n", CONNECT_TYPE, "\n", sa_family,
                     "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
                     current->pid, "\n", current->real_parent->pid, "\n",
