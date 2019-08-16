@@ -77,7 +77,7 @@
 #define HOOK_INIT_MODULE 1
 #define HOOK_FINIT_MODULE 1
 
-#define EXECVE_ROOTKIT_CHECK 0
+#define ROOTKIT_CHECK 0
 
 unsigned long **sys_call_table_ptr;
 void *orig_sys_call_table[NR_syscalls];
@@ -548,7 +548,7 @@ static const struct file_operations mchar_fops = {
     .mmap = device_mmap,
 };
 
-#if (EXECVE_ROOTKIT_CHECK == 1)
+#if (ROOTKIT_CHECK == 1)
 static int check_file(char *path)
 {
     int i;
@@ -893,7 +893,7 @@ asmlinkage int monitor_execve_hook(const char __user *filename, const char __use
 
     result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
-#if (EXECVE_ROOTKIT_CHECK == 1)
+#if (ROOTKIT_CHECK == 1)
     pid_check_res = check_pid(current->pid);
     file_check_res = check_file(abs_path);
 #endif
@@ -948,7 +948,6 @@ asmlinkage int monitor_execve_hook(char __user *filename, char __user * __user *
 {
     char *result_str;
     int pid_check_res = -1;
-    int ppid_check_res = -1;
     int file_check_res = -1;
     int result_str_len;
     int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0;
@@ -1044,7 +1043,7 @@ asmlinkage int monitor_execve_hook(char __user *filename, char __user * __user *
 
     result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
-#if (EXECVE_ROOTKIT_CHECK == 1)
+#if (ROOTKIT_CHECK == 1)
     pid_check_res = check_pid(current->pid);
     file_check_res = check_file(abs_path);
 #endif
@@ -1214,6 +1213,8 @@ asmlinkage unsigned long monitor_accept_hook(int fd, struct sockaddr __user *dir
     int sa_family = 0;
     int err;
     int result_str_len;
+    int pid_check_res = -1;
+    int file_check_res = -1;
     char dip[64];
     char dport[16];
     char sip[64] = "-1";
@@ -1287,28 +1288,35 @@ asmlinkage unsigned long monitor_accept_hook(int fd, struct sockaddr __user *dir
                 final_path = "-1";
             }
 
+#if (ROOTKIT_CHECK == 1)
+    if (final_path != "-1") {
+        file_check_res = check_file(final_path);
+    }
+    pid_check_res = check_pid(current->pid);
+#endif
+
             result_str_len = get_data_alignment(strlen(current->comm) +
                                strlen(current->nsproxy->uts_ns->name.nodename) +
                                strlen(current->comm) + strlen(final_path) + 172);
             result_str = kzalloc(result_str_len, GFP_ATOMIC);
 #if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
             snprintf(result_str, result_str_len,
-                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d",
+                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d",
                     current->real_cred->uid.val, "\n", ACCEPT_TYPE, "\n", sa_family,
                     "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
                     current->pid, "\n", current->real_parent->pid, "\n",
                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
                     current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                     sip, "\n", sport, "\n", ori_accept_syscall_res);
+                     sip, "\n", sport, "\n", ori_accept_syscall_res, "\n", pid_check_res, "\n", file_check_res);
 #elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
             snprintf(result_str, result_str_len,
-                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d",
+                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d",
                     current->real_cred->uid, "\n", ACCEPT_TYPE, "\n", sa_family,
                     "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
                     current->pid, "\n", current->real_parent->pid, "\n",
                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
                     current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                    sip, "\n", sport, "\n", ori_accept_syscall_res);
+                    sip, "\n", sport, "\n", ori_accept_syscall_res, "\n", pid_check_res, "\n", file_check_res);
 #endif
             send_msg_to_user(SEND_TYPE, result_str, 1);
         }
@@ -1327,6 +1335,8 @@ asmlinkage unsigned long monitor_accept4_hook(int fd, struct sockaddr __user *di
     int sa_family = 0;
     int err;
     int result_str_len;
+    int pid_check_res = -1;
+    int file_check_res = -1;
     char dip[64];
     char dport[16];
     char sip[64] = "-1";
@@ -1397,6 +1407,13 @@ asmlinkage unsigned long monitor_accept4_hook(int fd, struct sockaddr __user *di
                 final_path = "-1";
             }
 
+#if (ROOTKIT_CHECK == 1)
+    if (final_path != "-1") {
+        file_check_res = check_file(final_path);
+    }
+    pid_check_res = check_pid(current->pid);
+#endif
+
             result_str_len = get_data_alignment(strlen(current->comm) +
                                    strlen(current->nsproxy->uts_ns->name.nodename) +
                                  strlen(current->comm) + strlen(final_path) + 172);
@@ -1409,7 +1426,7 @@ asmlinkage unsigned long monitor_accept4_hook(int fd, struct sockaddr __user *di
                     current->pid, "\n", current->real_parent->pid, "\n",
                      pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
                      current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                     sip, "\n", sport, "\n", ori_accept_syscall_res);
+                     sip, "\n", sport, "\n", ori_accept_syscall_res, "\n", pid_check_res, "\n", file_check_res);
 #elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
           snprintf(result_str, result_str_len,
                     "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d",
@@ -1418,7 +1435,7 @@ asmlinkage unsigned long monitor_accept4_hook(int fd, struct sockaddr __user *di
                      current->pid, "\n", current->real_parent->pid, "\n",
                      pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
                     current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                    sip, "\n", sport, "\n", ori_accept_syscall_res);
+                    sip, "\n", sport, "\n", ori_accept_syscall_res, "\n", pid_check_res, "\n", file_check_res);
 #endif
            send_msg_to_user(SEND_TYPE, result_str, 1);
         }
@@ -1437,6 +1454,8 @@ asmlinkage unsigned long monitor_connect_hook(int fd, struct sockaddr __user *di
     int flag = 0;
     int sa_family = 0;
     int result_str_len;
+    int pid_check_res = -1;
+    int file_check_res = -1;
     char dip[64];
     char dport[16];
     char sip[64] = "-1";
@@ -1513,6 +1532,13 @@ asmlinkage unsigned long monitor_connect_hook(int fd, struct sockaddr __user *di
                 final_path = "-1";
             }
 
+#if (ROOTKIT_CHECK == 1)
+    if (final_path != "-1") {
+        file_check_res = check_file(final_path);
+    }
+    pid_check_res = check_pid(current->pid);
+#endif
+
             result_str_len =
                 get_data_alignment(strlen(current->comm) +
                                strlen(current->nsproxy->uts_ns->name.nodename) +
@@ -1520,22 +1546,22 @@ asmlinkage unsigned long monitor_connect_hook(int fd, struct sockaddr __user *di
             result_str = kzalloc(result_str_len, GFP_ATOMIC);
 #if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
                 snprintf(result_str, result_str_len,
-                 "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d",
-                 current->real_cred->uid.val, "\n", CONNECT_TYPE, "\n", sa_family,
-                 "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
-                 current->pid, "\n", current->real_parent->pid, "\n",
-                 pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                 current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                 sip, "\n", sport, "\n", ori_connect_syscall_res);
+                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d",
+                    current->real_cred->uid.val, "\n", CONNECT_TYPE, "\n", sa_family,
+                    "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
+                    current->pid, "\n", current->real_parent->pid, "\n",
+                    pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                    current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
+                    sip, "\n", sport, "\n", ori_connect_syscall_res, "\n", pid_check_res, "\n", file_check_res);
 #elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
                 snprintf(result_str, result_str_len,
-                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d",
+                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d",
                     current->real_cred->uid, "\n", CONNECT_TYPE, "\n", sa_family,
                     "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
                     current->pid, "\n", current->real_parent->pid, "\n",
                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
                     current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                    sip, "\n", sport, "\n", ori_connect_syscall_res);
+                    sip, "\n", sport, "\n", ori_connect_syscall_res, "\n", pid_check_res, "\n", file_check_res);
 #endif
             send_msg_to_user(SEND_TYPE, result_str, 1);
 
