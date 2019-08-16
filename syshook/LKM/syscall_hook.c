@@ -1420,7 +1420,7 @@ asmlinkage unsigned long monitor_accept4_hook(int fd, struct sockaddr __user *di
             result_str = kzalloc(result_str_len, GFP_ATOMIC);
 #if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
             snprintf(result_str, result_str_len,
-                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d",
+                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d",
                     current->real_cred->uid.val, "\n", ACCEPT_TYPE, "\n", sa_family,
                     "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
                     current->pid, "\n", current->real_parent->pid, "\n",
@@ -1429,7 +1429,7 @@ asmlinkage unsigned long monitor_accept4_hook(int fd, struct sockaddr __user *di
                      sip, "\n", sport, "\n", ori_accept_syscall_res, "\n", pid_check_res, "\n", file_check_res);
 #elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
           snprintf(result_str, result_str_len,
-                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d",
+                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d",
                     current->real_cred->uid, "\n", ACCEPT_TYPE, "\n", sa_family,
                     "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
                      current->pid, "\n", current->real_parent->pid, "\n",
