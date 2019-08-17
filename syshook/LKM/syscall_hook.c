@@ -70,9 +70,11 @@
 #define ACCEPT_TYPE "43"
 #define INIT_MODULE_TYPE "175"
 #define FINIT_MODULE_TYPE "313"
+#define DNS_TYPE "601"
 
 #define HOOK_EXECVE 1
 #define HOOK_CONNECT 1
+#define HOOK_DNS 0
 #define HOOK_ACCEPT 0
 #define HOOK_INIT_MODULE 1
 #define HOOK_FINIT_MODULE 1
@@ -95,6 +97,11 @@ asmlinkage int (*orig_accept4)(int fd, struct sockaddr __user *dirp,
 asmlinkage int (*orig_accept)(int fd, struct sockaddr __user *dirp,
                                 int addrlen);
 
+asmlinkage int (*orig_recvfrom)(int fd, void __user *ubuf, unsigned long size,
+                                                unsigned int flags,
+                                                struct sockaddr __user *addr,
+                                                int addrlen);
+
 #if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
 asmlinkage int (*orig_finit_module)(int fd, const char __user *uargs,
                                 int flags);
@@ -111,6 +118,11 @@ extern asmlinkage int monitor_stub_accept_hook(int fd, struct sockaddr __user *d
 
 extern asmlinkage int monitor_stub_accept4_hook(int fd, struct sockaddr __user *dirp,
                                                  int addrlen, int flags);
+
+extern asmlinkage int monitor_stub_recvfrom_hook(int fd, void __user *ubuf, unsigned long size,
+                                                 unsigned int flags,
+                                                 struct sockaddr __user *addr,
+                                                 int addrlen);
 
 static int flen = 256;
 static int use_count = 0;
@@ -1209,9 +1221,10 @@ asmlinkage void hook_update_use_count()
 
 asmlinkage unsigned long monitor_accept_hook(int fd, struct sockaddr __user *dirp, int addrlen)
 {
-    int flag = 0;
-    int sa_family = 0;
     int err;
+    int flag = 0;
+    int copy_res = 0;
+    int sa_family = 0;
     int result_str_len;
     int pid_check_res = -1;
     int file_check_res = -1;
@@ -1238,7 +1251,7 @@ asmlinkage unsigned long monitor_accept_hook(int fd, struct sockaddr __user *dir
         return ori_accept_syscall_res;
     }
 
-    int copy_res = copy_from_user(&tmp_dirp, dirp, 16);
+    copy_res = copy_from_user(&tmp_dirp, dirp, 16);
 
     if(copy_res == 0) {
         if(tmp_dirp.sa_family == AF_INET) {
@@ -1331,9 +1344,10 @@ asmlinkage unsigned long monitor_accept_hook(int fd, struct sockaddr __user *dir
 
 asmlinkage unsigned long monitor_accept4_hook(int fd, struct sockaddr __user *dirp, int addrlen, int flags)
 {
+    int err;
     int flag = 0;
     int sa_family = 0;
-    int err;
+    int copy_res = 0;
     int result_str_len;
     int pid_check_res = -1;
     int file_check_res = -1;
@@ -1359,7 +1373,7 @@ asmlinkage unsigned long monitor_accept4_hook(int fd, struct sockaddr __user *di
         return ori_accept_syscall_res;
     }
 
-    int copy_res = copy_from_user(&tmp_dirp, dirp, 16);
+    copy_res = copy_from_user(&tmp_dirp, dirp, 16);
 
     if(copy_res == 0) {
         if(tmp_dirp.sa_family == AF_INET) {
@@ -1448,10 +1462,127 @@ asmlinkage unsigned long monitor_accept4_hook(int fd, struct sockaddr __user *di
     return ori_accept_syscall_res;
 }
 
+asmlinkage unsigned long monitor_recvfrom_hook(int fd, void __user *ubuf, unsigned long size, unsigned int flags,
+                                                                                    struct sockaddr __user *addr,
+                                                                                    int addrlen)
+{
+    int err;
+    int flag = 0;
+    int sa_family = 0;
+    int copy_res = 0;
+    int result_str_len;
+    char dip[64];
+    char dport[16];
+    char sip[64] = "-1";
+    char sport[16] = "-1";
+    char *final_path = NULL;
+    char *result_str = NULL;
+    struct sockaddr tmp_dirp;
+    struct sockaddr_in *sin;
+    struct sockaddr_in6 *sin6;
+    struct socket *sock;
+    struct sockaddr_in source_addr;
+    struct sockaddr_in6 source_addr6;
+
+    unsigned long ori_recvfrom_syscall_res = orig_recvfrom(fd, ubuf, size, flags, addr, addrlen);
+
+    if (netlink_pid == -1 && share_mem_flag == -1) {
+    #if (SAFE_EXIT == 1)
+        del_use_count();
+    #endif
+
+        return ori_recvfrom_syscall_res;
+    }
+
+    copy_res = copy_from_user(&tmp_dirp, addr, 16);
+
+    if (tmp_dirp.sa_family == AF_INET) {
+        flag = 1;
+        sa_family = 4;
+        sock = sockfd_lookup(fd, &err);
+        if (sock) {
+            kernel_getsockname(sock, (struct sockaddr *)&source_addr, &addrlen);
+            snprintf(sport, 16, "%d", Ntohs(source_addr.sin_port));
+            snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(source_addr.sin_addr));
+            sockfd_put(sock);
+        }
+        sin = (struct sockaddr_in *)&tmp_dirp;
+        snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr.s_addr));
+        snprintf(dport, 16, "%d", Ntohs(sin->sin_port));
+    } else if (tmp_dirp.sa_family == AF_INET6) {
+        flag = 1;
+        sa_family = 6;
+        flag = 1;
+        sa_family = 6;
+        sock = sockfd_lookup(fd, &err);
+        if (sock) {
+            kernel_getsockname(sock, (struct sockaddr *)&source_addr6, &addrlen);
+            snprintf(sport, 16, "%d", Ntohs(source_addr6.sin6_port));
+            snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(source_addr6.sin6_addr));
+            sockfd_put(sock);
+        }
+        sin6 = (struct sockaddr_in6 *)&tmp_dirp;
+        snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sin6->sin6_addr));
+        snprintf(dport, 16, "%d", Ntohs(sin6->sin6_port));
+    }
+
+
+    if (flag == 1) {
+        if (current->active_mm) {
+            if (current->mm->exe_file) {
+                if (pathname) {
+                    pathname = memset(pathname, '\0', PATH_MAX);
+                    final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
+                } else {
+                    final_path = "-1";
+                    pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
+                }
+            }
+        }
+
+        if (final_path == NULL) {
+            final_path = "-1";
+        }
+
+        result_str_len = get_data_alignment(strlen(current->comm) +
+                         strlen(current->nsproxy->uts_ns->name.nodename) +
+                         strlen(current->comm) + strlen(final_path) + 172);
+                         result_str = kzalloc(result_str_len, GFP_ATOMIC);
+
+#if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
+        snprintf(result_str, result_str_len,
+                "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s",
+                current->real_cred->uid.val, "\n", DNS_TYPE, "\n", sa_family,
+                "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
+                current->pid, "\n", current->real_parent->pid, "\n",
+                pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
+                sip, "\n", sport);
+#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
+        snprintf(result_str, result_str_len,
+                "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s",
+                current->real_cred->uid, "\n", DNS_TYPE, "\n", sa_family,
+                "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
+                current->pid, "\n", current->real_parent->pid, "\n",
+                pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
+                sip, "\n", sport);
+#endif
+        send_msg_to_user(SEND_TYPE, result_str, 1);
+    }
+
+#if (SAFE_EXIT == 1)
+        del_use_count();
+#endif
+
+    return ori_recvfrom_syscall_res;
+}
+
 asmlinkage unsigned long monitor_connect_hook(int fd, struct sockaddr __user *dirp, int addrlen)
 {
     int err;
     int flag = 0;
+    int copy_res = 0;
     int sa_family = 0;
     int result_str_len;
     int pid_check_res = -1;
@@ -1478,7 +1609,7 @@ asmlinkage unsigned long monitor_connect_hook(int fd, struct sockaddr __user *di
         return ori_connect_syscall_res;
     }
 
-    int copy_res = copy_from_user(&tmp_dirp, dirp, 16);
+    copy_res = copy_from_user(&tmp_dirp, dirp, 16);
 
     if (copy_res == 0) {
 
@@ -1782,6 +1913,10 @@ static int lkm_init(void)
 #endif
 
 #if (CONNECT_TIME_TEST == 0)
+#if (HOOK_DNS ==  1)
+    orig_recvfrom = (void *)(sys_call_table_ptr[__NR_recvfrom]);
+    sys_call_table_ptr[__NR_recvfrom] = (void *)monitor_stub_recvfrom_hook;
+#endif
 #if (HOOK_ACCEPT == 1)
     orig_accept = (void *)(sys_call_table_ptr[__NR_accept]);
     sys_call_table_ptr[__NR_accept] = (void *)monitor_stub_accept_hook;
