@@ -74,7 +74,7 @@
 
 #define HOOK_EXECVE 1
 #define HOOK_CONNECT 1
-#define HOOK_DNS 0
+#define HOOK_DNS 1
 #define HOOK_ACCEPT 0
 #define HOOK_INIT_MODULE 1
 #define HOOK_FINIT_MODULE 1
@@ -1470,11 +1470,13 @@ asmlinkage unsigned long monitor_recvfrom_hook(int fd, void __user *ubuf, unsign
     int flag = 0;
     int sa_family = 0;
     int copy_res = 0;
+    int recv_data_copy_res = 0;
     int result_str_len;
     char dip[64];
     char dport[16];
     char sip[64] = "-1";
     char sport[16] = "-1";
+    char *recv_data = NULL;
     char *final_path = NULL;
     char *result_str = NULL;
     struct sockaddr tmp_dirp;
@@ -1485,7 +1487,7 @@ asmlinkage unsigned long monitor_recvfrom_hook(int fd, void __user *ubuf, unsign
     struct sockaddr_in6 source_addr6;
 
     unsigned long ori_recvfrom_syscall_res = orig_recvfrom(fd, ubuf, size, flags, addr, addrlen);
-    printk("%d\n", size);
+
     if (netlink_pid == -1 && share_mem_flag == -1) {
     #if (SAFE_EXIT == 1)
         del_use_count();
@@ -1500,44 +1502,48 @@ asmlinkage unsigned long monitor_recvfrom_hook(int fd, void __user *ubuf, unsign
         flag = 1;
         sa_family = 4;
         sock = sockfd_lookup(fd, &err);
+        sin = (struct sockaddr_in *)&tmp_dirp;
+        if (sin->sin_port == 13568 || sin->sin_port == 5353) {
+            recv_data_copy_res = copy_from_user(recv_data, ubuf, size);
+            printk("%s", recv_data);
+        } else {
+#if (SAFE_EXIT == 1)
+            del_use_count();
+#endif
+
+            return ori_recvfrom_syscall_res;
+        }
+        snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr.s_addr));
+        snprintf(dport, 16, "%d", Ntohs(sin->sin_port));
         if (sock) {
             kernel_getsockname(sock, (struct sockaddr *)&source_addr, &addrlen);
             snprintf(sport, 16, "%d", Ntohs(source_addr.sin_port));
-            if (sport == 53 || sport == 5353) {
-                snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(source_addr.sin_addr));
-                sockfd_put(sock);
-            } else {
-#if (SAFE_EXIT == 1)
-                del_use_count();
-#endif
-                return ori_recvfrom_syscall_res;
-            }
+            snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(source_addr.sin_addr));
+            sockfd_put(sock);
         }
-        sin = (struct sockaddr_in *)&tmp_dirp;
-        snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr.s_addr));
-        snprintf(dport, 16, "%d", Ntohs(sin->sin_port));
     } else if (tmp_dirp.sa_family == AF_INET6) {
         flag = 1;
         sa_family = 6;
-        flag = 1;
-        sa_family = 6;
         sock = sockfd_lookup(fd, &err);
-        if (sock) {
-            kernel_getsockname(sock, (struct sockaddr *)&source_addr6, &addrlen);
-            snprintf(sport, 16, "%d", Ntohs(source_addr6.sin6_port));\
-            if (sport == 53 || sport == 5353) {
-                snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(source_addr6.sin6_addr));
-                sockfd_put(sock);
-            } else {
-#if (SAFE_EXIT == 1)
-                del_use_count();
-#endif
-                return ori_recvfrom_syscall_res;
-            }
-        }
         sin6 = (struct sockaddr_in6 *)&tmp_dirp;
+        if (sin6->sin6_port == 13568 || sin6->sin6_port == 5353) {
+            recv_data_copy_res = copy_from_user(recv_data, ubuf, size);
+            printk("%s", recv_data);
+        } else {
+#if (SAFE_EXIT == 1)
+            del_use_count();
+#endif
+
+            return ori_recvfrom_syscall_res;
+        }
         snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sin6->sin6_addr));
         snprintf(dport, 16, "%d", Ntohs(sin6->sin6_port));
+        if (sock) {
+            kernel_getsockname(sock, (struct sockaddr *)&source_addr6, &addrlen);
+            snprintf(sport, 16, "%d", Ntohs(source_addr6.sin6_port));
+            snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(source_addr6.sin6_addr));
+            sockfd_put(sock);
+        }
     }
 
 
