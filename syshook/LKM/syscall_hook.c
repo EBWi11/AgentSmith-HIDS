@@ -1485,7 +1485,7 @@ asmlinkage unsigned long monitor_recvfrom_hook(int fd, void __user *ubuf, unsign
     struct sockaddr_in6 source_addr6;
 
     unsigned long ori_recvfrom_syscall_res = orig_recvfrom(fd, ubuf, size, flags, addr, addrlen);
-
+    printk("%d\n", size);
     if (netlink_pid == -1 && share_mem_flag == -1) {
     #if (SAFE_EXIT == 1)
         del_use_count();
@@ -1503,8 +1503,15 @@ asmlinkage unsigned long monitor_recvfrom_hook(int fd, void __user *ubuf, unsign
         if (sock) {
             kernel_getsockname(sock, (struct sockaddr *)&source_addr, &addrlen);
             snprintf(sport, 16, "%d", Ntohs(source_addr.sin_port));
-            snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(source_addr.sin_addr));
-            sockfd_put(sock);
+            if (sport == 53 || sport == 5353) {
+                snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(source_addr.sin_addr));
+                sockfd_put(sock);
+            } else {
+#if (SAFE_EXIT == 1)
+                del_use_count();
+#endif
+                return ori_recvfrom_syscall_res;
+            }
         }
         sin = (struct sockaddr_in *)&tmp_dirp;
         snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr.s_addr));
@@ -1517,9 +1524,16 @@ asmlinkage unsigned long monitor_recvfrom_hook(int fd, void __user *ubuf, unsign
         sock = sockfd_lookup(fd, &err);
         if (sock) {
             kernel_getsockname(sock, (struct sockaddr *)&source_addr6, &addrlen);
-            snprintf(sport, 16, "%d", Ntohs(source_addr6.sin6_port));
-            snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(source_addr6.sin6_addr));
-            sockfd_put(sock);
+            snprintf(sport, 16, "%d", Ntohs(source_addr6.sin6_port));\
+            if (sport == 53 || sport == 5353) {
+                snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(source_addr6.sin6_addr));
+                sockfd_put(sock);
+            } else {
+#if (SAFE_EXIT == 1)
+                del_use_count();
+#endif
+                return ori_recvfrom_syscall_res;
+            }
         }
         sin6 = (struct sockaddr_in6 *)&tmp_dirp;
         snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sin6->sin6_addr));
@@ -1956,6 +1970,9 @@ static void lkm_exit(void)
     sys_call_table_ptr[__NR_connect] = (void *)orig_connect;
 
 #if (CONNECT_TIME_TEST == 0)
+#if (HOOK_DNS == 1)
+    sys_call_table_ptr[__NR_recvfrom] = (void *)orig_recvfrom;
+#endif
 #if (HOOK_ACCEPT == 1)
     sys_call_table_ptr[__NR_accept] = (void *)orig_accept;
     sys_call_table_ptr[__NR_accept4] = (void *)orig_accept4;
