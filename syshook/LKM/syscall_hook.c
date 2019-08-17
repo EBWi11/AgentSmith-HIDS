@@ -1504,6 +1504,9 @@ asmlinkage unsigned long monitor_recvfrom_hook(int fd, void __user *ubuf, unsign
         sock = sockfd_lookup(fd, &err);
         sin = (struct sockaddr_in *)&tmp_dirp;
         if (sin->sin_port == 13568 || sin->sin_port == 5353) {
+            recv_data = kzalloc(size, GFP_ATOMIC);
+            if (!recv_data)
+                goto err;
             recv_data_copy_res = copy_from_user(recv_data, ubuf, size);
             printk("%s", recv_data);
         } else {
@@ -1527,6 +1530,9 @@ asmlinkage unsigned long monitor_recvfrom_hook(int fd, void __user *ubuf, unsign
         sock = sockfd_lookup(fd, &err);
         sin6 = (struct sockaddr_in6 *)&tmp_dirp;
         if (sin6->sin6_port == 13568 || sin6->sin6_port == 5353) {
+            recv_data = kzalloc(size, GFP_ATOMIC);
+            if (!recv_data)
+                goto err;
             recv_data_copy_res = copy_from_user(recv_data, ubuf, size);
             printk("%s", recv_data);
         } else {
@@ -1589,11 +1595,19 @@ asmlinkage unsigned long monitor_recvfrom_hook(int fd, void __user *ubuf, unsign
                 sip, "\n", sport);
 #endif
         send_msg_to_user(SEND_TYPE, result_str, 1);
+        kfree(recv_data);
     }
 
 #if (SAFE_EXIT == 1)
         del_use_count();
 #endif
+
+    return ori_recvfrom_syscall_res;
+
+err:
+    #if (SAFE_EXIT == 1)
+        del_use_count();
+    #endif
 
     return ori_recvfrom_syscall_res;
 }
