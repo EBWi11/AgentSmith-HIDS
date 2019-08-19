@@ -1507,6 +1507,7 @@ asmlinkage unsigned long monitor_recvfrom_hook(int fd, void __user *ubuf, unsign
             recv_data = kzalloc(size, GFP_ATOMIC);
             if (!recv_data)
                 goto err;
+
             recv_data_copy_res = copy_from_user(recv_data, ubuf, size);
             printk("%s", recv_data);
         } else {
@@ -1533,6 +1534,7 @@ asmlinkage unsigned long monitor_recvfrom_hook(int fd, void __user *ubuf, unsign
             recv_data = kzalloc(size, GFP_ATOMIC);
             if (!recv_data)
                 goto err;
+
             recv_data_copy_res = copy_from_user(recv_data, ubuf, size);
             printk("%s", recv_data);
         } else {
@@ -1602,6 +1604,7 @@ asmlinkage unsigned long monitor_recvfrom_hook(int fd, void __user *ubuf, unsign
         del_use_count();
 #endif
 
+    kfree(recv_data);
     return ori_recvfrom_syscall_res;
 
 err:
