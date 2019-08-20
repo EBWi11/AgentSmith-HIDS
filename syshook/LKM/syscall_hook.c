@@ -1589,7 +1589,6 @@ asmlinkage unsigned long monitor_recvfrom_hook(int fd, void __user *ubuf, unsign
                 sip, "\n", sport);
 #endif
         send_msg_to_user(SEND_TYPE, result_str, 1);
-        kfree(recv_data);
     }
 
 #if (SAFE_EXIT == 1)
