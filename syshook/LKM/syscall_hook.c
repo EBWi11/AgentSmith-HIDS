@@ -1116,7 +1116,7 @@ asmlinkage int monitor_init_module_hook(void __user *umod, unsigned long len, co
 
     files_path = files_table->fd[i - 1]->f_path;
     cwd = d_path(&files_path, init_module_buf, 256);
-    result_str_len = get_data_alignment(strlen(cwd) + 4);
+    result_str_len = get_data_alignment(strlen(cwd) + 192);
     result_str = kzalloc(result_str_len, GFP_ATOMIC);
 #if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
     snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s",
@@ -1169,13 +1169,6 @@ asmlinkage int monitor_finit_module_hook(int fd, const char __user *uargs, int f
              "\n", current->pid, "\n", current->real_parent->pid, "\n",
              pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
              current->comm, "\n", current->nsproxy->uts_ns->name.nodename);
-#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
-    snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s",
-             current->real_cred->uid, "\n", FINIT_MODULE_TYPE, "\n", cwd,
-             "\n", current->pid, "\n", current->real_parent->pid, "\n",
-             pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-             current->comm, "\n", current->nsproxy->uts_ns->name.nodename);
-#endif
     send_msg_to_user(SEND_TYPE, result_str, 1);
     return orig_finit_module(fd, uargs, flags);
 }
