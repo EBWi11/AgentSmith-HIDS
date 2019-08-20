@@ -1161,7 +1161,7 @@ asmlinkage int monitor_finit_module_hook(int fd, const char __user *uargs, int f
 
     files_path = files_table->fd[i - 1]->f_path;
     cwd = d_path(&files_path, init_module_buf, 256);
-    result_str_len = get_data_alignment(strlen(cwd) + 4);
+    result_str_len = get_data_alignment(strlen(cwd) + 192);
     result_str = kzalloc(result_str_len, GFP_ATOMIC);
     snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s",
              current->real_cred->uid.val, "\n", FINIT_MODULE_TYPE, "\n", cwd,
