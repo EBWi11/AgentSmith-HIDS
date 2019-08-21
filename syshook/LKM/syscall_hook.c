@@ -1454,7 +1454,7 @@ asmlinkage unsigned long monitor_accept4_hook(int fd, struct sockaddr __user *di
     return ori_accept_syscall_res;
 }
 
-asmlinkage unsigned long monitor_sendto_hook(int fd, void __user *ubuf, unsigned long size, unsigned int flags,
+asmlinkage unsigned long monitor_sendto_hook(int fd, void __user *buff, unsigned long size, unsigned int flags,
                                                                                     struct sockaddr __user *addr,
                                                                                     int addrlen)
 {
@@ -1478,7 +1478,7 @@ asmlinkage unsigned long monitor_sendto_hook(int fd, void __user *ubuf, unsigned
     struct sockaddr_in source_addr;
     struct sockaddr_in6 source_addr6;
 
-    unsigned long ori_sendto_syscall_res = orig_sendto(fd, ubuf, size, flags, addr, addrlen);
+    unsigned long ori_sendto_syscall_res = orig_sendto(fd, buff, size, flags, addr, addrlen);
 
     if (netlink_pid == -1 && share_mem_flag == -1) {
     #if (SAFE_EXIT == 1)
@@ -1500,7 +1500,7 @@ asmlinkage unsigned long monitor_sendto_hook(int fd, void __user *ubuf, unsigned
             if (!recv_data)
                 goto err;
 
-            recv_data_copy_res = copy_from_user(recv_data, ubuf, size);
+            recv_data_copy_res = copy_from_user(recv_data, buff, size);
             printk("%s", recv_data);
         } else {
 #if (SAFE_EXIT == 1)
@@ -1527,7 +1527,7 @@ asmlinkage unsigned long monitor_sendto_hook(int fd, void __user *ubuf, unsigned
             if (!recv_data)
                 goto err;
 
-            recv_data_copy_res = copy_from_user(recv_data, ubuf, size);
+            recv_data_copy_res = copy_from_user(recv_data, buff, size);
             printk("%s", recv_data);
         } else {
 #if (SAFE_EXIT == 1)
