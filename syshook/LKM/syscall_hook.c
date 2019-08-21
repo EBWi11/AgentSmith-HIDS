@@ -97,7 +97,7 @@ asmlinkage int (*orig_accept4)(int fd, struct sockaddr __user *dirp,
 asmlinkage int (*orig_accept)(int fd, struct sockaddr __user *dirp,
                                 int addrlen);
 
-asmlinkage int (*orig_recvfrom)(int fd, void __user *ubuf, unsigned long size,
+asmlinkage int (*orig_sendto)(int fd, void __user *buff, unsigned long size,
                                                 unsigned int flags,
                                                 struct sockaddr __user *addr,
                                                 int addrlen);
@@ -119,7 +119,7 @@ extern asmlinkage int monitor_stub_accept_hook(int fd, struct sockaddr __user *d
 extern asmlinkage int monitor_stub_accept4_hook(int fd, struct sockaddr __user *dirp,
                                                  int addrlen, int flags);
 
-extern asmlinkage int monitor_stub_recvfrom_hook(int fd, void __user *ubuf, unsigned long size,
+extern asmlinkage int monitor_stub_sendto_hook(int fd, void __user *buff, unsigned long size,
                                                  unsigned int flags,
                                                  struct sockaddr __user *addr,
                                                  int addrlen);
@@ -1454,7 +1454,7 @@ asmlinkage unsigned long monitor_accept4_hook(int fd, struct sockaddr __user *di
     return ori_accept_syscall_res;
 }
 
-asmlinkage unsigned long monitor_recvfrom_hook(int fd, void __user *ubuf, unsigned long size, unsigned int flags,
+asmlinkage unsigned long monitor_sendto_hook(int fd, void __user *ubuf, unsigned long size, unsigned int flags,
                                                                                     struct sockaddr __user *addr,
                                                                                     int addrlen)
 {
@@ -1478,14 +1478,14 @@ asmlinkage unsigned long monitor_recvfrom_hook(int fd, void __user *ubuf, unsign
     struct sockaddr_in source_addr;
     struct sockaddr_in6 source_addr6;
 
-    unsigned long ori_recvfrom_syscall_res = orig_recvfrom(fd, ubuf, size, flags, addr, addrlen);
+    unsigned long ori_sendto_syscall_res = orig_sendto(fd, ubuf, size, flags, addr, addrlen);
 
     if (netlink_pid == -1 && share_mem_flag == -1) {
     #if (SAFE_EXIT == 1)
         del_use_count();
     #endif
 
-        return ori_recvfrom_syscall_res;
+        return ori_sendto_syscall_res;
     }
 
     copy_res = copy_from_user(&tmp_dirp, addr, 16);
@@ -1495,7 +1495,7 @@ asmlinkage unsigned long monitor_recvfrom_hook(int fd, void __user *ubuf, unsign
         sa_family = 4;
         sock = sockfd_lookup(fd, &err);
         sin = (struct sockaddr_in *)&tmp_dirp;
-        if (sin->sin_port == 13568 || sin->sin_port == 5353) {
+        if (sin->sin_port > 0 ) {
             recv_data = kzalloc(size, GFP_ATOMIC);
             if (!recv_data)
                 goto err;
@@ -1507,7 +1507,7 @@ asmlinkage unsigned long monitor_recvfrom_hook(int fd, void __user *ubuf, unsign
             del_use_count();
 #endif
 
-            return ori_recvfrom_syscall_res;
+            return ori_sendto_syscall_res;
         }
         snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr.s_addr));
         snprintf(dport, 16, "%d", Ntohs(sin->sin_port));
@@ -1534,7 +1534,7 @@ asmlinkage unsigned long monitor_recvfrom_hook(int fd, void __user *ubuf, unsign
             del_use_count();
 #endif
 
-            return ori_recvfrom_syscall_res;
+            return ori_sendto_syscall_res;
         }
         snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sin6->sin6_addr));
         snprintf(dport, 16, "%d", Ntohs(sin6->sin6_port));
@@ -1596,14 +1596,14 @@ asmlinkage unsigned long monitor_recvfrom_hook(int fd, void __user *ubuf, unsign
 #endif
 
     kfree(recv_data);
-    return ori_recvfrom_syscall_res;
+    return ori_sendto_syscall_res;
 
 err:
     #if (SAFE_EXIT == 1)
         del_use_count();
     #endif
 
-    return ori_recvfrom_syscall_res;
+    return ori_sendto_syscall_res;
 }
 
 asmlinkage unsigned long monitor_connect_hook(int fd, struct sockaddr __user *dirp, int addrlen)
@@ -1942,8 +1942,8 @@ static int lkm_init(void)
 
 #if (CONNECT_TIME_TEST == 0)
 #if (HOOK_DNS ==  1)
-    orig_recvfrom = (void *)(sys_call_table_ptr[__NR_recvfrom]);
-    sys_call_table_ptr[__NR_recvfrom] = (void *)monitor_stub_recvfrom_hook;
+    orig_sendto = (void *)(sys_call_table_ptr[__NR_sendto]);
+    sys_call_table_ptr[__NR_sendto] = (void *)monitor_stub_sendto_hook;
 #endif
 #if (HOOK_ACCEPT == 1)
     orig_accept = (void *)(sys_call_table_ptr[__NR_accept]);
@@ -1985,7 +1985,7 @@ static void lkm_exit(void)
 
 #if (CONNECT_TIME_TEST == 0)
 #if (HOOK_DNS == 1)
-    sys_call_table_ptr[__NR_recvfrom] = (void *)orig_recvfrom;
+    sys_call_table_ptr[__NR_sendto] = (void *)orig_sendto;
 #endif
 #if (HOOK_ACCEPT == 1)
     sys_call_table_ptr[__NR_accept] = (void *)orig_accept;

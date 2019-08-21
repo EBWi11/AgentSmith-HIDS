@@ -3,7 +3,7 @@
 .global monitor_stub_connect_hook
 .global monitor_stub_accept_hook
 .global monitor_stub_accept4_hook
-.global monitor_stub_recvfrom_hook
+.global monitor_stub_sendto_hook
 
 monitor_stub_execve_hook:
     pushq   %rdi
@@ -78,7 +78,7 @@ monitor_stub_accept4_hook:
     pop     %rdi
     jmp     monitor_accept4_hook
 
-monitor_stub_recvfrom_hook:
+monitor_stub_sendto_hook:
     pushq   %rdi
     pushq   %rsi
     pushq   %rdx
@@ -94,4 +94,4 @@ monitor_stub_recvfrom_hook:
     pop     %rdx
     pop     %rsi
     pop     %rdi
-    jmp     monitor_recvfrom_hook
+    jmp     monitor_sendto_hook
