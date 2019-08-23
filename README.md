@@ -122,7 +122,7 @@ Detection info field(execve/accept/accept4/connect): **pid_rootkit_check**//**fi
 
 ### Uninstalling
 
-Before uninstalling the AgentSmith-HIDS, you need to close the user-mode agent process. The default Log path of the agent is located in: `/var/log/smith.log`, and also the default pid file in: `/run/smith.pid`. By default: `cat /run/ Smith.pid |xargs kill -9` then uninstall it by `rmmod syshook`.
+Before uninstalling the AgentSmith-HIDS, you need to close the user-mode agent process. The default Log path of the agent is located in: `/var/log/smith.log`, and also the default pid file in: `/var/run/smith.pid`. By default: `cat /var/run/smith.pid |xargs kill -9` then uninstall it by `rmmod syshook`.
 
 
 

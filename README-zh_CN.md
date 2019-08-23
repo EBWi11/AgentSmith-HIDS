@@ -116,7 +116,7 @@ AgentSmith-HIDS可以实现实时监测进程注入的行为,使用过Hook sys_p
 
 ### 卸载
 
-卸载AgentSmith-HIDS前需要先关闭用户态agent进程，agent默认Log path：`/var/log/smith.log`，默认pid file：`/run/smith.pid`，默认下：`cat /run/smith.pid |xargs kill -9`再通过`rmmod syshook`来完成卸载。
+卸载AgentSmith-HIDS前需要先关闭用户态agent进程，agent默认Log path：`/var/log/smith.log`，默认pid file：`/var/run/smith.pid`，默认下：`cat /var/run/smith.pid |xargs kill -9`再通过`rmmod syshook`来完成卸载。
 
 
 
