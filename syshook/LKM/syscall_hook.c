@@ -1454,6 +1454,22 @@ asmlinkage unsigned long monitor_accept4_hook(int fd, struct sockaddr __user *di
     return ori_accept_syscall_res;
 }
 
+static void *getQuery(unsigned char *data, int index, char *res) {
+    int i = 0;
+    int flag = -1;
+    for (i;i<strlen(data + index);i++) {
+        if (flag == -1) {
+            flag = (data + index)[i];
+        } else if (flag == 0) {
+            flag = (data + index)[i];
+            res[i-1] = 46;
+        } else {
+            res[i-1] = (data + index)[i];
+            flag = flag - 1;
+        }
+    }
+}
+
 asmlinkage unsigned long monitor_recvfrom_hook(int fd, void __user *ubuf, unsigned long size, unsigned int flags,
                                                                                     struct sockaddr __user *addr,
                                                                                     int addrlen)
@@ -1464,11 +1480,15 @@ asmlinkage unsigned long monitor_recvfrom_hook(int fd, void __user *ubuf, unsign
     int copy_res = 0;
     int recv_data_copy_res = 0;
     int result_str_len;
+    int opcode = 0;
+    int qr = 0;
+    int rcode = 0;
     char dip[64];
     char dport[16];
     char sip[64] = "-1";
     char sport[16] = "-1";
-    char *recv_data = NULL;
+    unsigned char *recv_data = NULL;
+    char *query = NULL;
     char *final_path = NULL;
     char *result_str = NULL;
     struct sockaddr tmp_dirp;
@@ -1481,68 +1501,65 @@ asmlinkage unsigned long monitor_recvfrom_hook(int fd, void __user *ubuf, unsign
     unsigned long ori_recvfrom_syscall_res = orig_recvfrom(fd, ubuf, size, flags, addr, addrlen);
 
     if (netlink_pid == -1 && share_mem_flag == -1) {
-    #if (SAFE_EXIT == 1)
-        del_use_count();
-    #endif
-
-        return ori_recvfrom_syscall_res;
+        goto err;
     }
 
     copy_res = copy_from_user(&tmp_dirp, addr, 16);
+    if (copy_res != 0) {
+        goto err;
+    }
 
     if (tmp_dirp.sa_family == AF_INET) {
-        flag = 1;
         sa_family = 4;
         sock = sockfd_lookup(fd, &err);
         sin = (struct sockaddr_in *)&tmp_dirp;
-        if (sin->sin_port == 13568 || sin->sin_port == 5353) {
+        if (sin->sin_port == 13568 || sin->sin_port == 59668) {
             recv_data = kzalloc(size, GFP_ATOMIC);
-            if (!recv_data)
-                goto err;
-
             recv_data_copy_res = copy_from_user(recv_data, ubuf, size);
-            printk("%s", recv_data);
-        } else {
-#if (SAFE_EXIT == 1)
-            del_use_count();
-#endif
-
-            return ori_recvfrom_syscall_res;
-        }
-        snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr.s_addr));
-        snprintf(dport, 16, "%d", Ntohs(sin->sin_port));
-        if (sock) {
-            kernel_getsockname(sock, (struct sockaddr *)&source_addr, &addrlen);
-            snprintf(sport, 16, "%d", Ntohs(source_addr.sin_port));
-            snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(source_addr.sin_addr));
-            sockfd_put(sock);
+            if (sizeof(recv_data) >= 8) {
+	            qr = (recv_data[2] & 0x80) ? 1 : 0;
+	            if (qr == 1 ) {
+	    	        flag = 1;
+	                opcode = (recv_data[2] >> 3) & 0x0f;
+	    	        rcode = recv_data[3] & 0x0f;
+	    	        query = kzalloc(strlen(recv_data+12), GFP_ATOMIC);
+	    	        getQuery(recv_data, 12, query);
+	    	        snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr.s_addr));
+                    snprintf(dport, 16, "%d", Ntohs(sin->sin_port));
+                    if (sock) {
+                        kernel_getsockname(sock, (struct sockaddr *)&source_addr, &addrlen);
+                        snprintf(sport, 16, "%d", Ntohs(source_addr.sin_port));
+                        snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(source_addr.sin_addr));
+                        sockfd_put(sock);
+                    }
+	            }
+	        }
         }
     } else if (tmp_dirp.sa_family == AF_INET6) {
-        flag = 1;
         sa_family = 6;
         sock = sockfd_lookup(fd, &err);
         sin6 = (struct sockaddr_in6 *)&tmp_dirp;
-        if (sin6->sin6_port == 13568 || sin6->sin6_port == 5353) {
+        if (sin->sin_port == 13568 || sin->sin_port == 59668) {
             recv_data = kzalloc(size, GFP_ATOMIC);
-            if (!recv_data)
-                goto err;
-
             recv_data_copy_res = copy_from_user(recv_data, ubuf, size);
-            printk("%s", recv_data);
-        } else {
-#if (SAFE_EXIT == 1)
-            del_use_count();
-#endif
-
-            return ori_recvfrom_syscall_res;
-        }
-        snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sin6->sin6_addr));
-        snprintf(dport, 16, "%d", Ntohs(sin6->sin6_port));
-        if (sock) {
-            kernel_getsockname(sock, (struct sockaddr *)&source_addr6, &addrlen);
-            snprintf(sport, 16, "%d", Ntohs(source_addr6.sin6_port));
-            snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(source_addr6.sin6_addr));
-            sockfd_put(sock);
+            if (sizeof(recv_data) >= 8) {
+                qr = (recv_data[2] & 0x80) ? 1 : 0;
+	            if (qr == 1 ) {
+	    	        flag = 1;
+	                opcode = (recv_data[2] >> 3) & 0x0f;
+	    	        rcode = recv_data[3] & 0x0f;
+	    	        query = kzalloc(strlen(recv_data+12), GFP_ATOMIC);
+	    	        getQuery(recv_data, 12, query);
+	    	        snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sin6->sin6_addr));
+                    snprintf(dport, 16, "%d", Ntohs(sin6->sin6_port));
+                    if (sock) {
+                        kernel_getsockname(sock, (struct sockaddr *)&source_addr6, &addrlen);
+                        snprintf(sport, 16, "%d", Ntohs(source_addr6.sin6_port));
+                        snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(source_addr6.sin6_addr));
+                        sockfd_put(sock);
+                    }
+	            }
+            }
         }
     }
 
@@ -1564,38 +1581,39 @@ asmlinkage unsigned long monitor_recvfrom_hook(int fd, void __user *ubuf, unsign
             final_path = "-1";
         }
 
-        result_str_len = get_data_alignment(strlen(current->comm) +
+        result_str_len = get_data_alignment(strlen(current->comm) + strlen(query) +
                          strlen(current->nsproxy->uts_ns->name.nodename) +
                          strlen(current->comm) + strlen(final_path) + 172);
-                         result_str = kzalloc(result_str_len, GFP_ATOMIC);
+        result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
 #if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
         snprintf(result_str, result_str_len,
-                "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s",
+                "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%s",
                 current->real_cred->uid.val, "\n", DNS_TYPE, "\n", sa_family,
                 "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
                 current->pid, "\n", current->real_parent->pid, "\n",
                 pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
                 current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                sip, "\n", sport);
+                sip, "\n", sport, "\n", qr, "\n", opcode, "\n", rcode, "\n", query);
 #elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
         snprintf(result_str, result_str_len,
-                "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s",
+                "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%s",
                 current->real_cred->uid, "\n", DNS_TYPE, "\n", sa_family,
                 "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
                 current->pid, "\n", current->real_parent->pid, "\n",
                 pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
                 current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                sip, "\n", sport);
+                sip, "\n", sport, "\n", qr, "\n", opcode, "\n", rcode, "\n", query);
 #endif
         send_msg_to_user(SEND_TYPE, result_str, 1);
+        kfree(query);
+        kfree(recv_data);
     }
 
 #if (SAFE_EXIT == 1)
         del_use_count();
 #endif
 
-    kfree(recv_data);
     return ori_recvfrom_syscall_res;
 
 err:
