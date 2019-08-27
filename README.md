@@ -106,6 +106,12 @@ Note: Since the Agent obtains the local IP through the command: `hostname -i`, p
 
 ### AntiRootkit(Beta Feature)
 
+AgentSmith-HIDS can hook some DNS query
+
+
+
+### AntiRootkit(Beta Feature)
+
 AgentSmith-HIDS will decete execve/accept/accept4/connect call's PID/ELF File,can find most rootkit action.
 
 Detection info field(execve/accept/accept4/connect): **pid_rootkit_check**//**file_rootkit_check**,0 is abnormal.  
@@ -142,6 +148,7 @@ Before uninstalling the AgentSmith-HIDS, you need to close the user-mode agent p
 | SEND_TYPE                   | LKM to user mode transmission method: <br />1. NETLINK; <br />2. SHERE_MEM;<br /> Default: 2 |
 | HOOK_EXECVE                 | execve() Hook Switch:<br />1. Enable;<br />Default:1         |
 | HOOK_CONNECT                | connect() Hook Switch:<br />1. Enable;<br />Default:1        |
+| HOOK_DNS                    | DNS Hook Switch:<br />1. Enable;<br />Default:0              |
 | HOOK_PTRACE                 | Porcess Injection Detect Switch:<br />1. Enable;<br />Default:1 |
 | HOOK_ACCEPT                 | accept() Hook Switch:<br />1. Enable;<br />Default:0         |
 | HOOK_INIT_MODULE            | init_module() Hook Switch:<br />1. Enable;<br />Default:1    |

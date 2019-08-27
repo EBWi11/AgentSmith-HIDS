@@ -71,6 +71,12 @@ AgentSmith-HIDS可以实现实时监测进程注入的行为,使用过Hook sys_p
 
 
 
+### DNS Hook (Beta Feature)
+
+AgentSmith-HIDS支持部分的DNS记录获取
+
+
+
 ### AntiRootkit(Beta Feature)
 
 目前AgentSmith-HIDS支持对 execve/accept/accept4/connect 的进程/可执行文件做检测,可以有效的发现试图隐藏自己行踪的行为.
@@ -136,6 +142,7 @@ AgentSmith-HIDS可以实现实时监测进程注入的行为,使用过Hook sys_p
 | HOOK_EXECVE                 | execve() hook 开关:<br />1:开启; <br />默认:  1              |
 | HOOK_CONNECT                | connect() hook 开关:<br />1:开启; <br />默认:  1             |
 | HOOK_PTRACE                 | 检测进程注入 开关:<br />1:开启; <br />默认:  1               |
+| HOOK_DNS                    | dns hook 开关:<br />1:开启; <br />默认:  0                   |
 | HOOK_ACCEPT                 | accept()/accept4() hook 开关:<br />1:开启; <br />默认:  0    |
 | HOOK_INIT_MODULE            | init_module() hook 开关:<br />1:开启; <br />默认:  1         |
 | HOOK_FINIT_MODULE           | finit_module() hook 开关:<br />1:开启; <br />默认:  1        |
