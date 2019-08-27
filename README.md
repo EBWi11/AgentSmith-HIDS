@@ -39,6 +39,7 @@ For security engineers who have a certain understanding of Linux and need a func
 
 * AgentSmith-HIDS has only been fully tested on Centos version 6/7 and Kernel version 2.6.32/3.10. Anyone who have tested the compatibility on other versions, Feel is always welcome and please do feel free to contact us (a stability test report will be required)
 * We will keep the development of the AgentSmith-HIDS and following the latest release of stable version of Centos7.
+* Real-time Porcess injection Detect
 * Real-time Rootkit Detect(Beta Feature)
 
 
@@ -121,7 +122,7 @@ Detection info field(execve/accept/accept4/connect): **pid_rootkit_check**//**fi
 
 ### Uninstalling
 
-Before uninstalling the AgentSmith-HIDS, you need to close the user-mode agent process. The default Log path of the agent is located in: `/var/log/smith.log`, and also the default pid file in: `/run/smith.pid`. By default: `cat /run/ Smith.pid |xargs kill -9` then uninstall it by `rmmod syshook`.
+Before uninstalling the AgentSmith-HIDS, you need to close the user-mode agent process. The default Log path of the agent is located in: `/var/log/smith.log`, and also the default pid file in: `/var/run/smith.pid`. By default: `cat /var/run/smith.pid |xargs kill -9` then uninstall it by `rmmod syshook`.
 
 
 
@@ -141,6 +142,7 @@ Before uninstalling the AgentSmith-HIDS, you need to close the user-mode agent p
 | SEND_TYPE                   | LKM to user mode transmission method: <br />1. NETLINK; <br />2. SHERE_MEM;<br /> Default: 2 |
 | HOOK_EXECVE                 | execve() Hook Switch:<br />1. Enable;<br />Default:1         |
 | HOOK_CONNECT                | connect() Hook Switch:<br />1. Enable;<br />Default:1        |
+| HOOK_PTRACE                 | Porcess Injection Detect Switch:<br />1. Enable;<br />Default:1 |
 | HOOK_ACCEPT                 | accept() Hook Switch:<br />1. Enable;<br />Default:0         |
 | HOOK_INIT_MODULE            | init_module() Hook Switch:<br />1. Enable;<br />Default:1    |
 | HOOK_FINIT_MODULE           | finit_module() Hook Switch:<br />1. Enable;<br />Default:1   |

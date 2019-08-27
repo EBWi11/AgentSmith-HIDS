@@ -87,6 +87,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
             let mut syscall_finit_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"cwd\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), ",\"CR0_check\":".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
             let mut syscall_connect_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"sa_family\":\"".to_string(), ",\"fd\":\"".to_string(), ",\"dport\":\"".to_string(), ",\"dip\":\"".to_string(), ",\"elf\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"sip\":\"".to_string(), ",\"sport\":\"".to_string(), ",\"res\":\"".to_string(), ",\"pid_rootkit_check\":\"".to_string(),",\"file_rootkit_check\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
             let mut syscall_accept_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"sa_family\":\"".to_string(), ",\"fd\":\"".to_string(), ",\"sport\":\"".to_string(), ",\"sip\":\"".to_string(), ",\"elf\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"dip\":\"".to_string(), ",\"dport\":\"".to_string(), ",\"res\":\"".to_string(), ",\"pid_rootkit_check\":\"".to_string(),",\"file_rootkit_check\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
+            let mut syscall_ptrace_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"ptrace_request\":\"".to_string(), ",\"target_pid\":\"".to_string(), ",\"addr\":\"".to_string(), ",\"data\":\"".to_string(), ",\"elf\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"res\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
 
             for mut s in msg_split {
                 if msg_syscall_type == "59" {
@@ -161,6 +162,21 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                     }
                     syscall_accept_msg[i].push_str(s);
                     syscall_accept_msg[i].push_str(tmp);
+                } else if msg_syscall_type == "101" {
+                    if i == 9 || i == 10 || i == 11 || i == 12 {
+                        if s == agent_pid {
+                            msg_syscall_type = "-1";
+                            break;
+                        }
+                    }
+                    if i == 8 {
+                        if accept_white_list.contains(s) {
+                            msg_syscall_type = "-1";
+                            break;
+                        }
+                    }
+                    syscall_ptrace_msg[i].push_str(s);
+                    syscall_ptrace_msg[i].push_str(tmp);
                 }
                 i = i + 1;
             }
@@ -180,6 +196,9 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
             } else if msg_syscall_type == "43" {
                 send_flag = 1;
                 msg_str = syscall_accept_msg.join("");
+            } else if msg_syscall_type == "101" {
+                send_flag = 1;
+                msg_str = syscall_ptrace_msg.join("");
             }
 
             if send_flag == 1 {

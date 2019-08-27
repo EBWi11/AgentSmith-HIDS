@@ -33,11 +33,12 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ### AgentSmith-HIDS实现了以下的功能：
 
-* 通过加载LKM的方式Hook了**execve,connect,accept,accept4,init_module,finit_module**的system_call；
+* 通过加载LKM的方式Hook了**execve,connect,ptrace,accept,accept4,init_module,finit_module**的system_call；
 * 通过对Linux namespace兼容的方式实现了对Docker容器行为的情报收集；
 * 实现了两种将Hook Info从内核态传输到用户态的方式：netlink和共享内存，共享内存传输损耗相较于netlink减小30%，在测试服务器上Hook connect耗时中位数8478ns，更详细的AgentSmith-HIDS BencherMark请见:https://github.com/DianrongSecurity/AgentSmith-HIDS/tree/master/doc **(注:经过其他小伙伴提醒，我们的压力测试方法有一定问题，并不是极限测试，我们会尽快发布更"压力"的测试报告)**
 * **系统文件完整性检测**，**系统用户列表查询**，**系统端口监听列表查询**，**系统RPM LIST查询**，**系统定时任务查询**功能；
 * 支持自定义检测模块(具体添加方式见下文)
+* 实时检测进程注入(Process Injection)
 * 实时检测Rootkit(Beta Feature)
 
 
@@ -64,59 +65,9 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 
 
+### 关于Process Injection Decete
 
-### 关于项目进度和未来
-
-AgentSmith-HIDS 目前已经在点融经过压力测试/稳定性测试，目前正在内部线上测试环境进行更加全面的测试。
-
-(本人已从点融离职，目前就职于一家游戏公司，稳定性测试依然在进行)
-
-未来计划：
-* 持续稳定性/性能测试。
-* 对Connect行为后续传输的数据进行偏移量计算从而得到一些关键信息(部分协议，如HTTP)，如Host这样的信息。
-* 借鉴LKRG，对Kernel进行保护。
-* 增加Rootkit的Connect行为实时检测。
-
-
-
-
-### 快速测试 （您可以参考[Quick-Start](https://github.com/DianrongSecurity/AgentSmith-HIDS/blob/master/Quick-Start.md)中更为详细的说明）
-
-1. 编译LKM，自己编译LKM需要安装Linux Kernel Source，编译目录在：`/syshook/LKM`，通过`make`得到`syshook.ko`LKM文件。
-
-2. 下发编译好的LKM文件到测试服务器，注意Kernel版本需要和编译服务器保持一致。
-
-3. 在测试环境安装LKM文件，`insmod syshook.ko`即可。
-
-4. 部署测试环境接收端Kafka Server，注意需要手动创建topic。
-
-5. (可选)部署测试环境HIDS心跳Server，具体请看：https://github.com/DianrongSecurity/AgentSmith-HIDS/tree/master/smith_console 。
-
-6. 编译agent模块，需要提前安装rust环境。在目录：`/root/smithhids/agent/src/conf`下，先修改agent配置文件：`/root/smithhids/agent/src/conf/settings.rs`，修改相关的Kafka信息和心跳配置，通过`cargo build —-release`，在`/agent/target/release/ `下得到编译好的agent。(注：需要提前`yum install openssl` && `yum install openssl-devel`)
-
-7. 安装agent，下发agent到测试环境，直接执行即可。
-
-8. 如果配置并部署了HIDS心跳Server，可以通过HIDS Console来简单对测试服务器的情况进行查看，具体操作请看：https://github.com/DianrongSecurity/AgentSmith-HIDS/tree/master/smith_console 。
-
-9. SELinux设置enforcing也不影响Agent运行。
-
-
-（注：由于Agent取本机IP是通过命令:`hostname -i`，所以测试时请保证hostname和hosts配置正确，否则HIDS Console端无法读取正确的IP。）
-
-
-
-
-### 自定义检测模块
-
-1. 自定义检测模块依赖心跳检测模块，既需要开启心跳检测才可支持自定义检测模块；
-
-2. 自定义检测模块的触发方式是心跳Server向Agent下发指令完成的，检测结果通过Kafka传递到Server端，因此不具备实时性；
-
-3. 自定义检测函数添加在https://github.com/DianrongSecurity/AgentSmith-HIDS/blob/master/agent/src/lib/detection_module.rs 文件下，并且需要在该文件的Detective impl的start函数定义好Mapping关系(Server下发指令和调用的检测函数关系)；
-
-4. 添加完自定义检测函数后需要在https://github.com/DianrongSecurity/AgentSmith-HIDS/blob/master/smith_console/heartbeat_server.py 中添加下发指令逻辑，注意需要和其他指令通过“;”间隔；
-
-5. 实现逻辑，Agent向心跳服务器发送心跳包，Server返回检测指令，Agent通过指令和检测函数的Mapping执行指令所指的检测函数，检测结果通过Kafka传递到Server端。
+AgentSmith-HIDS可以实现实时监测进程注入的行为,使用过Hook sys_ptrace()来实现的,我们仅会采集**PTRACE_POKETEXT和PTRACE_POKEDATA**
 
 
 
@@ -125,6 +76,33 @@ AgentSmith-HIDS 目前已经在点融经过压力测试/稳定性测试，目前
 目前AgentSmith-HIDS支持对 execve/accept/accept4/connect 的进程/可执行文件做检测,可以有效的发现试图隐藏自己行踪的行为.
 
 相关字段在hook execve/accept/accept4/connect 的信息中的**pid_rootkit_check**/**file_rootkit_check**,0代表异常.
+
+
+
+
+### 自定义检测模块
+
+1. 自定义检测模块依赖心跳检测模块，既需要开启心跳检测才可支持自定义检测模块；
+2. 自定义检测模块的触发方式是心跳Server向Agent下发指令完成的，检测结果通过Kafka传递到Server端，因此不具备实时性；
+3. 自定义检测函数添加在https://github.com/DianrongSecurity/AgentSmith-HIDS/blob/master/agent/src/lib/detection_module.rs 文件下，并且需要在该文件的Detective impl的start函数定义好Mapping关系(Server下发指令和调用的检测函数关系)；
+4. 添加完自定义检测函数后需要在https://github.com/DianrongSecurity/AgentSmith-HIDS/blob/master/smith_console/heartbeat_server.py 中添加下发指令逻辑，注意需要和其他指令通过“;”间隔；
+5. 实现逻辑，Agent向心跳服务器发送心跳包，Server返回检测指令，Agent通过指令和检测函数的Mapping执行指令所指的检测函数，检测结果通过Kafka传递到Server端。
+
+
+
+### 快速测试 （您可以参考[Quick-Start](https://github.com/DianrongSecurity/AgentSmith-HIDS/blob/master/Quick-Start.md)中更为详细的说明）
+
+1. 编译LKM，自己编译LKM需要安装Linux Kernel Source，编译目录在：`/syshook/LKM`，通过`make`得到`syshook.ko`LKM文件。
+2. 下发编译好的LKM文件到测试服务器，注意Kernel版本需要和编译服务器保持一致。
+3. 在测试环境安装LKM文件，`insmod syshook.ko`即可。
+4. 部署测试环境接收端Kafka Server，注意需要手动创建topic。
+5. (可选)部署测试环境HIDS心跳Server，具体请看：https://github.com/DianrongSecurity/AgentSmith-HIDS/tree/master/smith_console 。
+6. 编译agent模块，需要提前安装rust环境。在目录：`/root/smithhids/agent/src/conf`下，先修改agent配置文件：`/root/smithhids/agent/src/conf/settings.rs`，修改相关的Kafka信息和心跳配置，通过`cargo build —-release`，在`/agent/target/release/ `下得到编译好的agent。(注：需要提前`yum install openssl` && `yum install openssl-devel`)
+7. 安装agent，下发agent到测试环境，直接执行即可。
+8. 如果配置并部署了HIDS心跳Server，可以通过HIDS Console来简单对测试服务器的情况进行查看，具体操作请看：https://github.com/DianrongSecurity/AgentSmith-HIDS/tree/master/smith_console 。
+9. SELinux设置enforcing也不影响Agent运行。
+
+（注：由于Agent取本机IP是通过命令:`hostname -i`，所以测试时请保证hostname和hosts配置正确，否则HIDS Console端无法读取正确的IP。）
 
 
 
@@ -138,7 +116,7 @@ AgentSmith-HIDS 目前已经在点融经过压力测试/稳定性测试，目前
 
 ### 卸载
 
-卸载AgentSmith-HIDS前需要先关闭用户态agent进程，agent默认Log path：`/var/log/smith.log`，默认pid file：`/run/smith.pid`，默认下：`cat /run/smith.pid |xargs kill -9`再通过`rmmod syshook`来完成卸载。
+卸载AgentSmith-HIDS前需要先关闭用户态agent进程，agent默认Log path：`/var/log/smith.log`，默认pid file：`/var/run/smith.pid`，默认下：`cat /var/run/smith.pid |xargs kill -9`再通过`rmmod syshook`来完成卸载。
 
 
 
@@ -157,10 +135,11 @@ AgentSmith-HIDS 目前已经在点融经过压力测试/稳定性测试，目前
 | SEND_TYPE                   | LKM传输到用户态方案：<br />1:NETLINK;<br />2:SHERE_MEM；<br />默认：2 |
 | HOOK_EXECVE                 | execve() hook 开关:<br />1:开启; <br />默认:  1              |
 | HOOK_CONNECT                | connect() hook 开关:<br />1:开启; <br />默认:  1             |
+| HOOK_PTRACE                 | 检测进程注入 开关:<br />1:开启; <br />默认:  1               |
 | HOOK_ACCEPT                 | accept()/accept4() hook 开关:<br />1:开启; <br />默认:  0    |
 | HOOK_INIT_MODULE            | init_module() hook 开关:<br />1:开启; <br />默认:  1         |
 | HOOK_FINIT_MODULE           | finit_module() hook 开关:<br />1:开启; <br />默认:  1        |
-| ROOTKIT_CHECK               | execve/accept/accept4/connect rootkit检测开关:<br />1:开启;<br />默认: 0            |
+| ROOTKIT_CHECK               | execve/accept/accept4/connect rootkit检测开关:<br />1:开启;<br />默认: 0 |
 | KERNEL_PRINT                | debug输出：<br />-1:不输出;<br />1:输出共享内存时index信息;<br />2:输出捕获到的信息；<br />默认：-1 |
 | DELAY_TEST                  | 测试传输方案延迟：<br />-1:关闭;<br />1:开启；<br />默认：-1 |
 | WRITE_INDEX_TRY_LOCK        | 仅在SEND_TYPE=2时有意义，是控制对write_index lock方式：<br />-1:使用write_lock();<br />1:使用write_trylock()；<br />默认：-1 |
@@ -190,6 +169,21 @@ AgentSmith-HIDS 目前已经在点融经过压力测试/稳定性测试，目前
 * 虽然我们通过Hook syscall来尽可能的拿到所有我们想要的信息，但是需要注意依然存在绕过Hook的可能性，虽然这种情况难度较大，可能性很小。我们建议如果想要确保万无一失，在服务器初始化后尽早的部署HIDS。
 
 * 请在使用前进行充分测试。
+
+
+
+### 关于项目进度和未来
+
+AgentSmith-HIDS 目前已经在点融经过压力测试/稳定性测试，目前正在内部线上测试环境进行更加全面的测试。
+
+(本人已从点融离职，目前就职于一家游戏公司，稳定性测试依然在进行)
+
+未来计划：
+
+- 持续稳定性/性能测试。
+- 对Connect行为后续传输的数据进行偏移量计算从而得到一些关键信息(部分协议，如HTTP)，如Host这样的信息。
+- 借鉴LKRG，对Kernel进行保护。
+- 增加Rootkit的Connect行为实时检测。
 
 
 

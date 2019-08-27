@@ -1,6 +1,6 @@
 [package]
 name = "agent"
-version = "0.1.4"
+version = "0.1.5"
 authors = ["E_Bwill <cy_sniper@yeah.net>"]
 
 [dependencies]

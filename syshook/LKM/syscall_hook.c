@@ -3,7 +3,7 @@
 * Author:	E_BWill
 * Year:		2018
 * File:		syscall_hook.c
-* Description:	Hook execve,connect,accept4,accept4,init_module,finit_module Syscall;real-time detect rootkit
+* Description:	hook execve,connect,accept4,accept4,ptrace,init_module,finit_module syscall;real-time detect rootkit;real-time detect porcess injection
 
 * AgentSmith-HIDS is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -40,6 +40,7 @@
 #include <linux/version.h>
 #include <linux/spinlock.h>
 #include <linux/types.h>
+#include <linux/ptrace.h>
 #include <net/inet_sock.h>
 #include <net/tcp.h>
 #include <net/tcp.h>
@@ -69,15 +70,17 @@
 #define CONNECT_TYPE "42"
 #define ACCEPT_TYPE "43"
 #define INIT_MODULE_TYPE "175"
-#define FINIT_MODULE_TYPE "313"
+#define FINIT_MODULE_TYPE "313
 #define DNS_TYPE "601"
+#define PTRACE_TYPE "101"
 
 #define HOOK_EXECVE 1
 #define HOOK_CONNECT 1
-#define HOOK_DNS 1
+#define HOOK_DNS 0
 #define HOOK_ACCEPT 0
 #define HOOK_INIT_MODULE 1
 #define HOOK_FINIT_MODULE 1
+#define HOOK_PTRACE 1
 
 #define ROOTKIT_CHECK 0
 
@@ -101,6 +104,13 @@ asmlinkage int (*orig_recvfrom)(int fd, void __user *ubuf, unsigned long size,
                                                 unsigned int flags,
                                                 struct sockaddr __user *addr,
                                                 int addrlen);
+
+#if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
+asmlinkage int (*orig_ptrace)(long request, long pid, unsigned long addr,
+                              			   unsigned long data);
+#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
+asmlinkage int (*orig_ptrace)(long request, long pid, long addr, long data);
+#endif
 
 #if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
 asmlinkage int (*orig_finit_module)(int fd, const char __user *uargs,
@@ -443,8 +453,10 @@ static char *str_replace(char *orig, char *rep, char *with)
     len_rep = strlen(rep);
     if (len_rep == 0)
         return NULL;
+
     if (!with)
         with = "";
+
     len_with = strlen(with);
 
     ins = orig;
@@ -893,7 +905,11 @@ asmlinkage int monitor_execve_hook(const char __user *filename, const char __use
         offset += 1;
     }
 
-    argv_res_tmp = str_replace(argv_res, "\n", " ");
+    if (argv_len > 0) {
+        argv_res_tmp = str_replace(argv_res, "\n", " ");
+    } else {
+        argv_res_tmp = str_replace("", "\n", " ");
+    }
 
     result_str_len =
         get_data_alignment(strlen(argv_res_tmp) + strlen(pname) +
@@ -963,7 +979,6 @@ asmlinkage int monitor_execve_hook(char __user *filename, char __user * __user *
     int file_check_res = -1;
     int result_str_len;
     int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0;
-    struct filename *path;
     const char __user *native;
     char *abs_path = NULL;
     char *argv_res = NULL;
@@ -1043,7 +1058,11 @@ asmlinkage int monitor_execve_hook(char __user *filename, char __user * __user *
         offset += 1;
     }
 
-    argv_res_tmp = str_replace(argv_res, "\n", " ");
+    if (argv_len > 0) {
+        argv_res_tmp = str_replace(argv_res, "\n", " ");
+    } else {
+        argv_res_tmp = str_replace("", "\n", " ");
+    }
 
     result_str_len =
         get_data_alignment(strlen(argv_res_tmp) + strlen(pname) +
@@ -1453,6 +1472,101 @@ asmlinkage unsigned long monitor_accept4_hook(int fd, struct sockaddr __user *di
 
     return ori_accept_syscall_res;
 }
+#if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
+asmlinkage unsigned long monitor_ptrace_hook(long request, long pid, unsigned long addr, unsigned long data)
+{
+    int result_str_len = 0;
+    char *final_path = NULL;
+    char *result_str = NULL;
+    unsigned long orig_ptrace_syscall_res = orig_ptrace(request, pid, addr, data);
+
+    if (netlink_pid == -1 && share_mem_flag == -1) {
+        return orig_ptrace_syscall_res;
+    }
+
+    if (request == PTRACE_POKETEXT || request == PTRACE_POKEDATA) {
+        if (current->active_mm) {
+            if (current->mm->exe_file) {
+                if (pathname) {
+                    pathname = memset(pathname, '\0', PATH_MAX);
+                    final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
+                } else {
+                    final_path = "-1";
+                    pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
+                }
+            }
+        }
+
+        if (final_path == NULL) {
+           final_path = "-1";
+        }
+
+        result_str_len = get_data_alignment(strlen(current->comm) +
+                         strlen(current->nsproxy->uts_ns->name.nodename) +
+                         strlen(current->comm) + strlen(final_path) + 128);
+        result_str = kzalloc(result_str_len, GFP_ATOMIC);
+
+        snprintf(result_str, result_str_len,
+                 "%d%s%s%s%d%s%d%s%p%s%p%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%d",
+                 current->real_cred->uid.val, "\n", PTRACE_TYPE, "\n", request,
+                 "\n", pid, "\n", addr, "\n", data, "\n", final_path, "\n",
+                 current->pid, "\n", current->real_parent->pid, "\n",
+                 pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                 current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", orig_ptrace_syscall_res);
+        send_msg_to_user(SEND_TYPE, result_str, 1);
+        return orig_ptrace_syscall_res;
+    } else {
+        return orig_ptrace_syscall_res;
+    }
+}
+#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
+asmlinkage int monitor_ptrace_hook(long request, long pid, long addr, long data)
+{
+    int result_str_len = 0;
+    char *final_path = NULL;
+    char *result_str = NULL;
+    int orig_ptrace_syscall_res = orig_ptrace(request, pid, addr, data);
+
+    if (netlink_pid == -1 && share_mem_flag == -1) {
+        return orig_ptrace_syscall_res;
+    }
+
+    if (request == PTRACE_POKETEXT || request == PTRACE_POKEDATA) {
+        if (current->active_mm) {
+            if (current->mm->exe_file) {
+                if (pathname) {
+                    pathname = memset(pathname, '\0', PATH_MAX);
+                    final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
+                } else {
+                    final_path = "-1";
+                    pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
+                }
+            }
+        }
+
+        if (final_path == NULL) {
+           final_path = "-1";
+        }
+
+        result_str_len = get_data_alignment(strlen(current->comm) +
+                         strlen(current->nsproxy->uts_ns->name.nodename) +
+                         strlen(current->comm) + strlen(final_path) + 128);
+        result_str = kzalloc(result_str_len, GFP_ATOMIC);
+
+        snprintf(result_str, result_str_len,
+                 "%d%s%s%s%d%s%d%s%p%s%p%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%d",
+                 current->real_cred->uid, "\n", PTRACE_TYPE, "\n", request,
+                 "\n", pid, "\n", addr, "\n", data, "\n", final_path, "\n",
+                 current->pid, "\n", current->real_parent->pid, "\n",
+                 pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                 current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", orig_ptrace_syscall_res);
+        send_msg_to_user(SEND_TYPE, result_str, 1);
+        return orig_ptrace_syscall_res;
+    } else {
+        return orig_ptrace_syscall_res;
+    }
+}
+#endif
 
 static void *getQuery(unsigned char *data, int index, char *res) {
     int i = 0;
@@ -1984,6 +2098,10 @@ static int lkm_init(void)
     orig_stub_execve = (void *)(sys_call_table_ptr[__NR_execve]);
     sys_call_table_ptr[__NR_execve] = (void *)monitor_stub_execve_hook;
 #endif
+#if (HOOK_PTRACE == 1)
+    orig_ptrace = (void *)(sys_call_table_ptr[__NR_ptrace]);
+    sys_call_table_ptr[__NR_ptrace] = (void *)monitor_ptrace_hook;
+#endif
 #endif
 
     enable_write_protection();
@@ -2020,6 +2138,9 @@ static void lkm_exit(void)
 #if (HOOK_EXECVE == 1)
     sys_call_table_ptr[__NR_execve] = (void *)orig_stub_execve;
 #endif
+#if (HOOK_PTRACE == 1)
+    sys_call_table_ptr[__NR_ptrace] = (void *)orig_ptrace;
+#endif
 #endif
 
     sys_call_table_ptr = NULL;
@@ -2039,6 +2160,6 @@ module_init(lkm_init);
 module_exit(lkm_exit);
 
 MODULE_LICENSE("GPL v2");
-MODULE_VERSION("0.1.7");
+MODULE_VERSION("0.1.8");
 MODULE_AUTHOR("E_Bwill <cy_sniper@yeah.net>");
-MODULE_DESCRIPTION("Monitor Syscall: execve,connect,acccept,accept4,init_module,finit_module;real-time detect rootkit");
+MODULE_DESCRIPTION("hook execve,connect,accept4,accept4,ptrace,init_module,finit_module syscall;real-time detect rootkit;real-time detect porcess injection");
