@@ -70,7 +70,7 @@
 #define CONNECT_TYPE "42"
 #define ACCEPT_TYPE "43"
 #define INIT_MODULE_TYPE "175"
-#define FINIT_MODULE_TYPE "313
+#define FINIT_MODULE_TYPE "313"
 #define DNS_TYPE "601"
 #define PTRACE_TYPE "101"
 
