@@ -1653,7 +1653,7 @@ asmlinkage unsigned long monitor_recvfrom_hook(int fd, void __user *ubuf, unsign
         sa_family = 6;
         sock = sockfd_lookup(fd, &err);
         sin6 = (struct sockaddr_in6 *)&tmp_dirp;
-        if (sin->sin_port == 13568 || sin->sin_port == 59668) {
+        if (sin6->sin_port == 13568 || sin6->sin_port == 59668) {
             recv_data = kzalloc(size, GFP_ATOMIC);
             recv_data_copy_res = copy_from_user(recv_data, ubuf, size);
             if (sizeof(recv_data) >= 8) {
