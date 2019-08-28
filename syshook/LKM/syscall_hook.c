@@ -3,7 +3,7 @@
 * Author:	E_BWill
 * Year:		2018
 * File:		syscall_hook.c
-* Description:	hook execve,connect,accept4,accept4,ptrace,init_module,finit_module syscall;real-time detect rootkit;real-time detect porcess injection
+* Description:	hook execve,connect,accept,accept4,ptrace,init_module,finit_module syscall;real-time detect rootkit;real-time detect porcess injection
 
 * AgentSmith-HIDS is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -2162,4 +2162,4 @@ module_exit(lkm_exit);
 MODULE_LICENSE("GPL v2");
 MODULE_VERSION("0.1.8");
 MODULE_AUTHOR("E_Bwill <cy_sniper@yeah.net>");
-MODULE_DESCRIPTION("hook execve,connect,accept4,accept4,ptrace,init_module,finit_module syscall;real-time detect rootkit;real-time detect porcess injection");
+MODULE_DESCRIPTION("hook execve,connect,accept,accept4,ptrace,init_module,finit_module syscall;real-time detect rootkit;real-time detect porcess injection");
