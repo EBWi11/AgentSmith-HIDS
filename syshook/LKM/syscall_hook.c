@@ -71,11 +71,13 @@
 #define ACCEPT_TYPE "43"
 #define INIT_MODULE_TYPE "175"
 #define FINIT_MODULE_TYPE "313"
-#define DNS_TYPE "601"
 #define PTRACE_TYPE "101"
+#define DNS_TYPE "601"
+#define CREATE_FILE "602"
 
 #define HOOK_EXECVE 1
 #define HOOK_CONNECT 1
+#define HOOK_CREATE_FILE 1
 #define HOOK_DNS 0
 #define HOOK_ACCEPT 0
 #define HOOK_INIT_MODULE 1
@@ -105,6 +107,8 @@ asmlinkage int (*orig_recvfrom)(int fd, void __user *ubuf, unsigned long size,
                                                 struct sockaddr __user *addr,
                                                 int addrlen);
 
+asmlinkage int (*orig_open)(const char __user *filename, int flags, umode_t mode);
+
 #if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
 asmlinkage int (*orig_ptrace)(long request, long pid, unsigned long addr,
                               			   unsigned long data);
@@ -133,6 +137,8 @@ extern asmlinkage int monitor_stub_recvfrom_hook(int fd, void __user *ubuf, unsi
                                                  unsigned int flags,
                                                  struct sockaddr __user *addr,
                                                  int addrlen);
+
+extern asmlinkage int monitor_stub_open_hook(const char __user *filename, int flags, umode_t mode);
 
 static int flen = 256;
 static int use_count = 0;
@@ -1872,6 +1878,25 @@ asmlinkage unsigned long monitor_connect_hook(int fd, struct sockaddr __user *di
     return ori_connect_syscall_res;
 }
 
+asmlinkage unsigned long open_wapper(const char __user *filename, int flags, umode_t mode)
+{
+    return orig_open(filename, flags, mode);
+}
+
+asmlinkage unsigned long monitor_open_hook(const char __user *filename, int flags, umode_t mode)
+{
+	/*struct filename *tmp = tmp_getname(filename);
+	if (!IS_ERR(tmp)) {
+        printk("%s",filename);
+        tmp_putname(tmp);
+	}*/
+
+#if (SAFE_EXIT == 1)
+        del_use_count();
+#endif
+    return orig_open(filename, flags, mode);
+}
+
 unsigned long **find_sys_call_table(void)
 {
     unsigned long ptr;
@@ -2102,6 +2127,10 @@ static int lkm_init(void)
     orig_ptrace = (void *)(sys_call_table_ptr[__NR_ptrace]);
     sys_call_table_ptr[__NR_ptrace] = (void *)monitor_ptrace_hook;
 #endif
+#if (HOOK_CREATE_FILE == 1)
+    orig_open = (void *)(sys_call_table_ptr[__NR_open]);
+    sys_call_table_ptr[__NR_open] = (void *)monitor_open_hook;
+#endif
 #endif
 
     enable_write_protection();
@@ -2140,6 +2169,9 @@ static void lkm_exit(void)
 #endif
 #if (HOOK_PTRACE == 1)
     sys_call_table_ptr[__NR_ptrace] = (void *)orig_ptrace;
+#endif
+#if (HOOK_CREATE_FILE == 1)
+    sys_call_table_ptr[__NR_open] = (void *)orig_open;
 #endif
 #endif
 
