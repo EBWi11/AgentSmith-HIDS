@@ -1887,12 +1887,12 @@ asmlinkage unsigned long monitor_open_hook(const char __user *filename, int flag
 {
 	/*struct filename *tmp = tmp_getname(filename);
 	if (!IS_ERR(tmp)) {
-        printk("%s",filename);
+        printk("%s",tmp->name);
         tmp_putname(tmp);
 	}*/
 
 #if (SAFE_EXIT == 1)
-        del_use_count();
+    del_use_count();
 #endif
     return orig_open(filename, flags, mode);
 }
