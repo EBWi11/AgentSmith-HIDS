@@ -105,13 +105,13 @@ Note: Since the Agent obtains the local IP through the command: `hostname -i`, p
 
 
 
-### AntiRootkit(Beta Feature)
+### DNS Hook (Beta Feature)
 
 AgentSmith-HIDS can hook some DNS query
 
 
 
-### AntiRootkit(Beta Feature)
+### AntiRootkit (Beta Feature)
 
 AgentSmith-HIDS will decete execve/accept/accept4/connect call's PID/ELF File,can find most rootkit action.
 
