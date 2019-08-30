@@ -40,6 +40,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 * 支持自定义检测模块(具体添加方式见下文)
 * 实时检测进程注入(Process Injection)
 * 实时检测Rootkit(Beta Feature)
+* DNS Query Hook(Beta Feature)
 * 实时监测创建文件行为
 
 
