@@ -33,13 +33,14 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ### AgentSmith-HIDS实现了以下的功能：
 
-* 通过加载LKM的方式Hook了**execve,connect,ptrace,accept,accept4,init_module,finit_module**的system_call；
+* 通过加载LKM的方式Hook了**execve,connect,ptrace,accept,accept4,init_module,finit_module,open,openat,creat,recvfrom**的system_call；
 * 通过对Linux namespace兼容的方式实现了对Docker容器行为的情报收集；
 * 实现了两种将Hook Info从内核态传输到用户态的方式：netlink和共享内存，共享内存传输损耗相较于netlink减小30%，在测试服务器上Hook connect耗时中位数8478ns，更详细的AgentSmith-HIDS BencherMark请见:https://github.com/DianrongSecurity/AgentSmith-HIDS/tree/master/doc **(注:经过其他小伙伴提醒，我们的压力测试方法有一定问题，并不是极限测试，我们会尽快发布更"压力"的测试报告)**
 * **系统文件完整性检测**，**系统用户列表查询**，**系统端口监听列表查询**，**系统RPM LIST查询**，**系统定时任务查询**功能；
 * 支持自定义检测模块(具体添加方式见下文)
 * 实时检测进程注入(Process Injection)
 * 实时检测Rootkit(Beta Feature)
+* 实时监测创建文件行为
 
 
 
@@ -77,11 +78,17 @@ AgentSmith-HIDS支持部分的DNS记录获取
 
 
 
+### Create File Decete
+
+AgentSmith-HIDS支持实时监测创建文件的行为
+
+
+
 ### AntiRootkit(Beta Feature)
 
 目前AgentSmith-HIDS支持对 execve/accept/accept4/connect 的进程/可执行文件做检测,可以有效的发现试图隐藏自己行踪的行为.
 
-相关字段在hook execve/accept/accept4/connect 的信息中的**pid_rootkit_check**/**file_rootkit_check**,0代表异常.
+相关字段在Hook execve/accept/accept4/connect 的信息中的**pid_rootkit_check**/**file_rootkit_check**,0代表异常.
 
 
 
@@ -139,13 +146,14 @@ AgentSmith-HIDS支持部分的DNS记录获取
 | define                      | 说明                                                         |
 | --------------------------- | ------------------------------------------------------------ |
 | SEND_TYPE                   | LKM传输到用户态方案：<br />1:NETLINK;<br />2:SHERE_MEM；<br />默认：2 |
-| HOOK_EXECVE                 | execve() hook 开关:<br />1:开启; <br />默认:  1              |
-| HOOK_CONNECT                | connect() hook 开关:<br />1:开启; <br />默认:  1             |
+| HOOK_EXECVE                 | execve() Hook 开关:<br />1:开启; <br />默认:  1              |
+| HOOK_CONNECT                | connect() Hook 开关:<br />1:开启; <br />默认:  1             |
 | HOOK_PTRACE                 | 检测进程注入 开关:<br />1:开启; <br />默认:  1               |
-| HOOK_DNS                    | dns hook 开关:<br />1:开启; <br />默认:  0                   |
-| HOOK_ACCEPT                 | accept()/accept4() hook 开关:<br />1:开启; <br />默认:  0    |
-| HOOK_INIT_MODULE            | init_module() hook 开关:<br />1:开启; <br />默认:  1         |
-| HOOK_FINIT_MODULE           | finit_module() hook 开关:<br />1:开启; <br />默认:  1        |
+| HOOK_DNS                    | DNS Hook 开关:<br />1:开启; <br />默认:  0                   |
+| HOOK_CREATE_FILE            | Create File Hook 开关:<br />1:开启; <br />默认:  0           |
+| HOOK_ACCEPT                 | accept()/accept4() Hook 开关:<br />1:开启; <br />默认:  0    |
+| HOOK_INIT_MODULE            | init_module() Hook 开关:<br />1:开启; <br />默认:  1         |
+| HOOK_FINIT_MODULE           | finit_module() Hook 开关:<br />1:开启; <br />默认:  1        |
 | ROOTKIT_CHECK               | execve/accept/accept4/connect rootkit检测开关:<br />1:开启;<br />默认: 0 |
 | KERNEL_PRINT                | debug输出：<br />-1:不输出;<br />1:输出共享内存时index信息;<br />2:输出捕获到的信息；<br />默认：-1 |
 | DELAY_TEST                  | 测试传输方案延迟：<br />-1:关闭;<br />1:开启；<br />默认：-1 |
@@ -162,7 +170,7 @@ AgentSmith-HIDS支持部分的DNS记录获取
 
 
 
-关于HOOK_ACCEPT,开启后可能会有一定的性能影响(如:在负载较高的主机上安装agent,由于accept太过频繁导致网络IO负载较高),如果使用AgentSmith仅是作为安全需求使用,那么可以关闭该Hook.该HOOK在需要梳理网络通讯关系时可以开启,帮助分析资产间访问关系.
+关于HOOK_ACCEPT,开启后可能会有一定的性能影响(如:在负载较高的主机上安装agent,由于accept太过频繁导致网络IO负载较高),如果使用AgentSmith仅是作为安全需求使用,那么可以关闭该Hook.该Hook在需要梳理网络通讯关系时可以开启,帮助分析资产间访问关系.
 
 关于SAFE_EXIT，当在Hook connect情况下，如果在rmmod时有connect还未返回，那么rmmod后connect将会返回到错误的内存地址上，将会引起kernel crash。开启SAFE_EXIT会通过增加引用的方式来阻止这种情况的发生，但是可能会导致无法立即rmmod LKM。如果关闭SAFE_EXIT，需要注意如果想卸载Smith LKM需要通过重启的方式，否则可能会造成生产事故。
 

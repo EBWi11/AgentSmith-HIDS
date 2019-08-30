@@ -27,7 +27,7 @@ For security engineers who have a certain understanding of Linux and need a func
 
 
 ### What does the AgentSmith-HIDS achieved:
-* Hook the system_call of **execve, connect,accept,accept4, init_module, finit_module** by loading LKM;
+* Hook the system_call of **execve,connect,ptrace,accept,accept4,init_module,finit_module,open,openat,creat,recvfrom** by loading LKM;
 
 * Being compatible with Linux namespace so that information of Docker container can be collected;
 
@@ -41,6 +41,7 @@ For security engineers who have a certain understanding of Linux and need a func
 * We will keep the development of the AgentSmith-HIDS and following the latest release of stable version of Centos7.
 * Real-time Porcess injection Detect
 * Real-time Rootkit Detect(Beta Feature)
+* Real-time Create File Detect
 
 
 
@@ -118,6 +119,12 @@ Detection info field(execve/accept/accept4/connect): **pid_rootkit_check**//**fi
 
 
 
+### Create File Decete
+
+AgentSmith-HIDS can real-time decete create file action
+
+
+
 
 ### Work Flow Chart
 
@@ -149,7 +156,8 @@ Before uninstalling the AgentSmith-HIDS, you need to close the user-mode agent p
 | HOOK_EXECVE                 | execve() Hook Switch:<br />1. Enable;<br />Default:1         |
 | HOOK_CONNECT                | connect() Hook Switch:<br />1. Enable;<br />Default:1        |
 | HOOK_DNS                    | DNS Hook Switch:<br />1. Enable;<br />Default:0              |
-| HOOK_PTRACE                 | Porcess Injection Detect Switch:<br />1. Enable;<br />Default:1 |
+| HOOK_PTRACE                 | Porcess Injection Detect Hook Switch:<br />1. Enable;<br />Default:1 |
+| HOOK_CREATE_FILE            | Create File Detect Hook Switch:<br />1. Enable;<br />Default:0 |
 | HOOK_ACCEPT                 | accept() Hook Switch:<br />1. Enable;<br />Default:0         |
 | HOOK_INIT_MODULE            | init_module() Hook Switch:<br />1. Enable;<br />Default:1    |
 | HOOK_FINIT_MODULE           | finit_module() Hook Switch:<br />1. Enable;<br />Default:1   |
