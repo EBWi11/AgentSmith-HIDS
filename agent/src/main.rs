@@ -89,6 +89,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
             let mut syscall_accept_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"sa_family\":\"".to_string(), ",\"fd\":\"".to_string(), ",\"sport\":\"".to_string(), ",\"sip\":\"".to_string(), ",\"elf\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"dip\":\"".to_string(), ",\"dport\":\"".to_string(), ",\"res\":\"".to_string(), ",\"pid_rootkit_check\":\"".to_string(),",\"file_rootkit_check\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
             let mut syscall_ptrace_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"ptrace_request\":\"".to_string(), ",\"target_pid\":\"".to_string(), ",\"addr\":\"".to_string(), ",\"data\":\"".to_string(), ",\"elf\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"res\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
             let mut syscall_dns_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"sa_family\":\"".to_string(), ",\"fd\":\"".to_string(), ",\"sport\":\"".to_string(), ",\"sip\":\"".to_string(), ",\"elf\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"dip\":\"".to_string(), ",\"dport\":\"".to_string(), ",\"qr\":\"".to_string(), ",\"opcode\":\"".to_string(), ",\"rcode\":\"".to_string(), ",\"query\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
+            let mut syscall_create_file_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"elf\":\"".to_string(), ",\"file_path\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
 
             for mut s in msg_split {
                 if msg_syscall_type == "59" {
@@ -170,12 +171,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                             break;
                         }
                     }
-                    if i == 8 {
-                        if accept_white_list.contains(s) {
-                            msg_syscall_type = "-1";
-                            break;
-                        }
-                    }
+
                     syscall_ptrace_msg[i].push_str(s);
                     syscall_ptrace_msg[i].push_str(tmp);
                 } else if msg_syscall_type == "601" {
@@ -185,14 +181,19 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                             break;
                         }
                     }
-                    if i == 8 {
-                        if connect_white_list.contains(s) {
+
+                    syscall_dns_msg[i].push_str(s);
+                    syscall_dns_msg[i].push_str(tmp);
+                } else if msg_syscall_type == "602" {
+                    if i == 6 || i == 7 || i == 8 || i == 9 {
+                        if s == agent_pid {
                             msg_syscall_type = "-1";
                             break;
                         }
                     }
-                    syscall_dns_msg[i].push_str(s);
-                    syscall_dns_msg[i].push_str(tmp);
+
+                    syscall_create_file_msg[i].push_str(s);
+                    syscall_create_file_msg[i].push_str(tmp);
                 }
                 i = i + 1;
             }
@@ -218,6 +219,9 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
             } else if msg_syscall_type == "601" {
                 send_flag = 1;
                 msg_str = syscall_dns_msg.join("");
+            } else if msg_syscall_type == "602" {
+                send_flag = 1;
+                msg_str = syscall_create_file_msg.join("");
             }
 
             if send_flag == 1 {

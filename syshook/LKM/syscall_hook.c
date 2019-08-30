@@ -3,7 +3,7 @@
 * Author:	E_BWill
 * Year:		2018
 * File:		syscall_hook.c
-* Description:	hook execve,connect,accept,accept4,ptrace,init_module,finit_module syscall;real-time detect rootkit;real-time detect porcess injection
+* Description:	hook execve,connect,accept,accept4,ptrace,init_module,finit_module,open,openat,creat syscall;real-time detect rootkit;real-time detect porcess injection;create file
 
 * AgentSmith-HIDS is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -44,6 +44,7 @@
 #include <net/inet_sock.h>
 #include <net/tcp.h>
 #include <net/tcp.h>
+#include <linux/namei.h>
 #include <net/inet_connection_sock.h>
 
 #define NETLINK_USER 31
@@ -77,7 +78,7 @@
 
 #define HOOK_EXECVE 1
 #define HOOK_CONNECT 1
-#define HOOK_CREATE_FILE 1
+#define HOOK_CREATE_FILE 0
 #define HOOK_DNS 0
 #define HOOK_ACCEPT 0
 #define HOOK_INIT_MODULE 1
@@ -108,6 +109,10 @@ asmlinkage int (*orig_recvfrom)(int fd, void __user *ubuf, unsigned long size,
                                                 int addrlen);
 
 asmlinkage int (*orig_open)(const char __user *filename, int flags, umode_t mode);
+
+asmlinkage int (*orig_openat)(int dfd, const char __user *filename, int flags, umode_t mode);
+
+asmlinkage int (*orig_creat)(const char __user *pathname, umode_t mode);
 
 #if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
 asmlinkage int (*orig_ptrace)(long request, long pid, unsigned long addr,
@@ -140,6 +145,10 @@ extern asmlinkage int monitor_stub_recvfrom_hook(int fd, void __user *ubuf, unsi
 
 extern asmlinkage int monitor_stub_open_hook(const char __user *filename, int flags, umode_t mode);
 
+extern asmlinkage int monitor_stub_openat_hook(int dfd, const char __user *filename, int flags, umode_t mode);
+
+extern asmlinkage int monitor_stub_creat_hook(const char __user *pathname, umode_t mode);
+
 static int flen = 256;
 static int use_count = 0;
 static int netlink_pid = -1;
@@ -148,8 +157,18 @@ static int pre_slot_len = 0;
 static int write_index = 8;
 static int check_read_index_flag = -1;
 static char *pname_buf;
+static char *open_pname_buf;
+static char *openat_pname_buf;
+static char *creat_pname_buf;
 static char *init_module_buf;
-static char *pathname;
+static char *connect_pathname;
+static char *accept_pathname;
+static char *accept4_pathname;
+static char *ptrace_pathname;
+static char *recvfrom_pathname;
+static char *open_pathname;
+static char *openat_pathname;
+static char *creat_pathname;
 static char *tmp_stdin_fd;
 static char *tmp_stdout_fd;
 static char *slot_len;
@@ -400,8 +419,18 @@ static int get_data_alignment(int len)
 static void kzalloc_init(void)
 {
     pname_buf = kzalloc(flen, GFP_ATOMIC);
+    open_pname_buf = kzalloc(flen, GFP_ATOMIC);
+    openat_pname_buf = kzalloc(flen, GFP_ATOMIC);
+    creat_pname_buf = kzalloc(flen, GFP_ATOMIC);
     init_module_buf = kzalloc(256, GFP_ATOMIC);
-    pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
+    connect_pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
+    accept_pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
+    accept4_pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
+    ptrace_pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
+    recvfrom_pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
+    open_pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
+    openat_pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
+    creat_pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
     tmp_stdin_fd = kzalloc(256, GFP_ATOMIC);
     tmp_stdout_fd = kzalloc(256, GFP_ATOMIC);
     slot_len = kzalloc(8, GFP_ATOMIC);
@@ -420,11 +449,41 @@ static void kzalloc_exit(void)
     if (pname_buf)
         kfree(pname_buf);
 
+    if (open_pname_buf)
+        kfree(open_pname_buf);
+
+    if (openat_pname_buf)
+        kfree(openat_pname_buf);
+
+    if (creat_pname_buf)
+        kfree(creat_pname_buf);
+
     if (init_module_buf)
         kfree(init_module_buf);
 
-    if (pathname)
-        kfree(pathname);
+    if (connect_pathname)
+        kfree(connect_pathname);
+
+    if (accept_pathname)
+        kfree(accept_pathname);
+
+    if (accept4_pathname)
+        kfree(accept4_pathname);
+
+    if (ptrace_pathname)
+        kfree(ptrace_pathname);
+
+    if (recvfrom_pathname)
+        kfree(recvfrom_pathname);
+
+    if (open_pathname)
+        kfree(open_pathname);
+
+    if (openat_pathname)
+        kfree(openat_pathname);
+
+    if (creat_pathname)
+        kfree(creat_pathname);
 
     if(tmp_stdin_fd)
         kfree(tmp_stdin_fd);
@@ -1304,12 +1363,12 @@ asmlinkage unsigned long monitor_accept_hook(int fd, struct sockaddr __user *dir
         if (flag == 1) {
             if (current->active_mm) {
                 if (current->mm->exe_file) {
-                    if (pathname) {
-                        pathname = memset(pathname, '\0', PATH_MAX);
-                        final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
+                    if (accept_pathname) {
+                        accept_pathname = memset(accept_pathname, '\0', PATH_MAX);
+                        final_path = d_path(&current->mm->exe_file->f_path, accept_pathname, PATH_MAX);
                     } else {
                         final_path = "-1";
-                        pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
+                        accept_pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
                     }
                 }
             }
@@ -1424,12 +1483,12 @@ asmlinkage unsigned long monitor_accept4_hook(int fd, struct sockaddr __user *di
         if (flag == 1) {
             if (current->active_mm) {
                 if (current->mm->exe_file) {
-                    if (pathname) {
-                        pathname = memset(pathname, '\0', PATH_MAX);
-                        final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
+                    if (accept4_pathname) {
+                        accept4_pathname = memset(accept4_pathname, '\0', PATH_MAX);
+                        final_path = d_path(&current->mm->exe_file->f_path, accept4_pathname, PATH_MAX);
                     } else {
                         final_path = "-1";
-                        pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
+                        accept4_pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
                     }
                 }
             }
@@ -1493,12 +1552,12 @@ asmlinkage unsigned long monitor_ptrace_hook(long request, long pid, unsigned lo
     if (request == PTRACE_POKETEXT || request == PTRACE_POKEDATA) {
         if (current->active_mm) {
             if (current->mm->exe_file) {
-                if (pathname) {
-                    pathname = memset(pathname, '\0', PATH_MAX);
-                    final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
+                if (ptrace_pathname) {
+                    ptrace_pathname = memset(ptrace_pathname, '\0', PATH_MAX);
+                    final_path = d_path(&current->mm->exe_file->f_path, ptrace_pathname, PATH_MAX);
                 } else {
                     final_path = "-1";
-                    pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
+                    ptrace_pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
                 }
             }
         }
@@ -1540,12 +1599,12 @@ asmlinkage int monitor_ptrace_hook(long request, long pid, long addr, long data)
     if (request == PTRACE_POKETEXT || request == PTRACE_POKEDATA) {
         if (current->active_mm) {
             if (current->mm->exe_file) {
-                if (pathname) {
-                    pathname = memset(pathname, '\0', PATH_MAX);
-                    final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
+                if (ptrace_pathname) {
+                    ptrace_pathname = memset(ptrace_pathname, '\0', PATH_MAX);
+                    final_path = d_path(&current->mm->exe_file->f_path, ptrace_pathname, PATH_MAX);
                 } else {
                     final_path = "-1";
-                    pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
+                    ptrace_pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
                 }
             }
         }
@@ -1687,12 +1746,12 @@ asmlinkage unsigned long monitor_recvfrom_hook(int fd, void __user *ubuf, unsign
     if (flag == 1) {
         if (current->active_mm) {
             if (current->mm->exe_file) {
-                if (pathname) {
-                    pathname = memset(pathname, '\0', PATH_MAX);
-                    final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
+                if (recvfrom_pathname) {
+                    recvfrom_pathname = memset(recvfrom_pathname, '\0', PATH_MAX);
+                    final_path = d_path(&current->mm->exe_file->f_path, recvfrom_pathname, PATH_MAX);
                 } else {
                     final_path = "-1";
-                    pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
+                    recvfrom_pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
                 }
             }
         }
@@ -1815,12 +1874,12 @@ asmlinkage unsigned long monitor_connect_hook(int fd, struct sockaddr __user *di
         if (flag == 1) {
             if (current->active_mm) {
                 if (current->mm->exe_file) {
-                    if (pathname) {
-                        pathname = memset(pathname, '\0', PATH_MAX);
-                        final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
+                    if (connect_pathname) {
+                        connect_pathname = memset(connect_pathname, '\0', PATH_MAX);
+                        final_path = d_path(&current->mm->exe_file->f_path, connect_pathname, PATH_MAX);
                     } else {
                         final_path = "-1";
-                        pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
+                        connect_pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
                     }
                 }
             }
@@ -1883,18 +1942,255 @@ asmlinkage unsigned long open_wapper(const char __user *filename, int flags, umo
     return orig_open(filename, flags, mode);
 }
 
+asmlinkage unsigned long openat_wapper(int dfd, const char __user *filename, int flags, umode_t mode)
+{
+    return orig_openat(dfd, filename, flags, mode);
+}
+
 asmlinkage unsigned long monitor_open_hook(const char __user *filename, int flags, umode_t mode)
 {
-	/*struct filename *tmp = tmp_getname(filename);
-	if (!IS_ERR(tmp)) {
-        printk("%s",tmp->name);
-        tmp_putname(tmp);
-	}*/
+    int result_str_len = 0;
+    int ori_res = 0;
+    int check_res = 0;
+    char *path_str = NULL;
+    char *final_path = NULL;
+    char *result_str = NULL;
+    struct path path;
+    struct fdtable *files;
+
+    if (netlink_pid == -1 && share_mem_flag == -1)
+        return orig_open(filename, flags, mode);
+
+    check_res = user_path_at(AT_FDCWD, filename, LOOKUP_FOLLOW, &path);
+    ori_res = orig_open(filename, flags, mode);
+
+    if (!check_res) {
+        path_put(&path);
+    }
+
+    if (check_res == -2 && ori_res > 0) {
+        check_res = user_path_at(AT_FDCWD, filename, LOOKUP_FOLLOW, &path);
+        if (!check_res) {
+            if (open_pname_buf)
+                open_pname_buf = memset(open_pname_buf, '\0', flen);
+            else
+                open_pname_buf = kzalloc(flen, GFP_ATOMIC);
+
+            files = files_fdtable(current->files);
+
+            path_str = d_path(&path, open_pname_buf, flen);
+            path_put(&path);
+
+            if (current->active_mm) {
+                if (current->mm->exe_file) {
+                    if (open_pathname) {
+                        open_pathname = memset(open_pathname, '\0', PATH_MAX);
+                        final_path = d_path(&current->mm->exe_file->f_path, open_pathname, PATH_MAX);
+                    } else {
+                        final_path = "-1";
+                        open_pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
+                    }
+                }
+            }
+
+            if (final_path == NULL) {
+                final_path = "-1";
+            }
+
+            result_str_len = get_data_alignment(strlen(current->comm) +
+                             strlen(current->nsproxy->uts_ns->name.nodename) +
+                             strlen(current->comm) + strlen(path_str) + strlen(final_path) + 172);
+            result_str = kzalloc(result_str_len, GFP_ATOMIC);
+
+#if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
+            snprintf(result_str, result_str_len,
+                     "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s",
+                     current->real_cred->uid.val, "\n", CREATE_FILE, "\n", final_path, "\n",
+                     path_str, "\n", current->pid, "\n",current->real_parent->pid, "\n",
+                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n", current->comm, "\n",
+                     current->nsproxy->uts_ns->name.nodename);
+            send_msg_to_user(SEND_TYPE, result_str, 1);
+#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
+            snprintf(result_str, result_str_len,
+                     "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s",
+                     current->real_cred->uid, "\n", CREATE_FILE, "\n", final_path, "\n",
+                     path_str, "\n", current->pid, "\n",current->real_parent->pid, "\n",
+                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n", current->comm, "\n",
+                     current->nsproxy->uts_ns->name.nodename);
+            send_msg_to_user(SEND_TYPE, result_str, 1);
+#endif
+        }
+    }
 
 #if (SAFE_EXIT == 1)
     del_use_count();
 #endif
-    return orig_open(filename, flags, mode);
+
+    return ori_res;
+}
+
+asmlinkage unsigned long monitor_openat_hook(int dfd, const char __user *filename, int flags, umode_t mode)
+{
+    int result_str_len = 0;
+    int ori_res = 0;
+    int check_res = 0;
+    char *path_str = NULL;
+    char *final_path = NULL;
+    char *result_str = NULL;
+    struct path path;
+    struct fdtable *files;
+
+    if (netlink_pid == -1 && share_mem_flag == -1)
+        return orig_openat(dfd, filename, flags, mode);
+
+    check_res = user_path_at(dfd, filename, LOOKUP_FOLLOW, &path);
+    ori_res = orig_openat(dfd, filename, flags, mode);
+
+    if (!check_res) {
+        path_put(&path);
+    }
+
+    if (check_res == -2 && ori_res > 0) {
+        check_res = user_path_at(dfd, filename, LOOKUP_FOLLOW, &path);
+        if (!check_res) {
+            if (openat_pname_buf)
+                openat_pname_buf = memset(openat_pname_buf, '\0', flen);
+            else
+                openat_pname_buf = kzalloc(flen, GFP_ATOMIC);
+
+            files = files_fdtable(current->files);
+
+            path_str = d_path(&path, openat_pname_buf, flen);
+            path_put(&path);
+
+            if (current->active_mm) {
+                if (current->mm->exe_file) {
+                    if (openat_pathname) {
+                        openat_pathname = memset(openat_pathname, '\0', PATH_MAX);
+                        final_path = d_path(&current->mm->exe_file->f_path, openat_pathname, PATH_MAX);
+                    } else {
+                        final_path = "-1";
+                        openat_pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
+                    }
+                }
+            }
+
+            if (final_path == NULL) {
+                final_path = "-1";
+            }
+
+            result_str_len = get_data_alignment(strlen(current->comm) +
+                             strlen(current->nsproxy->uts_ns->name.nodename) +
+                             strlen(current->comm) + strlen(path_str) + strlen(final_path) + 172);
+            result_str = kzalloc(result_str_len, GFP_ATOMIC);
+
+#if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
+            snprintf(result_str, result_str_len,
+                     "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s",
+                     current->real_cred->uid.val, "\n", CREATE_FILE, "\n", final_path, "\n",
+                     path_str, "\n", current->pid, "\n",current->real_parent->pid, "\n",
+                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n", current->comm, "\n",
+                     current->nsproxy->uts_ns->name.nodename);
+            send_msg_to_user(SEND_TYPE, result_str, 1);
+#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
+            snprintf(result_str, result_str_len,
+                     "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s",
+                     current->real_cred->uid, "\n", CREATE_FILE, "\n", final_path, "\n",
+                     path_str, "\n", current->pid, "\n",current->real_parent->pid, "\n",
+                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n", current->comm, "\n",
+                     current->nsproxy->uts_ns->name.nodename);
+            send_msg_to_user(SEND_TYPE, result_str, 1);
+#endif
+        }
+    }
+
+#if (SAFE_EXIT == 1)
+    del_use_count();
+#endif
+
+    return ori_res;
+}
+
+asmlinkage unsigned long monitor_creat_hook(const char __user *pathname, umode_t mode)
+{
+    int result_str_len = 0;
+    int ori_res = 0;
+    int check_res = 0;
+    char *path_str = NULL;
+    char *final_path = NULL;
+    char *result_str = NULL;
+    struct path path;
+    struct fdtable *files;
+
+    if (netlink_pid == -1 && share_mem_flag == -1)
+        return orig_creat(pathname, mode);
+
+    check_res = user_path_at(AT_FDCWD, pathname, LOOKUP_FOLLOW, &path);
+    ori_res = orig_creat(pathname, mode);
+
+    if (!check_res) {
+        path_put(&path);
+    }
+
+    if (check_res == -2 && ori_res > 0) {
+        check_res = user_path_at(AT_FDCWD, pathname, LOOKUP_FOLLOW, &path);
+        if (!check_res) {
+            if (creat_pname_buf)
+                creat_pname_buf = memset(creat_pname_buf, '\0', flen);
+            else
+                creat_pname_buf = kzalloc(flen, GFP_ATOMIC);
+
+            files = files_fdtable(current->files);
+
+            path_str = d_path(&path, creat_pname_buf, flen);
+            path_put(&path);
+
+            if (current->active_mm) {
+                if (current->mm->exe_file) {
+                    if (creat_pathname) {
+                        creat_pathname = memset(creat_pathname, '\0', PATH_MAX);
+                        final_path = d_path(&current->mm->exe_file->f_path, creat_pathname, PATH_MAX);
+                    } else {
+                        final_path = "-1";
+                        creat_pathname = kzalloc(PATH_MAX, GFP_ATOMIC);
+                    }
+                }
+            }
+
+            if (final_path == NULL) {
+                final_path = "-1";
+            }
+
+            result_str_len = get_data_alignment(strlen(current->comm) +
+                             strlen(current->nsproxy->uts_ns->name.nodename) +
+                             strlen(current->comm) + strlen(path_str) + strlen(final_path) + 172);
+            result_str = kzalloc(result_str_len, GFP_ATOMIC);
+
+#if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
+            snprintf(result_str, result_str_len,
+                     "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s",
+                     current->real_cred->uid.val, "\n", CREATE_FILE, "\n", final_path, "\n",
+                     path_str, "\n", current->pid, "\n",current->real_parent->pid, "\n",
+                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n", current->comm, "\n",
+                     current->nsproxy->uts_ns->name.nodename);
+            send_msg_to_user(SEND_TYPE, result_str, 1);
+#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
+            snprintf(result_str, result_str_len,
+                     "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s",
+                     current->real_cred->uid, "\n", CREATE_FILE, "\n", final_path, "\n",
+                     path_str, "\n", current->pid, "\n",current->real_parent->pid, "\n",
+                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n", current->comm, "\n",
+                     current->nsproxy->uts_ns->name.nodename);
+            send_msg_to_user(SEND_TYPE, result_str, 1);
+#endif
+        }
+    }
+
+#if (SAFE_EXIT == 1)
+    del_use_count();
+#endif
+
+    return ori_res;
 }
 
 unsigned long **find_sys_call_table(void)
@@ -2130,6 +2426,12 @@ static int lkm_init(void)
 #if (HOOK_CREATE_FILE == 1)
     orig_open = (void *)(sys_call_table_ptr[__NR_open]);
     sys_call_table_ptr[__NR_open] = (void *)monitor_open_hook;
+
+    orig_openat = (void *)(sys_call_table_ptr[__NR_openat]);
+    sys_call_table_ptr[__NR_openat] = (void *)monitor_stub_openat_hook;
+
+    orig_creat = (void *)(sys_call_table_ptr[__NR_creat]);
+    sys_call_table_ptr[__NR_creat] = (void *)monitor_stub_creat_hook;
 #endif
 #endif
 
@@ -2172,6 +2474,8 @@ static void lkm_exit(void)
 #endif
 #if (HOOK_CREATE_FILE == 1)
     sys_call_table_ptr[__NR_open] = (void *)orig_open;
+    sys_call_table_ptr[__NR_openat] = (void *)orig_openat;
+    sys_call_table_ptr[__NR_creat] = (void *)orig_creat;
 #endif
 #endif
 
@@ -2192,6 +2496,6 @@ module_init(lkm_init);
 module_exit(lkm_exit);
 
 MODULE_LICENSE("GPL v2");
-MODULE_VERSION("0.1.8");
+MODULE_VERSION("0.1.9");
 MODULE_AUTHOR("E_Bwill <cy_sniper@yeah.net>");
-MODULE_DESCRIPTION("hook execve,connect,accept,accept4,ptrace,init_module,finit_module syscall;real-time detect rootkit;real-time detect porcess injection");
+MODULE_DESCRIPTION("hook execve,connect,accept,accept4,ptrace,init_module,finit_module,open,openat,creat syscall;real-time detect rootkit;real-time detect porcess injection;create file");
