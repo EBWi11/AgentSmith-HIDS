@@ -3,7 +3,7 @@
 * Author:	E_BWill
 * Year:		2018
 * File:		syscall_hook.c
-* Description:	hook execve,connect,accept,accept4,ptrace,init_module,finit_module,open,openat,creat syscall;real-time detect rootkit;real-time detect porcess injection;create file
+* Description:	hook execve,connect,accept,accept4,ptrace,init_module,finit_module,open,openat,creat syscall;real-time detect rootkit,porcess injection,create file
 
 * AgentSmith-HIDS is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -41,10 +41,10 @@
 #include <linux/spinlock.h>
 #include <linux/types.h>
 #include <linux/ptrace.h>
+#include <linux/namei.h>
 #include <net/inet_sock.h>
 #include <net/tcp.h>
 #include <net/tcp.h>
-#include <linux/namei.h>
 #include <net/inet_connection_sock.h>
 
 #define NETLINK_USER 31
@@ -79,13 +79,14 @@
 #define HOOK_EXECVE 1
 #define HOOK_CONNECT 1
 #define HOOK_CREATE_FILE 0
-#define HOOK_DNS 0
 #define HOOK_ACCEPT 0
 #define HOOK_INIT_MODULE 1
 #define HOOK_FINIT_MODULE 1
 #define HOOK_PTRACE 1
 
+//Beta Feature
 #define ROOTKIT_CHECK 0
+#define HOOK_DNS 0
 
 unsigned long **sys_call_table_ptr;
 void *orig_sys_call_table[NR_syscalls];
@@ -2498,4 +2499,4 @@ module_exit(lkm_exit);
 MODULE_LICENSE("GPL v2");
 MODULE_VERSION("0.1.9");
 MODULE_AUTHOR("E_Bwill <cy_sniper@yeah.net>");
-MODULE_DESCRIPTION("hook execve,connect,accept,accept4,ptrace,init_module,finit_module,open,openat,creat syscall;real-time detect rootkit;real-time detect porcess injection;create file");
+MODULE_DESCRIPTION("hook execve,connect,accept,accept4,ptrace,init_module,finit_module,open,openat,creat syscall;real-time detect rootkit,porcess injection,create file");
