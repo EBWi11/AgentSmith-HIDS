@@ -41,20 +41,6 @@ struct sh_mem_list_head
 struct msg_slot *slot;
 struct sh_mem_list_head *list_head;
 
-static char *get_user_id(const char *msg)
-{
-    int i;
-    int first = strcspn(msg, split_ymbol);
-
-    for (i = 0; i < sizeof(user_id); i++)
-        user_id[i] = 0;
-
-    for (i = 0; i < first; i++)
-        user_id[i] = msg[i];
-
-    return user_id;
-}
-
 static char *get_user(uid_t uid)
 {
     struct passwd *pws;
@@ -125,7 +111,6 @@ static char *shm_msg_factory_no_callback(char *msg)
 
             if (shm_res_len > 16)
             {
-                user_id = get_user_id(shm_res);
                 strcat(shm_res, time_buffer);
                 return shm_res;
             }
