@@ -2,19 +2,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pwd.h>
+#include <linux/netlink.h>
+#include <netinet/in.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/mman.h>
 #include <errno.h>
 #include <time.h>
-#include <netinet/in.h>
 #include "c_until.h"
-
-#define NLMSG_ALIGNTO	4U
-#define NLMSG_ALIGN(len) ( ((len)+NLMSG_ALIGNTO-1) & ~(NLMSG_ALIGNTO-1) )
-#define NLMSG_HDRLEN	 ((int) NLMSG_ALIGN(64))
-#define NLMSG_LENGTH(len) ((len) + NLMSG_HDRLEN)
-#define NLMSG_SPACE(len) NLMSG_ALIGN(NLMSG_LENGTH(len))
 
 #define MAX_SIZE 2097152
 #define DEVICE_FILENAME "/dev/smith"
@@ -24,18 +19,12 @@ typedef void (*rust_callback)(char *);
 int shm_read_index = 8;
 int pre_read_index = 0;
 int shm_fd = -1;
-
 struct msghdr msg;
 const char *split_ymbol = "\n";
 char user_id[16] = {0};
 char shm_res[NLMSG_SPACE(4096)] = {0};
 char *tmp_slot_len;
 char *sh_mem;
-
-struct timeval {
-	long tv_sec;
-	long tv_usec;
-};
 
 struct msg_slot
 {
@@ -137,9 +126,6 @@ static char *shm_msg_factory_no_callback(char *msg)
             if (shm_res_len > 16)
             {
                 user_id = get_user_id(shm_res);
-                username = get_user(atoi(user_id));
-                strcat(shm_res, username);
-                strcat(shm_res, "\n");
                 strcat(shm_res, time_buffer);
                 return shm_res;
             }
