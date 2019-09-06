@@ -8,10 +8,10 @@ import (
 func NewCache(ttl int, MaxEntrySize int, HardMaxCacheSize int) (*bigcache.BigCache, error) {
 	config := bigcache.Config{
 		// number of shards (must be a power of 2)
-		Shards: 1024,
+		Shards: 32,
 		// time after which entry can be evicted
 		LifeWindow:  time.Duration(ttl) * time.Second,
-		CleanWindow: 15 * time.Second,
+		CleanWindow: 20 * time.Second,
 		// rps * lifeWindow, used only in initial memory allocation
 		MaxEntriesInWindow: 1000 * 10 * 60,
 		// max entry size in bytes, used only in initial memory allocation
@@ -38,7 +38,7 @@ func NewCache(ttl int, MaxEntrySize int, HardMaxCacheSize int) (*bigcache.BigCac
 }
 
 func GetGlobalCache() *bigcache.BigCache {
-	c, err := NewCache(120, 2048, 64)
+	c, err := NewCache(300, 128, 12)
 	if err != nil {
 		Logger.Error().Err(err)
 		return nil
