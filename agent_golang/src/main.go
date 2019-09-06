@@ -8,11 +8,22 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"os"
+	"./common"
 )
+
+var GlobalCache = common.GetGlobalCache()
+var Logger = common.LogInit()
 
 func AgentInit() {
 	C.init()
 	C.shm_init()
+	if GlobalCache == nil {
+		AgentClose()
+		Logger.Error().Msg("Global Cache Init Error")
+		os.Exit(1)
+	}
+	Logger.Info().Msg("AgentSmith-HIDS Start")
 }
 
 func AgentClose() {
@@ -24,6 +35,68 @@ func GetMsgFromKernel(c chan string) {
 	for {
 		m = C.GoString(C.shm_run_no_callback())
 		c <- m
+	}
+}
+
+func GetUserNameByUid(uid string) (string, error) {
+	uidTmp, err := strconv.Atoi(uid)
+	if err != nil {
+		return "", err
+	}
+
+	return C.GoString(C.get_user(C.uid_t(uidTmp))), nil
+}
+
+func ParserMsg(msgChan chan string) {
+	for {
+		res := ""
+		userNmae := ""
+
+		msg := <-msgChan
+		msgList := strings.Split(msg, "\n")
+
+		msgType := msgList[1]
+		uidStr := msgList[0]
+
+		cacheRes, err := GlobalCache.Get(uidStr)
+
+		if err != nil {
+			Logger.Error().Err(err)
+		} else if cacheRes == nil {
+			userNmae, err = GetUserNameByUid(uidStr)
+			if err != nil {
+				Logger.Error().Err(err)
+			}
+
+			err = GlobalCache.Set(uidStr, []byte(userNmae))
+			if err != nil {
+				Logger.Error().Err(err)
+			}
+		} else {
+			userNmae = string(cacheRes)
+		}
+
+		msgList = append(msgList, userNmae)
+
+		switch msgType {
+		case "59":
+			res = ParserExecveMsg(msgList)
+		case "42":
+			res = ParserConnectMsg(msgList)
+		case "175":
+			res = ParserInitMsg(msgList)
+		case "313":
+			res = ParserFinitMsg(msgList)
+		case "43":
+			res = ParserAcceptMsg(msgList)
+		case "101":
+			res = ParserPtraceMsg(msgList)
+		case "601":
+			res = ParserDNSMsg(msgList)
+		case "602":
+			res = ParserCreateFileMsg(msgList)
+		}
+		fmt.Println(res)
 	}
 }
 
@@ -65,42 +138,6 @@ func ParserDNSMsg(msg []string) string {
 func ParserCreateFileMsg(msg []string) string {
 	jsonStr := "{\"uid\":\"" + msg[0] + "\",\"syscall\":\"" + msg[1] + "\",\"elf\":\"" + msg[2] + "\",\"file_path\":\"" + msg[3] + "\",\"pid\":\"" + msg[4] + "\",\"ppid\":\"" + msg[5] + "\",\"pgid\":\"" + msg[6] + "\",\"tgid\":\"" + msg[7] + "\",\"comm\":\"" + msg[8] + "\",\"nodename\":\"" + msg[9] + "\",\"time\":\"" + msg[10] + "\",\"user\":\"" + msg[11] + "\"}"
 	return jsonStr
-}
-
-func ParserMsg(msgChan chan string) {
-	for {
-		res := ""
-		msg := <-msgChan
-		msgList := strings.Split(msg, "\n")
-		msgType := msgList[1]
-		uidTmp, err := strconv.Atoi(msgList[0])
-		if err != nil {
-			continue
-		}
-
-		uid := C.uid_t(uidTmp)
-		userNmae := C.GoString(C.get_user(uid))
-		msgList = append(msgList, userNmae)
-		switch msgType {
-		case "59":
-			res = ParserExecveMsg(msgList)
-		case "42":
-			res = ParserConnectMsg(msgList)
-		case "175":
-			res = ParserInitMsg(msgList)
-		case "313":
-			res = ParserFinitMsg(msgList)
-		case "43":
-			res = ParserAcceptMsg(msgList)
-		case "101":
-			res = ParserPtraceMsg(msgList)
-		case "601":
-			res = ParserDNSMsg(msgList)
-		case "602":
-			res = ParserCreateFileMsg(msgList)
-		}
-		fmt.Println(res)
-	}
 }
 
 func main() {
