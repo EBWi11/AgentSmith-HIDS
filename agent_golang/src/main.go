@@ -5,25 +5,25 @@ package main
 */
 import "C"
 import (
+	"./common"
 	"fmt"
+	"github.com/panjf2000/ants"
+	"os"
 	"strconv"
 	"strings"
-	"os"
-	"./common"
 )
 
 var GlobalCache = common.GetGlobalCache()
-var Logger = common.LogInit()
 
 func AgentInit() {
 	C.init()
 	C.shm_init()
 	if GlobalCache == nil {
 		AgentClose()
-		Logger.Error().Msg("Global Cache Init Error")
+		common.Logger.Error().Msg("Global Cache Init Error")
 		os.Exit(1)
 	}
-	Logger.Info().Msg("AgentSmith-HIDS Start")
+	common.Logger.Info().Msg("AgentSmith-HIDS Start")
 }
 
 func AgentClose() {
@@ -47,56 +47,68 @@ func GetUserNameByUid(uid string) (string, error) {
 	return C.GoString(C.get_user(C.uid_t(uidTmp))), nil
 }
 
-func ParserMsg(msgChan chan string) {
+func ParserMsgWorker(oriMsg string) {
+	res := ""
+	userNmae := ""
+
+	msgList := strings.Split(oriMsg, "\n")
+
+	msgType := msgList[1]
+	uidStr := msgList[0]
+
+	cacheRes, err := GlobalCache.Get(uidStr)
+
+	if err != nil {
+		common.Logger.Error().Err(err)
+	} else if cacheRes == nil {
+		userNmae, err = GetUserNameByUid(uidStr)
+		if err != nil {
+			common.Logger.Error().Err(err)
+		}
+
+		err = GlobalCache.Set(uidStr, []byte(userNmae))
+		if err != nil {
+			common.Logger.Error().Err(err)
+		}
+	} else {
+		userNmae = string(cacheRes)
+	}
+
+	msgList = append(msgList, userNmae)
+
+	switch msgType {
+	case "59":
+		res = ParserExecveMsg(msgList)
+	case "42":
+		res = ParserConnectMsg(msgList)
+	case "175":
+		res = ParserInitMsg(msgList)
+	case "313":
+		res = ParserFinitMsg(msgList)
+	case "43":
+		res = ParserAcceptMsg(msgList)
+	case "101":
+		res = ParserPtraceMsg(msgList)
+	case "601":
+		res = ParserDNSMsg(msgList)
+	case "602":
+		res = ParserCreateFileMsg(msgList)
+	}
+	fmt.Println(res)
+}
+
+func ParserMsg(msgChan chan string, p *ants.Pool) {
+
 	for {
-		res := ""
-		userNmae := ""
-
 		msg := <-msgChan
-		msgList := strings.Split(msg, "\n")
-
-		msgType := msgList[1]
-		uidStr := msgList[0]
-
-		cacheRes, err := GlobalCache.Get(uidStr)
+		err := p.Submit(
+			func() {
+				ParserMsgWorker(msg)
+			})
 
 		if err != nil {
-			Logger.Error().Err(err)
-		} else if cacheRes == nil {
-			userNmae, err = GetUserNameByUid(uidStr)
-			if err != nil {
-				Logger.Error().Err(err)
-			}
-
-			err = GlobalCache.Set(uidStr, []byte(userNmae))
-			if err != nil {
-				Logger.Error().Err(err)
-			}
-		} else {
-			userNmae = string(cacheRes)
+			common.Logger.Error().Err(err)
 		}
-
-		msgList = append(msgList, userNmae)
-
-		switch msgType {
-		case "59":
-			res = ParserExecveMsg(msgList)
-		case "42":
-			res = ParserConnectMsg(msgList)
-		case "175":
-			res = ParserInitMsg(msgList)
-		case "313":
-			res = ParserFinitMsg(msgList)
-		case "43":
-			res = ParserAcceptMsg(msgList)
-		case "101":
-			res = ParserPtraceMsg(msgList)
-		case "601":
-			res = ParserDNSMsg(msgList)
-		case "602":
-			res = ParserCreateFileMsg(msgList)
-		}
-		fmt.Println(res)
 	}
 }
 
@@ -143,6 +155,12 @@ func ParserCreateFileMsg(msg []string) string {
 func main() {
 	msgChan := make(chan string, 1000)
 	AgentInit()
+	pool, err := ants.NewPool(8)
+	if err != nil {
+		common.Logger.Error().Err(err)
+		AgentClose()
+	}
+
 	go GetMsgFromKernel(msgChan)
-	ParserMsg(msgChan)
+	ParserMsg(msgChan, pool)
 }

@@ -1,5 +1,5 @@
-* [ ] 引入线程池来消费数据
-* [ ] Add Logger
+* [X] 引入线程池来消费数据
+* [X] Add Logger
 * [ ] Add Kafka Helper
 * [ ] 引入缓存，为数据增加User(通过uid得到)，以及elf和关键文件的md5
 * [ ] 守护进程
