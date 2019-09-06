@@ -8,7 +8,7 @@ import (
 func NewCache(ttl int, MaxEntrySize int, HardMaxCacheSize int) (*bigcache.BigCache, error) {
 	config := bigcache.Config{
 		// number of shards (must be a power of 2)
-		Shards: 32,
+		Shards: 256,
 		// time after which entry can be evicted
 		LifeWindow:  time.Duration(ttl) * time.Second,
 		CleanWindow: 20 * time.Second,
@@ -38,7 +38,7 @@ func NewCache(ttl int, MaxEntrySize int, HardMaxCacheSize int) (*bigcache.BigCac
 }
 
 func GetGlobalCache() *bigcache.BigCache {
-	c, err := NewCache(300, 128, 12)
+	c, err := NewCache(300, 64, 8)
 	if err != nil {
 		Logger.Error().Err(err)
 		return nil
