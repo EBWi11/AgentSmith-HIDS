@@ -5,7 +5,6 @@ package main
 */
 import "C"
 import (
-	"fmt"
 	"github.com/EBWi11/AgentSmith-HIDS/agent_golang/common"
 	"github.com/panjf2000/ants"
 	"github.com/sevlyar/go-daemon"
@@ -19,6 +18,7 @@ var GlobalCache = common.GetGlobalCache()
 func AgentInit() {
 	C.init()
 	C.shm_init()
+
 	if GlobalCache == nil {
 		AgentClose()
 		common.Logger.Error().Msg("Global Cache Init Error")
@@ -52,14 +52,14 @@ func GetELFMD5(elf string) string {
 	elfmd5 := ""
 	elfMd5Cache, err := GlobalCache.Get(elf)
 	if err != nil {
-		common.Logger.Error().Err(err)
+		common.Logger.Error().Msg(err.Error())
 	}
 
 	if elfMd5Cache == nil {
 		elfmd5 = common.GetFileMD5(elf)
 		err = GlobalCache.Set(elf, []byte(elfmd5))
 		if err != nil {
-			common.Logger.Error().Err(err)
+			common.Logger.Error().Msg(err.Error())
 		}
 	} else {
 		elfmd5 = string(elfMd5Cache)
@@ -76,7 +76,7 @@ func ParserMsgWorker(oriMsg string) {
 
 	hostNameCache, err := GlobalCache.Get("#HOSTNAME")
 	if err != nil {
-		common.Logger.Error().Err(err)
+		common.Logger.Error().Msg(err.Error())
 	}
 
 	if hostNameCache != nil {
@@ -85,7 +85,7 @@ func ParserMsgWorker(oriMsg string) {
 		hostName = common.GetHostName()
 		err = GlobalCache.Set("#HOSTNAME", []byte(hostName))
 		if err != nil {
-			common.Logger.Error().Err(err)
+			common.Logger.Error().Msg(err.Error())
 		}
 	}
 
@@ -97,18 +97,18 @@ func ParserMsgWorker(oriMsg string) {
 	cacheRes, err := GlobalCache.Get(uidStr)
 
 	if err != nil {
-		common.Logger.Error().Err(err)
+		common.Logger.Error().Msg(err.Error())
 	}
 
 	if cacheRes == nil {
 		userNmae, err = GetUserNameByUid(uidStr)
 		if err != nil {
-			common.Logger.Error().Err(err)
+			common.Logger.Error().Msg(err.Error())
 		}
 
 		err = GlobalCache.Set(uidStr, []byte(userNmae))
 		if err != nil {
-			common.Logger.Error().Err(err)
+			common.Logger.Error().Msg(err.Error())
 		}
 	} else {
 		userNmae = string(cacheRes)
@@ -149,7 +149,7 @@ func ParserMsgWorker(oriMsg string) {
 		msgList = append(msgList, elfmd5)
 		res = ParserCreateFileMsg(msgList)
 	}
-	fmt.Println(res)
+	common.SMITH_CONF.DataChan <- res
 }
 
 func ParserMsg(msgChan chan string, p *ants.Pool) {
@@ -161,7 +161,7 @@ func ParserMsg(msgChan chan string, p *ants.Pool) {
 			})
 
 		if err != nil {
-			common.Logger.Error().Err(err)
+			common.Logger.Error().Msg(err.Error())
 		}
 	}
 }
@@ -211,7 +211,7 @@ func Run() {
 	AgentInit()
 	pool, err := ants.NewPool(4)
 	if err != nil {
-		common.Logger.Error().Err(err)
+		common.Logger.Error().Msg(err.Error())
 		AgentClose()
 	}
 
@@ -220,10 +220,18 @@ func Run() {
 }
 
 func main() {
+	common.LogInit()
+	err := common.SmithConfInit()
+
+	if err != nil {
+		common.Logger.Error().Msg(err.Error())
+		return
+	}
+
 	cntxt := &daemon.Context{
 		PidFilePerm: 0644,
 		PidFileName: "/var/run/smith_hids.pid",
-		LogFileName: "/var/log/smithd.log",
+		LogFileName: "/var/log/smith_hids.log",
 		LogFilePerm: 0640,
 		WorkDir:     "/",
 		Umask:       027,
@@ -233,7 +241,7 @@ func main() {
 	d, err := cntxt.Reborn()
 
 	if err != nil {
-		common.Logger.Error().Err(err)
+		common.Logger.Error().Msg(err.Error())
 		return
 	}
 
@@ -247,6 +255,6 @@ func main() {
 
 	err = daemon.ServeSignals()
 	if err != nil {
-		common.Logger.Error().Err(err)
+		common.Logger.Error().Msg(err.Error())
 	}
 }

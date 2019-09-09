@@ -40,7 +40,7 @@ func NewCache(ttl int, MaxEntrySize int, HardMaxCacheSize int) (*bigcache.BigCac
 func GetGlobalCache() *bigcache.BigCache {
 	c, err := NewCache(300, 64, 8)
 	if err != nil {
-		Logger.Error().Err(err)
+		Logger.Error().Msg(err.Error())
 		return nil
 	}
 

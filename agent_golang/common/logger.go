@@ -5,10 +5,9 @@ import (
 	"os"
 )
 
-var Logger = LogInit()
+var Logger = zerolog.Logger{}
 
-func LogInit() zerolog.Logger {
+func LogInit() {
 	logFile, _ := os.OpenFile("/var/log/smith_hids.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0644)
-	log := zerolog.New(logFile).With().Caller().Timestamp().Logger()
-	return log
+	Logger = zerolog.New(logFile).With().Caller().Timestamp().Logger()
 }

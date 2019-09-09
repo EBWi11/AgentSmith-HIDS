@@ -10,7 +10,7 @@ import (
 func GetHostName() string {
 	hostName, err := os.Hostname()
 	if err != nil {
-		Logger.Error().Err(err)
+		Logger.Error().Msg(err.Error())
 	}
 	return hostName
 }
