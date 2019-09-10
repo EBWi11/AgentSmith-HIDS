@@ -1,0 +1,62 @@
+function get_node_name:string() %{
+   strlcpy(STAP_RETVALUE, current->nsproxy->uts_ns->name.nodename, strlen(current->nsproxy->uts_ns->name.nodename) + 1);
+%}
+
+probe kernel.function("sys_execve").return {
+    file = current_exe_file()
+    current = task_current()
+    node_name = get_node_name()
+    cmd = str_replace(cmdline_str(),"\n"," ")
+    printf("execve %s %s %6d %6d %6d %6d %s\n",node_name, fullpath_struct_file(current, file), uid(), pid(), ppid(), gid(), cmd)
+}
+
+probe kernel.function("sys_connect").return {
+    file = current_exe_file()
+    current = task_current()
+    node_name = get_node_name()
+    cmd = str_replace(cmdline_str(),"\n"," ")
+    printf("connect %s %s %6d %6d %6d %6d %s\n", node_name, fullpath_struct_file(current, file), uid(), pid(), ppid(), gid(), cmd)
+}
+
+probe kernel.function("sys_accept4").return {
+    file = current_exe_file()
+    current = task_current()
+    node_name = get_node_name()
+    cmd = str_replace(cmdline_str(),"\n"," ")
+    printf("accept %s %s %6d %6d %6d %6d %s\n", node_name, fullpath_struct_file(current, file), uid(), pid(), ppid(), gid(), cmd)
+}
+
+probe kernel.function("vfs_create").return {
+    file = current_exe_file()
+    current = task_current()
+    node_name = get_node_name()
+    cmd = str_replace(cmdline_str(),"\n"," ")
+    printf("vfs_create %s %s %6d %6d %6d %6d %s\n", node_name, fullpath_struct_file(current, file), uid(), pid(), ppid(), gid(), cmd)
+}
+
+probe kernel.function("sys_ptrace").return {
+    request = pointer_arg(1)
+    if (request == 4 || request == 5) {
+        file = current_exe_file()
+        current = task_current()
+        node_name = get_node_name()
+        cmd = str_replace(cmdline_str(),"\n"," ")
+        printf("ptrace %s %s %6d %6d %6d %6d %6d %s\n", node_name, fullpath_struct_file(current, file), pointer_arg(2), uid(), pid(), ppid(), gid(), cmd)
+    }
+}
+
+probe kernel.function("load_module").return {
+    file = current_exe_file()
+    current = task_current()
+    node_name = get_node_name()
+    cmd = str_replace(cmdline_str(),"\n"," ")
+    printf("load_module %s %s %6d %6d %6d %6d %s\n", node_name, fullpath_struct_file(current, file), uid(), pid(), ppid(), gid(), cmd)
+}
+
+probe kernel.function("sys_recvfrom").return {
+    file = current_exe_file()
+    current = task_current()
+    node_name = get_node_name()
+    cmd = str_replace(cmdline_str(),"\n"," ")
+    printf("recvfrom %s %s %6d %6d %6d %6d %s\n", node_name, fullpath_struct_file(current, file), uid(), pid(), ppid(), gid(), cmd)
+}
