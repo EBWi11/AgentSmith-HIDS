@@ -51,9 +51,6 @@ func GetUserNameByUid(uid string) (string, error) {
 func GetELFMD5(elf string) string {
 	elfmd5 := ""
 	elfMd5Cache, err := GlobalCache.Get(elf)
-	if err != nil {
-		common.Logger.Error().Msg(err.Error())
-	}
 
 	if elfMd5Cache == nil {
 		elfmd5 = common.GetFileMD5(elf)
@@ -75,9 +72,6 @@ func ParserMsgWorker(oriMsg string) {
 	hostName := ""
 
 	hostNameCache, err := GlobalCache.Get("#HOSTNAME")
-	if err != nil {
-		common.Logger.Error().Msg(err.Error())
-	}
 
 	if hostNameCache != nil {
 		hostName = string(hostNameCache)
@@ -95,10 +89,6 @@ func ParserMsgWorker(oriMsg string) {
 	uidStr := msgList[0]
 
 	cacheRes, err := GlobalCache.Get(uidStr)
-
-	if err != nil {
-		common.Logger.Error().Msg(err.Error())
-	}
 
 	if cacheRes == nil {
 		userNmae, err = GetUserNameByUid(uidStr)
