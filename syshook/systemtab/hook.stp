@@ -96,7 +96,7 @@ probe kernel.function("sys_execve").return {
     printf("execve %s %s %6d %6d %6d %6d %s %s\n",node_name, fullpath_struct_file(current, file), uid(), pid(), ppid(), gid(), cmd, pexecname)
 }
 
-probe __syscall.connect.return {
+probe kernel.function("sys_connect").return {
     if ($return != 0) {
         sa_family = @cast($uservaddr, "sockaddr") -> sa_family
         if (sa_family == 2) {
