@@ -7,7 +7,8 @@ probe kernel.function("sys_execve").return {
     current = task_current()
     node_name = get_node_name()
     cmd = str_replace(cmdline_str(),"\n"," ")
-    printf("execve %s %s %6d %6d %6d %6d %s\n",node_name, fullpath_struct_file(current, file), uid(), pid(), ppid(), gid(), cmd)
+    pexecname = task_execname(task_parent(current))
+    printf("execve %s %s %6d %6d %6d %6d %s %s\n",node_name, fullpath_struct_file(current, file), uid(), pid(), ppid(), gid(), cmd, pexecname)
 }
 
 probe kernel.function("sys_connect").return {
@@ -15,33 +16,40 @@ probe kernel.function("sys_connect").return {
     current = task_current()
     node_name = get_node_name()
     cmd = str_replace(cmdline_str(),"\n"," ")
-    printf("connect %s %s %6d %6d %6d %6d %s\n", node_name, fullpath_struct_file(current, file), uid(), pid(), ppid(), gid(), cmd)
+    pexecname = task_execname(task_parent(current))
+    printf("connect %s %s %6d %6d %6d %6d %s %s\n", node_name, fullpath_struct_file(current, file), uid(), pid(), ppid(), gid(), cmd, pexecname)
 }
 
-probe kernel.function("sys_accept4").return {
+probe kernel.function("sys_accept").return {
     file = current_exe_file()
     current = task_current()
     node_name = get_node_name()
     cmd = str_replace(cmdline_str(),"\n"," ")
-    printf("accept %s %s %6d %6d %6d %6d %s\n", node_name, fullpath_struct_file(current, file), uid(), pid(), ppid(), gid(), cmd)
+    pexecname = task_execname(task_parent(current))
+    printf("accept %s %s %6d %6d %6d %6d %s %s\n", node_name, fullpath_struct_file(current, file), uid(), pid(), ppid(), gid(), cmd, pexecname)
 }
 
-probe kernel.function("vfs_create").return {
-    file = current_exe_file()
-    current = task_current()
-    node_name = get_node_name()
-    cmd = str_replace(cmdline_str(),"\n"," ")
-    printf("vfs_create %s %s %6d %6d %6d %6d %s\n", node_name, fullpath_struct_file(current, file), uid(), pid(), ppid(), gid(), cmd)
-}
-
-probe kernel.function("sys_ptrace").return {
-    request = pointer_arg(1)
-    if (request == 4 || request == 5) {
+probe kernel.{function("vfs_create"), function("vfs_mknod")}.return? {
+    fd = $return
+    if (fd == 0) {
         file = current_exe_file()
         current = task_current()
         node_name = get_node_name()
         cmd = str_replace(cmdline_str(),"\n"," ")
-        printf("ptrace %s %s %6d %6d %6d %6d %6d %s\n", node_name, fullpath_struct_file(current, file), pointer_arg(2), uid(), pid(), ppid(), gid(), cmd)
+        create_file_path = sprintf("%s/%s", inode_path($dir), d_name($dentry))
+        pexecname = task_execname(task_parent(current))
+        printf("vfs_create %s %s %s %6d %6d %6d %6d %s %s\n", node_name, fullpath_struct_file(current, file), create_file_path , uid(), pid(), ppid(), gid(), cmd, pexecname)
+    }
+}
+
+probe kernel.function("sys_ptrace").return {
+    if ($request == 4 || $request == 5) {
+        file = current_exe_file()
+        current = task_current()
+        node_name = get_node_name()
+        cmd = str_replace(cmdline_str(),"\n"," ")
+        pexecname = task_execname(task_parent(current))
+        printf("ptrace %s %s %6d %6d %6d %6d %6d %s %s\n", node_name, fullpath_struct_file(current, file), $pid, uid(), pid(), ppid(), gid(), cmd, pexecname)
     }
 }
 
@@ -50,7 +58,8 @@ probe kernel.function("load_module").return {
     current = task_current()
     node_name = get_node_name()
     cmd = str_replace(cmdline_str(),"\n"," ")
-    printf("load_module %s %s %6d %6d %6d %6d %s\n", node_name, fullpath_struct_file(current, file), uid(), pid(), ppid(), gid(), cmd)
+    pexecname = task_execname(task_parent(current))
+    printf("load_module %s %s %6d %6d %6d %6d %s %s\n", node_name, fullpath_struct_file(current, file), uid(), pid(), ppid(), gid(), cmd, pexecname)
 }
 
 probe kernel.function("sys_recvfrom").return {
@@ -58,5 +67,6 @@ probe kernel.function("sys_recvfrom").return {
     current = task_current()
     node_name = get_node_name()
     cmd = str_replace(cmdline_str(),"\n"," ")
-    printf("recvfrom %s %s %6d %6d %6d %6d %s\n", node_name, fullpath_struct_file(current, file), uid(), pid(), ppid(), gid(), cmd)
+    pexecname = task_execname(task_parent(current))
+    printf("recvfrom %s %s %6d %6d %6d %6d %s %s\n", node_name, fullpath_struct_file(current, file), uid(), pid(), ppid(), gid(), cmd, pexecname)
 }
