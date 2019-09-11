@@ -5,10 +5,10 @@
 | execve                   | kernel.function("sys_execve").return   |
 | connect                  | kernel.function("sys_connect").return  |
 | accept/accept4           | kernel.function("sys_accept4").return  |
-| open/openat/creat        | kernel.function("do_sys_open").return  |
+| open/openat/creat        | kernel.function("vfs_create").return  |
 | ptrace                   | kernel.function("sys_ptrace").return   |
 | init_module/finit_module | kernel.function("load_module").return  |
-| recvfrom                 | kernel.functiom("sock_recvmsg").return |
+| recvfrom                 | kernel.functiom("sys_recvfrom").return |
 
 ## Custom C Function
 
