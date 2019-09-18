@@ -1955,16 +1955,6 @@ asmlinkage unsigned long monitor_connect_hook(int fd, struct sockaddr __user *di
     return ori_connect_syscall_res;
 }
 
-asmlinkage unsigned long open_wapper(const char __user *filename, int flags, umode_t mode)
-{
-    return orig_open(filename, flags, mode);
-}
-
-asmlinkage unsigned long openat_wapper(int dfd, const char __user *filename, int flags, umode_t mode)
-{
-    return orig_openat(dfd, filename, flags, mode);
-}
-
 asmlinkage unsigned long monitor_open_hook(const char __user *filename, int flags, umode_t mode)
 {
     int result_str_len = 0;

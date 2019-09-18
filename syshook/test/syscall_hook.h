@@ -6,7 +6,9 @@
 * Description:	some struct for share memory
 *******************************************************************/
 
-/*
+/****************
+
+   RING BUFFER
  ________________
 | Reade Index    |
 |................|
@@ -30,8 +32,7 @@ Start Flag: Jus for init
 Data Len: Tell User Space Agent the Data Len
 Data: LKM Hook Data
 
-*/
-
+****************/
 
 struct msg_slot {
     int len;
