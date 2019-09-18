@@ -1,5 +1,5 @@
 obj-m   := syshook.o
-syshook-objs := syscall_hook.o syscall_stub_hook.o
+syshook-objs := syscall_hook.o
 KDIR    := /lib/modules/$(shell uname -r)/build
 PWD    := $(shell pwd)
 
