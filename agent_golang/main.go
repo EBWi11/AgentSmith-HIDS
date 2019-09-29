@@ -157,42 +157,42 @@ func ParserMsg(msgChan chan string, p *ants.Pool) {
 }
 
 func ParserExecveMsg(msg []string) string {
-	jsonStr := "{\"uid\":\"" + msg[0] + "\",\"syscall\":\"" + msg[1] + "\",\"run_path\":\"" + msg[2] + "\",\"elf\":\"" + msg[3] + "\",\"argv\":\"" + msg[4] + "\",\"pid\":\"" + msg[5] + "\",\"ppid\":\"" + msg[6] + "\",\"pgid\":\"" + msg[7] + "\",\"tgid\":\"" + msg[8] + "\",\"comm\":\"" + msg[9] + "\",\"nodename\":\"" + msg[10] + "\",\"stdin\":\"" + msg[11] + "\",\"stdout\":\"" + msg[12] + "\",\"pid_rootkit_check\":\"" + msg[13] + "\",\"file_rootkit_check\":\"" + msg[14] + "\",\"time\":\"" + msg[15] + "\",\"user\":\"" + msg[16] + "\",\"hostname\":\"" + msg[17] + "\",\"elf_md5\":\"" + msg[18] + "\"}"
+	jsonStr := "{\"uid\":\"" + msg[0] + "\",\"syscall\":\"" + msg[1] + "\",\"run_path\":\"" + msg[2] + "\",\"elf\":\"" + msg[3] + "\",\"argv\":\"" + msg[4] + "\",\"pid\":\"" + msg[5] + "\",\"ppid\":\"" + msg[6] + "\",\"pgid\":\"" + msg[7] + "\",\"tgid\":\"" + msg[8] + "\",\"comm\":\"" + msg[9] + "\",\"nodename\":\"" + msg[10] + "\",\"stdin\":\"" + msg[11] + "\",\"stdout\":\"" + msg[12] + "\",\"pid_rootkit_check\":\"" + msg[13] + "\",\"file_rootkit_check\":\"" + msg[14] + "\",\"sessionid\":\"" + msg[15] + "\",\"time\":\"" + msg[16] + "\",\"user\":\"" + msg[17] + "\",\"hostname\":\"" + msg[18] + "\",\"elf_md5\":\"" + msg[19] + "\"}"
 	return jsonStr
 }
 
 func ParserInitMsg(msg []string) string {
-	jsonStr := "{\"uid\":\"" + msg[0] + "\",\"syscall\":\"" + msg[1] + "\",\"cwd\":\"" + msg[2] + "\",\"pid\":\"" + msg[3] + "\",\"pgid\":\"" + msg[4] + "\",\"tgid\":\"" + msg[5] + "\",\"comm\":\"" + msg[6] + "\",\"nodename\":\"" + msg[7] + "\",\"time\":\"" + msg[8] + "\",\"user\":\"" + msg[9] + "\",\"hostname\":\"" + msg[10] + "\",\"elf_md5\":\"" + msg[11] + "\"}"
+	jsonStr := "{\"uid\":\"" + msg[0] + "\",\"syscall\":\"" + msg[1] + "\",\"cwd\":\"" + msg[2] + "\",\"pid\":\"" + msg[3] + "\",\"pgid\":\"" + msg[4] + "\",\"tgid\":\"" + msg[5] + "\",\"comm\":\"" + msg[6] + "\",\"nodename\":\"" + msg[7] + "\",\"sessionid\":\"" + msg[8] + "\",\"time\":\"" + msg[9] + "\",\"user\":\"" + msg[10] + "\",\"hostname\":\"" + msg[11] + "\",\"elf_md5\":\"" + msg[12] + "\"}"
 	return jsonStr
 }
 
 func ParserFinitMsg(msg []string) string {
-	jsonStr := "{\"uid\":\"" + msg[0] + "\",\"syscall\":\"" + msg[1] + "\",\"cwd\":\"" + msg[2] + "\",\"pid\":\"" + msg[3] + "\",\"pgid\":\"" + msg[4] + "\",\"tgid\":\"" + msg[5] + "\",\"comm\":\"" + msg[6] + "\",\"nodename\":\"" + msg[7] + "\",\"time\":\"" + msg[8] + "\",\"user\":\"" + msg[9] + "\",\"hostname\":\"" + msg[10] + "\",\"elf_md5\":\"" + msg[11] + "\"}"
+	jsonStr := "{\"uid\":\"" + msg[0] + "\",\"syscall\":\"" + msg[1] + "\",\"cwd\":\"" + msg[2] + "\",\"pid\":\"" + msg[3] + "\",\"pgid\":\"" + msg[4] + "\",\"tgid\":\"" + msg[5] + "\",\"comm\":\"" + msg[6] + "\",\"nodename\":\"" + msg[7] + "\",\"sessionid\":\"" + msg[8] + "\",\"time\":\"" + msg[9] + "\",\"user\":\"" + msg[10] + "\",\"hostname\":\"" + msg[11] + "\",\"elf_md5\":\"" + msg[12] + "\"}"
 	return jsonStr
 }
 
 func ParserConnectMsg(msg []string) string {
-	jsonStr := "{\"uid\":\"" + msg[0] + "\",\"syscall\":\"" + msg[1] + "\",\"sa_family\":\"" + msg[2] + "\",\"fd\":\"" + msg[3] + "\",\"dport\":\"" + msg[4] + "\",\"dip\":\"" + msg[5] + "\",\"elf\":\"" + msg[6] + "\",\"pid\":\"" + msg[7] + "\",\"ppid\":\"" + msg[8] + "\",\"pgid\":\"" + msg[9] + "\",\"tgid\":\"" + msg[10] + "\",\"comm\":\"" + msg[11] + "\",\"nodename\":\"" + msg[12] + "\",\"sip\":\"" + msg[13] + "\",\"sport\":\"" + msg[14] + "\",\"res\":\"" + msg[15] + "\",\"pid_rootkit_check\":\"" + msg[16] + "\",\"file_rootkit_check\":\"" + msg[17] + "\",\"time\":\"" + msg[18] + "\",\"user\":\"" + msg[19] + "\",\"hostname\":\"" + msg[20] + "\",\"elf_md5\":\"" + msg[21] + "\"}"
+	jsonStr := "{\"uid\":\"" + msg[0] + "\",\"syscall\":\"" + msg[1] + "\",\"sa_family\":\"" + msg[2] + "\",\"fd\":\"" + msg[3] + "\",\"dport\":\"" + msg[4] + "\",\"dip\":\"" + msg[5] + "\",\"elf\":\"" + msg[6] + "\",\"pid\":\"" + msg[7] + "\",\"ppid\":\"" + msg[8] + "\",\"pgid\":\"" + msg[9] + "\",\"tgid\":\"" + msg[10] + "\",\"comm\":\"" + msg[11] + "\",\"nodename\":\"" + msg[12] + "\",\"sip\":\"" + msg[13] + "\",\"sport\":\"" + msg[14] + "\",\"res\":\"" + msg[15] + "\",\"pid_rootkit_check\":\"" + msg[16] + "\",\"file_rootkit_check\":\"" + msg[17] + "\",\"sessionid\":\"" + msg[18] + "\",\"time\":\"" + msg[19] + "\",\"user\":\"" + msg[20] + "\",\"hostname\":\"" + msg[21] + "\",\"elf_md5\":\"" + msg[22] + "\"}"
 	return jsonStr
 }
 
 func ParserAcceptMsg(msg []string) string {
-	jsonStr := "{\"uid\":\"" + msg[0] + "\",\"syscall\":\"" + msg[1] + "\",\"sa_family\":\"" + msg[2] + "\",\"fd\":\"" + msg[3] + "\",\"sport\":\"" + msg[4] + "\",\"sip\":\"" + msg[5] + "\",\"elf\":\"" + msg[6] + "\",\"pid\":\"" + msg[7] + "\",\"ppid\":\"" + msg[8] + "\",\"pgid\":\"" + msg[9] + "\",\"tgid\":\"" + msg[10] + "\",\"comm\":\"" + msg[11] + "\",\"nodename\":\"" + msg[12] + "\",\"dip\":\"" + msg[13] + "\",\"dport\":\"" + msg[14] + "\",\"res\":\"" + msg[15] + "\",\"pid_rootkit_check\":\"" + msg[16] + "\",\"file_rootkit_check\":\"" + msg[17] + "\",\"time\":\"" + msg[18] + "\",\"user\":\"" + msg[19] + "\",\"hostname\":\"" + msg[20] + "\",\"elf_md5\":\"" + msg[21] + "\"}"
+	jsonStr := "{\"uid\":\"" + msg[0] + "\",\"syscall\":\"" + msg[1] + "\",\"sa_family\":\"" + msg[2] + "\",\"fd\":\"" + msg[3] + "\",\"sport\":\"" + msg[4] + "\",\"sip\":\"" + msg[5] + "\",\"elf\":\"" + msg[6] + "\",\"pid\":\"" + msg[7] + "\",\"ppid\":\"" + msg[8] + "\",\"pgid\":\"" + msg[9] + "\",\"tgid\":\"" + msg[10] + "\",\"comm\":\"" + msg[11] + "\",\"nodename\":\"" + msg[12] + "\",\"dip\":\"" + msg[13] + "\",\"dport\":\"" + msg[14] + "\",\"res\":\"" + msg[15] + "\",\"pid_rootkit_check\":\"" + msg[16] + "\",\"file_rootkit_check\":\"" + msg[17] + "\",\"sessionid\":\"" + msg[18] + "\",\"time\":\"" + msg[19] + "\",\"user\":\"" + msg[20] + "\",\"hostname\":\"" + msg[21] + "\",\"elf_md5\":\"" + msg[22] + "\"}"
 	return jsonStr
 }
 
 func ParserPtraceMsg(msg []string) string {
-	jsonStr := "{\"uid\":\"" + msg[0] + "\",\"syscall\":\"" + msg[1] + "\",\"ptrace_request\":\"" + msg[2] + "\",\"target_pid\":\"" + msg[3] + "\",\"addr\":\"" + msg[4] + "\",\"data\":\"" + msg[5] + "\",\"elf\":\"" + msg[6] + "\",\"pid\":\"" + msg[7] + "\",\"ppid\":\"" + msg[8] + "\",\"pgid\":\"" + msg[9] + "\",\"tgid\":\"" + msg[10] + "\",\"comm\":\"" + msg[11] + "\",\"nodename\":\"" + msg[12] + "\",\"res\":\"" + msg[13] + "\",\"time\":\"" + msg[14] + "\",\"user\":\"" + msg[15] + "\",\"hostname\":\"" + msg[16] + "\",\"elf_md5\":\"" + msg[17] + "\"}"
+	jsonStr := "{\"uid\":\"" + msg[0] + "\",\"syscall\":\"" + msg[1] + "\",\"ptrace_request\":\"" + msg[2] + "\",\"target_pid\":\"" + msg[3] + "\",\"addr\":\"" + msg[4] + "\",\"data\":\"" + msg[5] + "\",\"elf\":\"" + msg[6] + "\",\"pid\":\"" + msg[7] + "\",\"ppid\":\"" + msg[8] + "\",\"pgid\":\"" + msg[9] + "\",\"tgid\":\"" + msg[10] + "\",\"comm\":\"" + msg[11] + "\",\"nodename\":\"" + msg[12] + "\",\"res\":\"" + msg[13] + "\",\"sessionid\":\"" + msg[14] + "\",\"time\":\"" + msg[15] + "\",\"user\":\"" + msg[16] + "\",\"hostname\":\"" + msg[17] + "\",\"elf_md5\":\"" + msg[18] + "\"}"
 	return jsonStr
 }
 
 func ParserDNSMsg(msg []string) string {
-	jsonStr := "{\"uid\":\"" + msg[0] + "\",\"syscall\":\"" + msg[1] + "\",\"sa_family\":\"" + msg[2] + "\",\"fd\":\"" + msg[3] + "\",\"sport\":\"" + msg[4] + "\",\"sip\":\"" + msg[5] + "\",\"elf\":\"" + msg[6] + "\",\"pid\":\"" + msg[7] + "\",\"ppid\":\"" + msg[8] + "\",\"pgid\":\"" + msg[9] + "\",\"tgid\":\"" + msg[10] + "\",\"comm\":\"" + msg[11] + "\",\"nodename\":\"" + msg[12] + "\",\"dip\":\"" + msg[13] + "\",\"dport\":\"" + msg[14] + "\",\"qr\":\"" + msg[15] + "\",\"opcode\":\"" + msg[16] + "\",\"rcode\":\"" + msg[17] + "\",\"query\":\"" + msg[18] + "\",\"time\":\"" + msg[19] + "\",\"user\":\"" + msg[20] + "\",\"hostname\":\"" + msg[21] + "\",\"elf_md5\":\"" + msg[22] + "\"}"
+	jsonStr := "{\"uid\":\"" + msg[0] + "\",\"syscall\":\"" + msg[1] + "\",\"sa_family\":\"" + msg[2] + "\",\"fd\":\"" + msg[3] + "\",\"sport\":\"" + msg[4] + "\",\"sip\":\"" + msg[5] + "\",\"elf\":\"" + msg[6] + "\",\"pid\":\"" + msg[7] + "\",\"ppid\":\"" + msg[8] + "\",\"pgid\":\"" + msg[9] + "\",\"tgid\":\"" + msg[10] + "\",\"comm\":\"" + msg[11] + "\",\"nodename\":\"" + msg[12] + "\",\"dip\":\"" + msg[13] + "\",\"dport\":\"" + msg[14] + "\",\"qr\":\"" + msg[15] + "\",\"opcode\":\"" + msg[16] + "\",\"rcode\":\"" + msg[17] + "\",\"query\":\"" + msg[18] + "\",\"sessionid\":\"" + msg[19] + "\",\"time\":\"" + msg[20] + "\",\"user\":\"" + msg[21] + "\",\"hostname\":\"" + msg[22] + "\",\"elf_md5\":\"" + msg[23] + "\"}"
 	return jsonStr
 }
 
 func ParserCreateFileMsg(msg []string) string {
-	jsonStr := "{\"uid\":\"" + msg[0] + "\",\"syscall\":\"" + msg[1] + "\",\"elf\":\"" + msg[2] + "\",\"file_path\":\"" + msg[3] + "\",\"pid\":\"" + msg[4] + "\",\"ppid\":\"" + msg[5] + "\",\"pgid\":\"" + msg[6] + "\",\"tgid\":\"" + msg[7] + "\",\"comm\":\"" + msg[8] + "\",\"nodename\":\"" + msg[9] + "\",\"time\":\"" + msg[10] + "\",\"user\":\"" + msg[11] + "\",\"hostname\":\"" + msg[12] + "\",\"elf_md5\":\"" + msg[13] + "\"}"
+	jsonStr := "{\"uid\":\"" + msg[0] + "\",\"syscall\":\"" + msg[1] + "\",\"elf\":\"" + msg[2] + "\",\"file_path\":\"" + msg[3] + "\",\"pid\":\"" + msg[4] + "\",\"ppid\":\"" + msg[5] + "\",\"pgid\":\"" + msg[6] + "\",\"tgid\":\"" + msg[7] + "\",\"comm\":\"" + msg[8] + "\",\"nodename\":\"" + msg[9] + "\",\"sessionid\":\"" + msg[10] + "\",\"time\":\"" + msg[11] + "\",\"user\":\"" + msg[12] + "\",\"hostname\":\"" + msg[13] + "\",\"elf_md5\":\"" + msg[14] + "\"}"
 	return jsonStr
 }
 
