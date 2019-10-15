@@ -52,7 +52,6 @@
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 #include <linux/version.h>
-
 #include <net/inet_connection_sock.h>
 
 #define NETLINK_USER 31
@@ -1078,7 +1077,8 @@ asmlinkage int monitor_execve_hook(const char __user *filename, const char __use
     if (argv_res_tmp)
         kfree(argv_res_tmp);
 
-    tmp_putname(path);
+    if (abs_path != "-1")
+        tmp_putname(path);
 
 #if (EXECVE_TIME_TEST == 1)
     char *ktime_result_str = NULL;
@@ -1096,7 +1096,8 @@ err:
     if (argv_res_tmp)
         kfree(argv_res_tmp);
 
-    tmp_putname(path);
+    if (abs_path != "-1")
+        tmp_putname(path);
 
     tmp_stdin_fd = memset(tmp_stdin_fd, '\0', 256);
     tmp_stdout_fd = memset(tmp_stdout_fd, '\0', 256);
@@ -1533,10 +1534,10 @@ asmlinkage unsigned long monitor_accept4_hook(int fd, struct sockaddr __user *di
             }
 
 #if (ROOTKIT_CHECK == 1)
-    if (final_path != "-1") {
-        file_check_res = check_file(final_path);
-    }
-    pid_check_res = check_pid(current->pid);
+        if (final_path != "-1") {
+            file_check_res = check_file(final_path);
+        }
+        pid_check_res = check_pid(current->pid);
 #endif
 
             result_str_len = get_data_alignment(strlen(current->comm) +
