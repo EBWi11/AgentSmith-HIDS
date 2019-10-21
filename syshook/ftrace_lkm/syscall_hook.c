@@ -958,6 +958,7 @@ asmlinkage int monitor_execve_hook(const char __user *filename, const char __use
     int file_check_res = -1;
     int result_str_len;
     int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0;
+    unsigned int sessionid = 0;
     struct filename *path;
     const char __user *native;
     char *abs_path = NULL;
@@ -975,6 +976,10 @@ asmlinkage int monitor_execve_hook(const char __user *filename, const char __use
 #if (EXECVE_TIME_TEST == 1)
     ktime_t stime;
     get_start_time(&stime);
+#endif
+
+#ifdef CONFIG_AUDITSYSCALL
+    sessionid = current -> sessionid;
 #endif
 
     files = files_fdtable(current->files);
@@ -1058,13 +1063,13 @@ asmlinkage int monitor_execve_hook(const char __user *filename, const char __use
 #endif
 
     snprintf(result_str, result_str_len,
-             "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d",
+             "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%u",
              current->real_cred->uid.val, "\n", EXECVE_TYPE, "\n", pname, "\n",
              abs_path, "\n", argv_res_tmp, "\n", current->pid, "\n",
              current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
              "\n", current->tgid, "\n", current->comm, "\n",
              current->nsproxy->uts_ns->name.nodename,"\n",tmp_stdin,"\n",tmp_stdout,
-             "\n",pid_check_res, "\n",file_check_res);
+             "\n",pid_check_res, "\n",file_check_res, "\n", sessionid);
 
     send_msg_to_user(SEND_TYPE, result_str, 1);
 
@@ -1112,6 +1117,7 @@ asmlinkage int monitor_execve_hook(char __user *filename, char __user * __user *
     int file_check_res = -1;
     int result_str_len;
     int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0;
+    unsigned int sessionid = 0;
     const char __user *native;
     char *abs_path = NULL;
     char *argv_res = NULL;
@@ -1127,6 +1133,10 @@ asmlinkage int monitor_execve_hook(char __user *filename, char __user * __user *
 #if (EXECVE_TIME_TEST == 1)
     ktime_t stime;
     get_start_time(&stime);
+#endif
+
+#ifdef CONFIG_AUDITSYSCALL
+    sessionid = current -> sessionid;
 #endif
 
     files = files_fdtable(current->files);
@@ -1217,13 +1227,13 @@ asmlinkage int monitor_execve_hook(char __user *filename, char __user * __user *
 #endif
 
     snprintf(result_str, result_str_len,
-             "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d",
+             "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%u",
              current->real_cred->uid, "\n", EXECVE_TYPE, "\n", pname, "\n",
              abs_path, "\n", argv_res_tmp, "\n", current->pid, "\n",
              current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
              "\n", current->tgid, "\n", current->comm, "\n",
              current->nsproxy->uts_ns->name.nodename,"\n",tmp_stdin,"\n",tmp_stdout,
-             "\n",pid_check_res, "\n",file_check_res);
+             "\n",pid_check_res, "\n",file_check_res, "\n", sessionid);
 
     send_msg_to_user(SEND_TYPE, result_str, 1);
 
@@ -1270,6 +1280,7 @@ asmlinkage int monitor_init_module_hook(void __user *umod, unsigned long len, co
     char *result_str;
     int i = 0;
     int result_str_len;
+    unsigned int sessionid = 0;
     struct files_struct *current_files;
     struct fdtable *files_table;
     struct path files_path;
@@ -1279,6 +1290,10 @@ asmlinkage int monitor_init_module_hook(void __user *umod, unsigned long len, co
 
     if (netlink_pid == -1 && share_mem_flag == -1)
         return orig_init_module(umod, len, uargs);
+
+#ifdef CONFIG_AUDITSYSCALL
+    sessionid = current -> sessionid;
+#endif
 
     if (init_module_buf)
         init_module_buf = memset(init_module_buf, '\0', 256);
@@ -1293,17 +1308,17 @@ asmlinkage int monitor_init_module_hook(void __user *umod, unsigned long len, co
     result_str_len = get_data_alignment(strlen(cwd) + 192);
     result_str = kzalloc(result_str_len, GFP_ATOMIC);
 #if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
-    snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s",
+    snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
              current->real_cred->uid.val, "\n", INIT_MODULE_TYPE, "\n", cwd,
              "\n", current->pid, "\n", current->real_parent->pid, "\n",
              pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-             current->comm, "\n", current->nsproxy->uts_ns->name.nodename);
+             current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
 #elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
-    snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s",
+    snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
              current->real_cred->uid, "\n", INIT_MODULE_TYPE, "\n", cwd,
              "\n", current->pid, "\n", current->real_parent->pid, "\n",
              pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-             current->comm, "\n", current->nsproxy->uts_ns->name.nodename);
+             current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
 #endif
     send_msg_to_user(SEND_TYPE, result_str, 1);
     return orig_init_module(umod, len, uargs);
@@ -1315,6 +1330,7 @@ asmlinkage int monitor_finit_module_hook(int fd, const char __user *uargs, int f
     char *result_str;
     int result_str_len;
     int i = 0;
+    unsigned int sessionid = 0;
     struct files_struct *current_files;
     struct fdtable *files_table;
     struct path files_path;
@@ -1324,6 +1340,10 @@ asmlinkage int monitor_finit_module_hook(int fd, const char __user *uargs, int f
 
     if (netlink_pid == -1 && share_mem_flag == -1)
         return orig_finit_module(fd, uargs, flags);
+
+#ifdef CONFIG_AUDITSYSCALL
+    sessionid = current -> sessionid;
+#endif
 
     if (init_module_buf)
         init_module_buf = memset(init_module_buf, '\0', 256);
@@ -1337,11 +1357,11 @@ asmlinkage int monitor_finit_module_hook(int fd, const char __user *uargs, int f
     cwd = d_path(&files_path, init_module_buf, 256);
     result_str_len = get_data_alignment(strlen(cwd) + 192);
     result_str = kzalloc(result_str_len, GFP_ATOMIC);
-    snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s",
+    snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
              current->real_cred->uid.val, "\n", FINIT_MODULE_TYPE, "\n", cwd,
              "\n", current->pid, "\n", current->real_parent->pid, "\n",
              pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-             current->comm, "\n", current->nsproxy->uts_ns->name.nodename);
+             current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
     send_msg_to_user(SEND_TYPE, result_str, 1);
     return orig_finit_module(fd, uargs, flags);
 }
@@ -1361,6 +1381,7 @@ asmlinkage unsigned long monitor_accept_hook(int fd, struct sockaddr __user *dir
     int result_str_len;
     int pid_check_res = -1;
     int file_check_res = -1;
+    unsigned int sessionid = 0;
     char dip[64];
     char dport[16];
     char sip[64] = "-1";
@@ -1377,6 +1398,10 @@ asmlinkage unsigned long monitor_accept_hook(int fd, struct sockaddr __user *dir
 
     if (netlink_pid == -1 && share_mem_flag == -1)
         return ori_accept_syscall_res;
+
+#ifdef CONFIG_AUDITSYSCALL
+    sessionid = current -> sessionid;
+#endif
 
     hook_update_use_count();
     copy_res = copy_from_user(&tmp_dirp, dirp, 16);
@@ -1442,22 +1467,24 @@ asmlinkage unsigned long monitor_accept_hook(int fd, struct sockaddr __user *dir
             result_str = kzalloc(result_str_len, GFP_ATOMIC);
 #if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
             snprintf(result_str, result_str_len,
-                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d",
+                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%u",
                     current->real_cred->uid.val, "\n", ACCEPT_TYPE, "\n", sa_family,
                     "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
                     current->pid, "\n", current->real_parent->pid, "\n",
                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
                     current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                     sip, "\n", sport, "\n", ori_accept_syscall_res, "\n", pid_check_res, "\n", file_check_res);
+                     sip, "\n", sport, "\n", ori_accept_syscall_res, "\n", pid_check_res,
+                     "\n", file_check_res, "\n", sessionid);
 #elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
             snprintf(result_str, result_str_len,
-                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d",
+                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%u",
                     current->real_cred->uid, "\n", ACCEPT_TYPE, "\n", sa_family,
                     "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
                     current->pid, "\n", current->real_parent->pid, "\n",
                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
                     current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                    sip, "\n", sport, "\n", ori_accept_syscall_res, "\n", pid_check_res, "\n", file_check_res);
+                    sip, "\n", sport, "\n", ori_accept_syscall_res, "\n", pid_check_res,
+                    "\n", file_check_res, "\n", sessionid);
 #endif
             send_msg_to_user(SEND_TYPE, result_str, 1);
         }
@@ -1477,6 +1504,7 @@ asmlinkage unsigned long monitor_accept4_hook(int fd, struct sockaddr __user *di
     int result_str_len;
     int pid_check_res = -1;
     int file_check_res = -1;
+    unsigned int sessionid = 0;
     char dip[64];
     char dport[16];
     char sip[64] = "-1";
@@ -1493,6 +1521,10 @@ asmlinkage unsigned long monitor_accept4_hook(int fd, struct sockaddr __user *di
 
     if (netlink_pid == -1 && share_mem_flag == -1)
         return ori_accept_syscall_res;
+
+#ifdef CONFIG_AUDITSYSCALL
+    sessionid = current -> sessionid;
+#endif
 
     hook_update_use_count();
     copy_res = copy_from_user(&tmp_dirp, dirp, 16);
@@ -1556,22 +1588,24 @@ asmlinkage unsigned long monitor_accept4_hook(int fd, struct sockaddr __user *di
             result_str = kzalloc(result_str_len, GFP_ATOMIC);
 #if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
             snprintf(result_str, result_str_len,
-                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d",
+                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%u",
                     current->real_cred->uid.val, "\n", ACCEPT_TYPE, "\n", sa_family,
                     "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
                     current->pid, "\n", current->real_parent->pid, "\n",
                      pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
                      current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                     sip, "\n", sport, "\n", ori_accept_syscall_res, "\n", pid_check_res, "\n", file_check_res);
+                     sip, "\n", sport, "\n", ori_accept_syscall_res, "\n", pid_check_res,
+                     "\n", file_check_res, "\n", sessionid);
 #elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
           snprintf(result_str, result_str_len,
-                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d",
+                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%u",
                     current->real_cred->uid, "\n", ACCEPT_TYPE, "\n", sa_family,
                     "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
                      current->pid, "\n", current->real_parent->pid, "\n",
                      pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
                     current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                    sip, "\n", sport, "\n", ori_accept_syscall_res, "\n", pid_check_res, "\n", file_check_res);
+                    sip, "\n", sport, "\n", ori_accept_syscall_res, "\n", pid_check_res,
+                    "\n", file_check_res, "\n", sessionid);
 #endif
            send_msg_to_user(SEND_TYPE, result_str, 1);
         }
@@ -1584,6 +1618,7 @@ asmlinkage unsigned long monitor_accept4_hook(int fd, struct sockaddr __user *di
 asmlinkage unsigned long monitor_ptrace_hook(long request, long pid, unsigned long addr, unsigned long data)
 {
     int result_str_len = 0;
+    unsigned int sessionid = 0;
     char *final_path = NULL;
     char *result_str = NULL;
     unsigned long orig_ptrace_syscall_res = orig_ptrace(request, pid, addr, data);
@@ -1591,6 +1626,10 @@ asmlinkage unsigned long monitor_ptrace_hook(long request, long pid, unsigned lo
     if (netlink_pid == -1 && share_mem_flag == -1) {
         return orig_ptrace_syscall_res;
     }
+
+#ifdef CONFIG_AUDITSYSCALL
+    sessionid = current -> sessionid;
+#endif
 
     if (request == PTRACE_POKETEXT || request == PTRACE_POKEDATA) {
         if (current->active_mm) {
@@ -1615,12 +1654,13 @@ asmlinkage unsigned long monitor_ptrace_hook(long request, long pid, unsigned lo
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
         snprintf(result_str, result_str_len,
-                 "%d%s%s%s%d%s%d%s%p%s%p%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%d",
+                 "%d%s%s%s%d%s%d%s%p%s%p%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%d%s%u",
                  current->real_cred->uid.val, "\n", PTRACE_TYPE, "\n", request,
                  "\n", pid, "\n", addr, "\n", data, "\n", final_path, "\n",
                  current->pid, "\n", current->real_parent->pid, "\n",
                  pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                 current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", orig_ptrace_syscall_res);
+                 current->comm, "\n", current->nsproxy->uts_ns->name.nodename,
+                 "\n", orig_ptrace_syscall_res, "\n", sessionid);
         send_msg_to_user(SEND_TYPE, result_str, 1);
         return orig_ptrace_syscall_res;
     } else {
@@ -1631,6 +1671,7 @@ asmlinkage unsigned long monitor_ptrace_hook(long request, long pid, unsigned lo
 asmlinkage int monitor_ptrace_hook(long request, long pid, long addr, long data)
 {
     int result_str_len = 0;
+    unsigned int sessionid = 0;
     char *final_path = NULL;
     char *result_str = NULL;
     int orig_ptrace_syscall_res = orig_ptrace(request, pid, addr, data);
@@ -1638,6 +1679,10 @@ asmlinkage int monitor_ptrace_hook(long request, long pid, long addr, long data)
     if (netlink_pid == -1 && share_mem_flag == -1) {
         return orig_ptrace_syscall_res;
     }
+
+#ifdef CONFIG_AUDITSYSCALL
+    sessionid = current -> sessionid;
+#endif
 
     if (request == PTRACE_POKETEXT || request == PTRACE_POKEDATA) {
         if (current->active_mm) {
@@ -1662,12 +1707,13 @@ asmlinkage int monitor_ptrace_hook(long request, long pid, long addr, long data)
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
         snprintf(result_str, result_str_len,
-                 "%d%s%s%s%d%s%d%s%p%s%p%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%d",
+                 "%d%s%s%s%d%s%d%s%p%s%p%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%d%s%u",
                  current->real_cred->uid, "\n", PTRACE_TYPE, "\n", request,
                  "\n", pid, "\n", addr, "\n", data, "\n", final_path, "\n",
                  current->pid, "\n", current->real_parent->pid, "\n",
                  pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                 current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", orig_ptrace_syscall_res);
+                 current->comm, "\n", current->nsproxy->uts_ns->name.nodename,
+                 "\n", orig_ptrace_syscall_res, "\n", sessionid);
         send_msg_to_user(SEND_TYPE, result_str, 1);
         return orig_ptrace_syscall_res;
     } else {
@@ -1703,6 +1749,7 @@ asmlinkage unsigned long monitor_recvfrom_hook(int fd, void __user *ubuf, unsign
     int recv_data_copy_res = 0;
     int result_str_len;
     int opcode = 0;
+    unsigned int sessionid = 0;
     int qr = 0;
     int rcode = 0;
     char dip[64];
@@ -1724,6 +1771,10 @@ asmlinkage unsigned long monitor_recvfrom_hook(int fd, void __user *ubuf, unsign
 
     if (netlink_pid == -1 && share_mem_flag == -1)
         goto err;
+
+#ifdef CONFIG_AUDITSYSCALL
+    sessionid = current -> sessionid;
+#endif
 
     hook_update_use_count();
     copy_res = copy_from_user(&tmp_dirp, addr, 16);
@@ -1809,22 +1860,22 @@ asmlinkage unsigned long monitor_recvfrom_hook(int fd, void __user *ubuf, unsign
 
 #if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
         snprintf(result_str, result_str_len,
-                "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%s",
+                "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%s%s%u",
                 current->real_cred->uid.val, "\n", DNS_TYPE, "\n", sa_family,
                 "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
                 current->pid, "\n", current->real_parent->pid, "\n",
                 pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
                 current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                sip, "\n", sport, "\n", qr, "\n", opcode, "\n", rcode, "\n", query);
+                sip, "\n", sport, "\n", qr, "\n", opcode, "\n", rcode, "\n", query, "\n", sessionid);
 #elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
         snprintf(result_str, result_str_len,
-                "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%s",
+                "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%s%s%u",
                 current->real_cred->uid, "\n", DNS_TYPE, "\n", sa_family,
                 "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
                 current->pid, "\n", current->real_parent->pid, "\n",
                 pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
                 current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                sip, "\n", sport, "\n", qr, "\n", opcode, "\n", rcode, "\n", query);
+                sip, "\n", sport, "\n", qr, "\n", opcode, "\n", rcode, "\n", query, "\n", sessionid);
 #endif
         send_msg_to_user(SEND_TYPE, result_str, 1);
         kfree(query);
@@ -1848,6 +1899,7 @@ asmlinkage unsigned long monitor_connect_hook(int fd, struct sockaddr __user *di
     int result_str_len;
     int pid_check_res = -1;
     int file_check_res = -1;
+    unsigned int sessionid = 0;
     char dip[64];
     char dport[16];
     char sip[64] = "-1";
@@ -1864,6 +1916,10 @@ asmlinkage unsigned long monitor_connect_hook(int fd, struct sockaddr __user *di
 
     if (netlink_pid == -1 && share_mem_flag == -1)
         return ori_connect_syscall_res;
+
+#ifdef CONFIG_AUDITSYSCALL
+    sessionid = current -> sessionid;
+#endif
 
     hook_update_use_count();
     copy_res = copy_from_user(&tmp_dirp, dirp, 16);
@@ -1934,22 +1990,24 @@ asmlinkage unsigned long monitor_connect_hook(int fd, struct sockaddr __user *di
             result_str = kzalloc(result_str_len, GFP_ATOMIC);
 #if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
                 snprintf(result_str, result_str_len,
-                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d",
+                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%u",
                     current->real_cred->uid.val, "\n", CONNECT_TYPE, "\n", sa_family,
                     "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
                     current->pid, "\n", current->real_parent->pid, "\n",
                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
                     current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                    sip, "\n", sport, "\n", ori_connect_syscall_res, "\n", pid_check_res, "\n", file_check_res);
+                    sip, "\n", sport, "\n", ori_connect_syscall_res, "\n", pid_check_res,
+                    "\n", file_check_res, "\n", sessionid);
 #elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
                 snprintf(result_str, result_str_len,
-                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d",
+                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%u",
                     current->real_cred->uid, "\n", CONNECT_TYPE, "\n", sa_family,
                     "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
                     current->pid, "\n", current->real_parent->pid, "\n",
                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
                     current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                    sip, "\n", sport, "\n", ori_connect_syscall_res, "\n", pid_check_res, "\n", file_check_res);
+                    sip, "\n", sport, "\n", ori_connect_syscall_res, "\n", pid_check_res,
+                    "\n", file_check_res, "\n", sessionid);
 #endif
             send_msg_to_user(SEND_TYPE, result_str, 1);
 
@@ -1972,6 +2030,7 @@ asmlinkage unsigned long monitor_open_hook(const char __user *filename, int flag
     int ori_res = 0;
     int check_res = 0;
     int check_flag = 0;
+    unsigned int sessionid = 0;
     char *path_str = NULL;
     char *final_path = NULL;
     char *result_str = NULL;
@@ -1985,6 +2044,10 @@ asmlinkage unsigned long monitor_open_hook(const char __user *filename, int flag
 
     if (!check_flag)
         return orig_open(filename, flags, mode);
+
+#ifdef CONFIG_AUDITSYSCALL
+    sessionid = current -> sessionid;
+#endif
 
     check_res = user_path_at(AT_FDCWD, filename, LOOKUP_FOLLOW, &path);
     ori_res = orig_open(filename, flags, mode);
@@ -2029,19 +2092,19 @@ asmlinkage unsigned long monitor_open_hook(const char __user *filename, int flag
 
 #if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
             snprintf(result_str, result_str_len,
-                     "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s",
+                     "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
                      current->real_cred->uid.val, "\n", CREATE_FILE, "\n", final_path, "\n",
                      path_str, "\n", current->pid, "\n",current->real_parent->pid, "\n",
                      pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n", current->comm, "\n",
-                     current->nsproxy->uts_ns->name.nodename);
+                     current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
             send_msg_to_user(SEND_TYPE, result_str, 1);
 #elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
             snprintf(result_str, result_str_len,
-                     "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s",
+                     "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
                      current->real_cred->uid, "\n", CREATE_FILE, "\n", final_path, "\n",
                      path_str, "\n", current->pid, "\n",current->real_parent->pid, "\n",
                      pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n", current->comm, "\n",
-                     current->nsproxy->uts_ns->name.nodename);
+                     current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
             send_msg_to_user(SEND_TYPE, result_str, 1);
 #endif
         }
@@ -2056,6 +2119,7 @@ asmlinkage unsigned long monitor_openat_hook(int dfd, const char __user *filenam
     int ori_res = 0;
     int check_res = 0;
     int check_flag = 0;
+    unsigned int sessionid = 0;
     char *path_str = NULL;
     char *final_path = NULL;
     char *result_str = NULL;
@@ -2064,6 +2128,10 @@ asmlinkage unsigned long monitor_openat_hook(int dfd, const char __user *filenam
 
     if (netlink_pid == -1 && share_mem_flag == -1)
         return orig_openat(dfd, filename, flags, mode);
+
+#ifdef CONFIG_AUDITSYSCALL
+    sessionid = current -> sessionid;
+#endif
 
     check_flag = flags & O_CREAT;
 
@@ -2113,19 +2181,19 @@ asmlinkage unsigned long monitor_openat_hook(int dfd, const char __user *filenam
 
 #if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
             snprintf(result_str, result_str_len,
-                     "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s",
+                     "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
                      current->real_cred->uid.val, "\n", CREATE_FILE, "\n", final_path, "\n",
                      path_str, "\n", current->pid, "\n",current->real_parent->pid, "\n",
                      pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n", current->comm, "\n",
-                     current->nsproxy->uts_ns->name.nodename);
+                     current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
             send_msg_to_user(SEND_TYPE, result_str, 1);
 #elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
             snprintf(result_str, result_str_len,
-                     "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s",
+                     "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
                      current->real_cred->uid, "\n", CREATE_FILE, "\n", final_path, "\n",
                      path_str, "\n", current->pid, "\n",current->real_parent->pid, "\n",
                      pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n", current->comm, "\n",
-                     current->nsproxy->uts_ns->name.nodename);
+                     current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
             send_msg_to_user(SEND_TYPE, result_str, 1);
 #endif
         }
@@ -2144,9 +2212,14 @@ asmlinkage unsigned long monitor_creat_hook(const char __user *pathname, umode_t
     char *result_str = NULL;
     struct path path;
     struct fdtable *files;
+    unsigned int sessionid = 0;
 
     if (netlink_pid == -1 && share_mem_flag == -1)
         return orig_creat(pathname, mode);
+
+#ifdef CONFIG_AUDITSYSCALL
+    sessionid = current -> sessionid;
+#endif
 
     check_res = user_path_at(AT_FDCWD, pathname, LOOKUP_FOLLOW, &path);
     ori_res = orig_creat(pathname, mode);
@@ -2191,19 +2264,19 @@ asmlinkage unsigned long monitor_creat_hook(const char __user *pathname, umode_t
 
 #if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
             snprintf(result_str, result_str_len,
-                     "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s",
+                     "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
                      current->real_cred->uid.val, "\n", CREATE_FILE, "\n", final_path, "\n",
                      path_str, "\n", current->pid, "\n",current->real_parent->pid, "\n",
                      pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n", current->comm, "\n",
-                     current->nsproxy->uts_ns->name.nodename);
+                     current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
             send_msg_to_user(SEND_TYPE, result_str, 1);
 #elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
             snprintf(result_str, result_str_len,
-                     "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s",
+                     "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
                      current->real_cred->uid, "\n", CREATE_FILE, "\n", final_path, "\n",
                      path_str, "\n", current->pid, "\n",current->real_parent->pid, "\n",
                      pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n", current->comm, "\n",
-                     current->nsproxy->uts_ns->name.nodename);
+                     current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
             send_msg_to_user(SEND_TYPE, result_str, 1);
 #endif
         }
