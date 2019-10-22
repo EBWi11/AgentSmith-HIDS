@@ -110,7 +110,6 @@ struct ftrace_hook {
 		.original = (_original),	\
 	}
 
-unsigned long **sys_call_table_ptr;
 struct sockaddr_in *sad;
 
 typedef unsigned short int uint16;
@@ -138,6 +137,8 @@ asmlinkage int (*orig_open)(const char __user *filename, int flags, umode_t mode
 asmlinkage int (*orig_openat)(int dfd, const char __user *filename, int flags, umode_t mode);
 
 asmlinkage int (*orig_creat)(const char __user *pathname, umode_t mode);
+
+asmlinkage void (*orig_fsnotify_create)(struct inode *inode, struct dentry *dentry);
 
 #if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
 asmlinkage int (*orig_ptrace)(long request, long pid, unsigned long addr,
@@ -545,7 +546,7 @@ int fh_install_hook(struct ftrace_hook *hook)
 
 	err = fh_resolve_hook_address(hook);
 	if (err)
-		return err;
+	    return err;
 
 	hook->ops.func = fh_ftrace_thunk;
 	hook->ops.flags = FTRACE_OPS_FL_SAVE_REGS
@@ -2285,20 +2286,6 @@ asmlinkage unsigned long monitor_creat_hook(const char __user *pathname, umode_t
     return ori_res;
 }
 
-unsigned long **find_sys_call_table(void)
-{
-    unsigned long ptr;
-    unsigned long *p;
-    for (ptr = (unsigned long)sys_close;
-         ptr < (unsigned long)&loops_per_jiffy;
-         ptr += sizeof(void *)) {
-        p = (unsigned long *)ptr;
-        if (p[__NR_close] == (unsigned long)sys_close)
-            return (unsigned long **)p;
-    }
-    return NULL;
-}
-
 static int check_syn_send_recv(void)
 {
     int i;
@@ -2485,16 +2472,6 @@ static int lkm_init(void)
     }
 #endif
 
-    if (!(sys_call_table_ptr = find_sys_call_table())) {
-        if (SEND_TYPE == SHERE_MEM) {
-            device_destroy(class, MKDEV(major, 0));
-            class_destroy(class);
-            unregister_chrdev(major, DEVICE_NAME);
-        }
-        pr_err("GET_SYS_CALL_TABLE_FAILED\n");
-        return -1;
-    }
-
     kzalloc_init();
     lock_init();
 
@@ -2521,7 +2498,6 @@ static int lkm_init(void)
 #endif
 
     disable_write_protection();
-    orig_connect = (void *)(sys_call_table_ptr[__NR_connect]);
 
 #if (HOOK_CONNECT == 1)
     err = fh_install_hook(&CONNECT_HOOK);
