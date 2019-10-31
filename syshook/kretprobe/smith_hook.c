@@ -76,6 +76,9 @@
 #define RECVFROM_HOOK 1
 #define LOAD_MODULE_HOOK 1
 
+typedef unsigned short int uint16;
+typedef unsigned long int uint32;
+
 #define NIPQUAD(addr) \
     ((unsigned char *)&addr)[0], \
     ((unsigned char *)&addr)[1], \
@@ -92,6 +95,10 @@
     ntohs((addr).s6_addr16[6]), \
     ntohs((addr).s6_addr16[7])
 
+#define BigLittleSwap16(A) ((((uint16)(A)&0xff00) >> 8) | \
+                           (((uint16)(A)&0x10ff) << 8))
+
+int checkCPUendianRes = 0;
 char connect_kretprobe_state = 0x0;
 char accept_kretprobe_state = 0x0;
 char execve_kretprobe_state = 0x0;
@@ -145,6 +152,40 @@ struct load_module_data {
 static void exit_protect_action(void)
 {
     __module_get(THIS_MODULE);
+}
+#endif
+
+#if WRITE_INDEX_TRY_LOCK == 1
+static int write_index_trylock(void)
+{
+    return write_trylock(&_write_index_lock);
+}
+#endif
+
+static int checkCPUendian(void)
+{
+    union {
+        unsigned long int i;
+        unsigned char s[4];
+    } c;
+    c.i = 0x12345678;
+    return (0x12 == c.s[0]);
+}
+
+unsigned short int Ntohs(unsigned short int n)
+{
+    return checkCPUendianRes ? n : BigLittleSwap16(n);
+}
+
+#if DELAY_TEST == 1
+static char *get_timespec(void)
+{
+    char *res = NULL;
+    struct timespec tmp_time;
+    res = kzalloc(64, GFP_ATOMIC);
+    tmp_time = current_kernel_time();
+    snprintf(res, 64, "%lu.%lu", tmp_time.tv_sec, tmp_time.tv_nsec);
+    return res;
 }
 #endif
 
@@ -657,6 +698,7 @@ static void uninstall_kretprobe(void)
 static int __init smith_init(void)
 {
 	int ret;
+	checkCPUendianRes = checkCPUendian();
 
     ret = init_share_mem();
 
