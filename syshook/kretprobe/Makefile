@@ -11,7 +11,7 @@ clean:
 	$(MAKE) -C $(KERNEL_DIR) M=$(PWD) clean
 
 insmod:
-	sudo insmod kretprobe.ko
+	sudo insmod smith_hook.ko
 
 rmmod:
-	sudo rmmod kretprobe
+	sudo rmmod smith_hook
