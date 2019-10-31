@@ -62,7 +62,11 @@
 #define CHECK_READ_INDEX_THRESHOLD 524288
 #define CHECK_WRITE_INDEX_THRESHOLD 32768
 
+#define KERNEL_PRINT 0
 #define EXIT_PROTECT 0
+#define DELAY_TEST 0
+#define WRITE_INDEX_TRY_LOCK 0
+#define WRITE_INDEX_TRY_LOCK_NUM 3
 
 #define CONNECT_HOOK 1
 #define ACCEPT_HOOK 1
@@ -96,6 +100,8 @@ char ptrace_kretprobe_state = 0x0;
 char recvfrom_kretprobe_state = 0x0;
 char load_module_kretprobe_state = 0x0;
 
+static char *list_head_char;
+static int check_read_index_flag = -1;
 static int share_mem_flag = -1;
 static int pre_slot_len = 0;
 static int write_index = 8;
@@ -213,52 +219,194 @@ static const struct file_operations mchar_fops = {
     .mmap = device_mmap,
 };
 
+static int get_read_index(void)
+{
+    int i;
+    struct sh_mem_list_head *_list_head;
+
+    for (i = 0; i < 8; i++)
+        list_head_char[i] = sh_mem[i];
+
+    _list_head = (struct sh_mem_list_head *)list_head_char;
+    return _list_head->read_index;
+}
+
+static struct msg_slot get_solt(int len, int next)
+{
+    struct msg_slot new_msg_slot = {len, next};
+    return new_msg_slot;
+}
+
+static int get_write_index(void)
+{
+    return write_index;
+}
+
+static void fix_write_index(int index)
+{
+    write_index = index;
+}
+
+static int send_msg_to_user_memshare(char *msg, int kfree_flag)
+{
+    int raw_data_len = 0;
+    int write_index_lock_flag = 0;
+    int curr_write_index = -1;
+    int now_write_index = -1;
+    int now_read_index = -1;
+    struct msg_slot new_msg_slot;
+
+    if (share_mem_flag == 1) {
+
+#if (WRITE_INDEX_TRY_LOCK == 1)
+        int i;
+        for (i = 0; i < WRITE_INDEX_TRY_LOCK_NUM; i++) {
+            if (write_index_trylock()) {
+                write_index_lock_flag = 1;
+                break;
+            }
+        }
+#else
+        write_index_lock();
+        write_index_lock_flag = 1;
+#endif
+
+        if (write_index_lock_flag) {
+
+            raw_data_len = strlen(msg);
+
+            if (raw_data_len == 0) {
+                write_index_unlock();
+                if (msg && kfree_flag == 1)
+                    kfree(msg);
+
+                return 0;
+            }
+
+            curr_write_index = get_write_index();
+
+            if (pre_slot_len != 0)
+                now_write_index = curr_write_index + 1;
+            else
+                now_write_index = curr_write_index;
+
+            if (check_read_index_flag == 1) {
+                now_read_index = get_read_index();
+                if (now_read_index > curr_write_index + 1) {
+                    if ((curr_write_index + 1024 + raw_data_len) > now_read_index)
+                        goto out;
+                }
+            }
+
+            if ((curr_write_index + CHECK_WRITE_INDEX_THRESHOLD) >= MAX_SIZE) {
+                now_read_index = get_read_index();
+                if (now_read_index <= CHECK_READ_INDEX_THRESHOLD) {
+#if (KERNEL_PRINT == 1)
+                    printk("READ IS TOO SLOW!! READ_INDEX:%d\n", now_read_index);
+#endif
+                    check_read_index_flag = 1;
+                }
+                else
+                    check_read_index_flag = -1;
+
+                new_msg_slot = get_solt(raw_data_len, 1);
+                memcpy(&sh_mem[now_write_index], &new_msg_slot, 8);
+                memcpy(&sh_mem[now_write_index + 8], msg, raw_data_len);
+                fix_write_index(7);
+
+#if (KERNEL_PRINT == 1)
+                printk("curr_write_index:%d pre_slot_len:%d now_write_index:%d now_read_index:%d\n",
+                       curr_write_index, pre_slot_len, now_write_index, now_read_index);
+#endif
+            } else {
+                new_msg_slot = get_solt(raw_data_len, -1);
+                memcpy(&sh_mem[now_write_index], &new_msg_slot, 8);
+                memcpy(&sh_mem[now_write_index + 8], msg, raw_data_len);
+                fix_write_index(now_write_index + 8 + raw_data_len);
+            }
+
+            pre_slot_len = raw_data_len + 8;
+            write_index_unlock();
+        }
+    }
+
+    if (msg && kfree_flag == 1)
+        kfree(msg);
+
+    return 0;
+
+out:
+    write_index_unlock();
+    if (msg && kfree_flag == 1)
+        kfree(msg);
+    return 0;
+}
+
+static int send_msg_to_user(char *msg, int kfree_flag)
+{
+#if (KERNEL_PRINT == 2)
+    printk("%s\n", msg);
+#endif
+
+#if (DELAY_TEST == 1)
+    if (kfree_flag == 1) {
+        send_msg_to_user_memshare(get_timespec(), 1);
+
+        if (msg)
+            kfree(msg);
+        return 0;
+    }
+#endif
+
+    return send_msg_to_user_memshare(msg, kfree_flag);
+}
+
 static int connect_ret_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
 	int retval = regs_return_value(regs);
-    printk("connect --> %d\n", retval);
+	//send_msg_to_user("connect\n", 0);
     return 0;
 }
 
 static int accept_ret_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
 	int retval = regs_return_value(regs);
-    printk("accept --> %d\n", retval);
+	//send_msg_to_user("accept\n", 0);
     return 0;
 }
 
 static int execve_ret_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
 	int retval = regs_return_value(regs);
-    printk("execve --> %d\n", retval);
+	//send_msg_to_user("execve\n", 0);
     return 0;
 }
 
 static int fsnotify_ret_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
 	int retval = regs_return_value(regs);
-	printk("fsnotify --> %d\n", retval);
+	//send_msg_to_user("fsnotify\n", 0);
 	return 0;
 }
 
 static int ptrace_ret_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
 	int retval = regs_return_value(regs);
-	printk("ptrace --> %d\n", retval);
+	//send_msg_to_user("ptrace\n", 0);
 	return 0;
 }
 
 static int recvfrom_ret_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
 	int retval = regs_return_value(regs);
-	printk("recvfrom --> %d\n", retval);
+	//send_msg_to_user("recvfrom\n", 0);
 	return 0;
 }
 
 static int load_module_ret_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
 	int retval = regs_return_value(regs);
-	printk("load_module --> %d\n", retval);
+	//send_msg_to_user("load_module\n", 0);
 	return 0;
 }
 
