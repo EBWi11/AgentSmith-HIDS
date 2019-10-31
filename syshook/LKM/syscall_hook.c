@@ -44,7 +44,6 @@
 #include <linux/namei.h>
 #include <net/inet_sock.h>
 #include <net/tcp.h>
-#include <net/tcp.h>
 #include <net/inet_connection_sock.h>
 
 #define NETLINK_USER 31

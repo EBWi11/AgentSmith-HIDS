@@ -1,4 +1,4 @@
-obj-m += kretprobe.o
+obj-m += smith_hook.o
 
 KERNEL_VER := $(shell uname -r)
 KERNEL_DIR := /lib/modules/$(KERNEL_VER)/build
