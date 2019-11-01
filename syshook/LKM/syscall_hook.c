@@ -179,6 +179,7 @@ static struct device *device;
 static int major;
 static char *sh_mem = NULL;
 static DEFINE_MUTEX(mchar_mutex);
+int checkCPUendianRes = 0;
 
 static rwlock_t _write_index_lock;
 static rwlock_t _write_use_count_lock;
@@ -362,7 +363,7 @@ int checkCPUendian(void)
 
 unsigned short int Ntohs(unsigned short int n)
 {
-    return checkCPUendian() ? n : BigLittleSwap16(n);
+    return checkCPUendianRes ? n : BigLittleSwap16(n);
 }
 
 static void get_start_time(ktime_t *start)
@@ -2363,6 +2364,7 @@ static int check_syn_send_recv(void)
 static int lkm_init(void)
 {
     int i = 0;
+	checkCPUendianRes = checkCPUendian();
 
     if (LINUX_VERSION_CODE != KERNEL_VERSION(3, 10, 0) && LINUX_VERSION_CODE != KERNEL_VERSION(2, 6, 32)) {
         pr_err("KERNEL_VERSION_DON'T_SUPPORT\n");
