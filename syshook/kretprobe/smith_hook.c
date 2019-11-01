@@ -49,6 +49,7 @@
 
 #define DEVICE_NAME "smith"
 #define CLASS_NAME "smith"
+
 #define EXECVE_TYPE "59"
 #define CONNECT_TYPE "42"
 #define ACCEPT_TYPE "43"
@@ -155,13 +156,6 @@ static void exit_protect_action(void)
 }
 #endif
 
-#if WRITE_INDEX_TRY_LOCK == 1
-static int write_index_trylock(void)
-{
-    return write_trylock(&_write_index_lock);
-}
-#endif
-
 static int checkCPUendian(void)
 {
     union {
@@ -189,6 +183,18 @@ static char *get_timespec(void)
 }
 #endif
 
+static void lock_init(void)
+{
+    rwlock_init(&_write_index_lock);
+}
+
+#if WRITE_INDEX_TRY_LOCK == 1
+static int write_index_trylock(void)
+{
+    return write_trylock(&_write_index_lock);
+}
+#endif
+
 static inline void write_index_lock(void)
 {
     write_lock(&_write_index_lock);
@@ -199,7 +205,7 @@ static inline void write_index_unlock(void)
     write_unlock(&_write_index_lock);
 }
 
-static void _init_share_mem(int type)
+static void do_init_share_mem(int type)
 {
     struct sh_mem_list_head _init_list_head = {0, -1};
     if (type == 1)
@@ -218,8 +224,15 @@ static int device_open(struct inode *inode, struct file *file)
         write_index_unlock();
         write_index = 8;
         memset(sh_mem, '\0', MAX_SIZE);
-        _init_share_mem(0);
+        do_init_share_mem(0);
     }
+    return 0;
+}
+
+static int device_close(struct inode *indoe, struct file *file)
+{
+    mutex_unlock(&mchar_mutex);
+    share_mem_flag = -1;
     return 0;
 }
 
@@ -244,13 +257,6 @@ static int device_mmap(struct file *filp, struct vm_area_struct *vma)
 
 out:
     return ret;
-}
-
-static int device_close(struct inode *indoe, struct file *file)
-{
-    mutex_unlock(&mchar_mutex);
-    share_mem_flag = -1;
-    return 0;
 }
 
 static const struct file_operations mchar_fops = {
@@ -404,51 +410,93 @@ static int send_msg_to_user(char *msg, int kfree_flag)
 
 static int connect_ret_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-	int retval = regs_return_value(regs);
-	//send_msg_to_user("connect\n", 0);
+	int retval = 0;
+
+	if (share_mem_flag == -1) {
+	    return 0;
+	}
+
+	retval = regs_return_value(regs);
+	send_msg_to_user("connect---------------------------------\n", 0);
     return 0;
 }
 
 static int accept_ret_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-	int retval = regs_return_value(regs);
-	//send_msg_to_user("accept\n", 0);
+	int retval = 0;
+
+	if (share_mem_flag == -1) {
+	    return 0;
+	}
+
+	retval = regs_return_value(regs);
+	send_msg_to_user("accept---------------------------------\n", 0);
     return 0;
 }
 
 static int execve_ret_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-	int retval = regs_return_value(regs);
-	//send_msg_to_user("execve\n", 0);
+    int retval = 0;
+
+	if (share_mem_flag == -1) {
+	    return 0;
+	}
+
+	retval = regs_return_value(regs);
+	send_msg_to_user("execve---------------------------------\n", 0);
     return 0;
 }
 
 static int fsnotify_ret_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-	int retval = regs_return_value(regs);
-	//send_msg_to_user("fsnotify\n", 0);
-	return 0;
+    int retval = 0;
+
+	if (share_mem_flag == -1) {
+	    return 0;
+	}
+
+	retval = regs_return_value(regs);
+	send_msg_to_user("fsnotify---------------------------------\n", 0);
+    return 0;
 }
 
 static int ptrace_ret_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-	int retval = regs_return_value(regs);
-	//send_msg_to_user("ptrace\n", 0);
-	return 0;
+    int retval = 0;
+
+	if (share_mem_flag == -1) {
+	    return 0;
+	}
+
+	retval = regs_return_value(regs);
+	send_msg_to_user("ptrace---------------------------------\n", 0);
+    return 0;
 }
 
 static int recvfrom_ret_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-	int retval = regs_return_value(regs);
-	//send_msg_to_user("recvfrom\n", 0);
-	return 0;
+    int retval = 0;
+
+	if (share_mem_flag == -1) {
+	    return 0;
+	}
+
+	retval = regs_return_value(regs);
+	send_msg_to_user("recvfrom---------------------------------\n", 0);
+    return 0;
 }
 
 static int load_module_ret_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-	int retval = regs_return_value(regs);
-	//send_msg_to_user("load_module\n", 0);
-	return 0;
+    int retval = 0;
+
+	if (share_mem_flag == -1) {
+	    return 0;
+	}
+
+	retval = regs_return_value(regs);
+	send_msg_to_user("load_module---------------------------------\n", 0);
+    return 0;
 }
 
 static struct kretprobe connect_kretprobe = {
@@ -660,6 +708,7 @@ static int init_share_mem(void)
     }
 
     mutex_init(&mchar_mutex);
+    lock_init();
     return 0;
 }
 
@@ -710,6 +759,7 @@ static int __init smith_init(void)
     if (CONNECT_HOOK == 1) {
 	    ret = connect_register_kretprobe();
 	    if (ret < 0) {
+	    	uninstall_share_mem();
 		    printk(KERN_INFO "[SMITH] connect register_kretprobe failed, returned %d\n", ret);
 		    return -1;
 	    }
@@ -719,6 +769,7 @@ static int __init smith_init(void)
 	ret = accept_register_kretprobe();
 	    if (ret < 0) {
 		    uninstall_kretprobe();
+		    uninstall_share_mem();
 		    printk(KERN_INFO "[SMITH] accept register_kretprobe failed, returned %d\n", ret);
 		    return -1;
 	    }
@@ -728,6 +779,7 @@ static int __init smith_init(void)
 	ret = execve_register_kretprobe();
 	    if (ret < 0) {
 		    uninstall_kretprobe();
+		    uninstall_share_mem();
 		    printk(KERN_INFO "[SMITH] execve register_kretprobe failed, returned %d\n", ret);
 	    	return -1;
 	    }
@@ -737,6 +789,7 @@ static int __init smith_init(void)
 	ret = fsnotify_register_kretprobe();
 	    if (ret < 0) {
 		    uninstall_kretprobe();
+		    uninstall_share_mem();
 		    printk(KERN_INFO "[SMITH] fsnotify register_kretprobe failed, returned %d\n", ret);
 		    return -1;
 	    }
@@ -746,6 +799,7 @@ static int __init smith_init(void)
 	ret = ptrace_register_kretprobe();
 	    if (ret < 0) {
 		    uninstall_kretprobe();
+		    uninstall_share_mem();
 		    printk(KERN_INFO "[SMITH] ptrace register_kretprobe failed, returned %d\n", ret);
 		    return -1;
 	    }
