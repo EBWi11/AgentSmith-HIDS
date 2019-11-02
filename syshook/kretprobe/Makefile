@@ -1,4 +1,5 @@
-obj-m += smith_hook.o
+obj-m += smith.o
+smith-objs := smith_hook.o share_mem.o
 
 KERNEL_VER := $(shell uname -r)
 KERNEL_DIR := /lib/modules/$(KERNEL_VER)/build
