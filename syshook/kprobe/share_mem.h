@@ -6,6 +6,7 @@
 * Description:	share memory
 *******************************************************************/
 #include <linux/mm.h>
+#include <linux/fs.h>
 #include <linux/device.h>
 #include <linux/module.h>
 #include <linux/slab.h>
@@ -20,7 +21,7 @@
 #define DELAY_TEST 0
 #define KERNEL_PRINT 0
 
-static int share_mem_flag;
+extern int share_mem_flag;
 
 struct msg_slot {
     int len;
