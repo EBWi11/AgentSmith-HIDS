@@ -153,26 +153,26 @@ static int count(struct user_arg_ptr argv, int max)
 #elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
 static int count(char __user * __user * argv, int max)
 {
-    int i = 0;
+	int i = 0;
 
-    if (argv != NULL) {
-        for (;;) {
-            char __user * p;
+	if (argv != NULL) {
+		for (;;) {
+			char __user * p;
 
-            if (get_user(p, argv))
-                return -EFAULT;
-            if (!p)
-                break;
-            argv++;
-            if (i++ >= max)
-                return -E2BIG;
+			if (get_user(p, argv))
+				return -EFAULT;
+			if (!p)
+				break;
+			argv++;
+			if (i++ >= max)
+				return -E2BIG;
 
-            if (fatal_signal_pending(current))
-                return -ERESTARTNOHAND;
-            cond_resched();
-        }
-    }
-    return i;
+			if (fatal_signal_pending(current))
+				return -ERESTARTNOHAND;
+			cond_resched();
+		}
+	}
+	return i;
 }
 
 static char *dentry_path_raw(void)
@@ -184,7 +184,7 @@ static char *dentry_path_raw(void)
     path_get(&pwd);
     root = current->fs->root;
     path_get(&root);
-    cwd = d_path(&pwd,pname_buf,flen);
+    cwd = d_path(&pwd, pname_buf, flen);
     return cwd;
 }
 #endif
@@ -425,7 +425,6 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
     int result_str_len;
     int pid_check_res = -1;
     int file_check_res = -1;
-    char *filename;
     unsigned int sessionid;
     char *result_str;
     char *pname;
@@ -438,12 +437,14 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
 
 	if (share_mem_flag != -1) {
 	    sessionid = get_sessionid();
-	    char *argv = (char *) regs->si;
+	    char **argv = (char **) regs->si;
 	    char tmp_stdin_fd[256];
         char tmp_stdout_fd[256];
-        char pname_buf[256];
 
-        filename = (char *) regs->di;
+        char filename[2048];
+        int copy_res = copy_from_user(filename, (char *) regs->di, 2048);
+        if(copy_res)
+            copy_res = "";
 
 	    files = files_fdtable(current->files);
 
