@@ -244,13 +244,10 @@ static char *str_replace(char *orig, char *rep, char *with)
 
 struct connect_data {
     int fd;
+    struct sockaddr *dirp;
 };
 
 struct accept_data {
-    int fd;
-};
-
-struct execve_data {
     int fd;
 };
 
@@ -301,18 +298,132 @@ static unsigned int get_sessionid(void)
     return sessionid;
 }
 
-static void connect_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
-{
-	if (share_mem_flag != -1) {
-	    send_msg_to_user("connect---------------------------------\n", 0);
-	}
-}
-
 static void accept_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
 {
 	if (share_mem_flag != -1) {
 	    send_msg_to_user("accept---------------------------------\n", 0);
 	}
+}
+
+static int connect_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
+{
+    struct connect_data *data;
+    data = (struct connect_data *)ri->data;
+    data->fd = regs->di;
+    data->dirp = (struct sockaddr *)regs->si;
+    return 0;
+}
+
+static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
+{
+    int err;
+    int fd;
+    int flag = 0;
+    int sa_family;
+    int copy_res = 0;
+    int result_str_len;
+    int pid_check_res = -1;
+    int file_check_res = -1;
+    unsigned int sessionid;
+    struct socket *sock;
+    struct sock *sk;
+    struct sockaddr *tmp_dirp;
+    struct connect_data *data;
+    struct inet_sock *inet;
+    char dip[64];
+    char sip[64];
+    char dport[16] = "-1";
+    char sport[16] = "-1";
+    char *final_path = NULL;
+    char *result_str;
+
+	if (share_mem_flag != -1) {
+	    sessionid = get_sessionid();
+	    int retval = regs_return_value(regs);
+
+        data = (struct connect_data *)ri->data;
+        fd = data->fd;
+        sock = sockfd_lookup(fd, &err);
+        if (!sock)
+            goto out;
+        else
+            sockfd_put(sock);
+
+        tmp_dirp = data->dirp;
+        if(copy_res == 0) {
+            if(tmp_dirp->sa_family == AF_INET) {
+                sk = sock->sk;
+                inet = (struct inet_sock*)sk;
+
+                if (inet->inet_dport) {
+                    snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_daddr));
+                    snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_saddr));
+                    snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
+                    snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
+                }
+
+                sa_family = 4;
+                flag = 1;
+            } else if(tmp_dirp->sa_family == AF_INET6) {
+                sk = sock->sk;
+                inet = (struct inet_sock*)sk;
+
+                if (inet->inet_dport) {
+                    //snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(inet->pinet6->daddr));
+                    snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(inet->pinet6->saddr));
+                    snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
+                    snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
+                }
+
+                sa_family = 6;
+                flag = 1;
+            }
+        }
+
+        if(flag == 1) {
+            if (current->active_mm) {
+                if (current->mm->exe_file) {
+                    char connect_pathname[256];
+                    final_path = d_path(&current->mm->exe_file->f_path, connect_pathname, PATH_MAX);
+                }
+            }
+
+            if (final_path == NULL) {
+                final_path = "-1";
+            }
+
+            result_str_len = get_data_alignment(strlen(current->comm) +
+                             strlen(current->nsproxy->uts_ns->name.nodename) +
+                             strlen(current->comm) + strlen(final_path) + 172);
+
+            result_str = kzalloc(result_str_len, GFP_ATOMIC);
+#if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
+            snprintf(result_str, result_str_len,
+                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%u",
+                    current->real_cred->uid.val, "\n", CONNECT_TYPE, "\n", sa_family,
+                    "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
+                    current->pid, "\n", current->real_parent->pid, "\n",
+                    pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                    current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
+                    sip, "\n", sport, "\n", retval, "\n", pid_check_res, "\n",
+                    file_check_res, "\n", sessionid);
+#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
+            snprintf(result_str, result_str_len,
+                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%u",
+                    current->real_cred->uid, "\n", CONNECT_TYPE, "\n", sa_family,
+                    "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
+                    current->pid, "\n", current->real_parent->pid, "\n",
+                    pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                    current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
+                    sip, "\n", sport, "\n", retval, "\n", pid_check_res, "\n",
+                    file_check_res, "\n", sessionid);
+#endif
+            send_msg_to_user(result_str, 1);
+        }
+    }
+
+out:
+    return 0;
 }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
@@ -555,9 +666,11 @@ static void load_module_post_handler(struct kprobe *p, struct pt_regs *regs, uns
 	}
 }
 
-static struct kprobe connect_kprobe = {
-    .symbol_name = "sys_connect",
-	.post_handler = connect_post_handler,
+static struct kretprobe connect_kprobe = {
+    .kp.symbol_name = "sys_connect",
+    .data_size  = sizeof(struct connect_data),
+	.handler = connect_handler,
+    .entry_handler = connect_entry_handler,
 };
 
 static struct kprobe accept_kprobe = {
@@ -593,7 +706,7 @@ static struct kprobe load_module_kprobe = {
 static int connect_register_kprobe(void)
 {
 	int ret;
-	ret = register_kprobe(&connect_kprobe);
+	ret = register_kretprobe(&connect_kprobe);
 
 	if (ret == 0)
         connect_kprobe_state = 0x1;
@@ -603,7 +716,7 @@ static int connect_register_kprobe(void)
 
 static void unregister_kprobe_connect(void)
 {
-	unregister_kprobe(&connect_kprobe);
+	unregister_kretprobe(&connect_kprobe);
 }
 
 static int accept_register_kprobe(void)
