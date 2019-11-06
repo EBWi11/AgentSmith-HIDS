@@ -325,7 +325,7 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     int pid_check_res = -1;
     int file_check_res = -1;
     unsigned int sessionid;
-    struct socket *sock;
+    struct socket *socket;
     struct sock *sk;
     struct sockaddr *tmp_dirp;
     struct connect_data *data;
@@ -343,40 +343,65 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
         data = (struct connect_data *)ri->data;
         fd = data->fd;
-        sock = sockfd_lookup(fd, &err);
-        if (!sock)
+        socket = sockfd_lookup(fd, &err);
+
+        if (!socket)
             goto out;
         else
-            sockfd_put(sock);
+            sockfd_put(socket);
 
         tmp_dirp = data->dirp;
         if(copy_res == 0) {
-            if(tmp_dirp->sa_family == AF_INET) {
-                sk = sock->sk;
-                inet = (struct inet_sock*)sk;
+            switch (tmp_dirp->sa_family) {
+                case AF_INET:
+                    sk = socket->sk;
+                    inet = (struct inet_sock*)sk;
 
-                if (inet->inet_dport) {
-                    snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_daddr));
-                    snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_saddr));
-                    snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
-                    snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
-                }
-
-                sa_family = 4;
-                flag = 1;
-            } else if(tmp_dirp->sa_family == AF_INET6) {
-                sk = sock->sk;
-                inet = (struct inet_sock*)sk;
-
-                if (inet->inet_dport) {
-                    //snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(inet->pinet6->daddr));
-                    snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(inet->pinet6->saddr));
-                    snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
-                    snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
-                }
-
-                sa_family = 6;
-                flag = 1;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+                    if (inet->inet_dport) {
+                        snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_daddr));
+                        snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_saddr));
+                        snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
+                        snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
+                        flag = 1;
+                    }
+#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
+                    if (inet->dport) {
+                        snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->daddr));
+                        snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->saddr));
+                        snprintf(sport, 16, "%d", Ntohs(inet->sport));
+                        snprintf(dport, 16, "%d", Ntohs(inet->dport));
+                        flag = 1;
+                    }
+#endif
+                    sa_family = 4;
+                    break;
+#if IS_ENABLED(CONFIG_IPV6)
+                case AF_INET6:
+                    sk = socket->sk;
+                    inet = (struct inet_sock*)sk;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+                    if (inet->inet_dport) {
+                        snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sk->sk_v6_daddr));
+                        snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sk->sk_v6_rcv_saddr));
+                        snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
+                        snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
+                        flag = 1;
+                    }
+#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
+                    if (inet->dport) {
+                        snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(inet->pinet6->daddr));
+                        snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(inet->pinet6->saddr));
+                        snprintf(sport, 16, "%d", Ntohs(inet->sport));
+                        snprintf(dport, 16, "%d", Ntohs(inet->dport));
+                        flag = 1;
+                    }
+#endif
+                    sa_family = 6;
+                    break;
+#endif
+                default:
+                    break;
             }
         }
 
