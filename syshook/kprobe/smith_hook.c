@@ -44,11 +44,10 @@
 #define EXECVE_TYPE "59"
 #define CONNECT_TYPE "42"
 #define ACCEPT_TYPE "43"
-#define INIT_MODULE_TYPE "175"
-#define FINIT_MODULE_TYPE "313"
 #define PTRACE_TYPE "101"
 #define DNS_TYPE "601"
 #define CREATE_FILE "602"
+#define LOAD_MODULE_TYPE "603"
 
 #define EXIT_PROTECT 0
 
@@ -175,13 +174,15 @@ static int count(char __user * __user * argv, int max)
 static char *dentry_path_raw(void)
 {
     char *cwd;
-    char pname_buf[PATH_MAX];
+    char *pname_buf = NULL;
     struct path pwd, root;
     pwd = current->fs->pwd;
     path_get(&pwd);
     root = current->fs->root;
     path_get(&root);
+    pname_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
     cwd = d_path(&pwd, pname_buf, PATH_MAX);
+    kfree(pname_buf);
     return cwd;
 }
 #endif
@@ -286,6 +287,7 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     int err;
     int fd;
     int flag = 0;
+    int copy_res;
     int retval;
     int sa_family;
     int result_str_len;
@@ -294,7 +296,7 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     unsigned int sessionid;
     struct socket *socket;
     struct sock *sk;
-    struct sockaddr *tmp_dirp;
+    struct sockaddr tmp_dirp;
     struct connect_data *data;
     struct inet_sock *inet;
     char dip[64];
@@ -310,11 +312,21 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
         data = (struct connect_data *)ri->data;
         fd = data->fd;
+
+        if(!fd)
+            goto out;
+
         socket = sockfd_lookup(fd, &err);
 
+        copy_res = copy_from_user(&tmp_dirp, data->dirp, 16);
+
         if(socket) {
-            tmp_dirp = data->dirp;
-            switch (tmp_dirp->sa_family) {
+            if(!copy_res) {
+                sockfd_put(socket);
+                goto out;
+            }
+
+            switch (tmp_dirp.sa_family) {
                 case AF_INET:
                     sk = socket->sk;
                     inet = (struct inet_sock*)sk;
@@ -411,6 +423,9 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     }
 
     return 0;
+
+out:
+    return 0;
 }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
@@ -422,10 +437,10 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
     int file_check_res = -1;
     char *filename;
     unsigned int sessionid;
-    char *result_str;
-    char *pname;
-    char *tmp_stdin;
-    char *tmp_stdout;
+    char *result_str = NULL;
+    char *pname = NULL;
+    char *tmp_stdin = NULL;
+    char *tmp_stdout = NULL;
     char *argv_res = NULL;
     char *argv_res_tmp = NULL;
     struct fdtable *files;
@@ -520,12 +535,12 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
     int pid_check_res = -1;
     int file_check_res = -1;
     unsigned int sessionid;
-    char *result_str;
-    char *pname;
-    char *tmp_stdin;
-    char *tmp_stdout;
-    char *argv_res;
-    char *argv_res_tmp;
+    char *result_str = NULL;
+    char *pname = NULL;
+    char *tmp_stdin = NULL;
+    char *tmp_stdout = NULL;
+    char *argv_res = NULL;
+    char *argv_res_tmp = NULL;
     struct fdtable *files;
     const char __user *native;
 
@@ -634,7 +649,6 @@ static void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
     unsigned long data;
     char *final_path = NULL;
     char *result_str = NULL;
-    unsigned long orig_ptrace_syscall_res = 0;
     unsigned int sessionid;
 
 	if (share_mem_flag != -1) {
@@ -655,28 +669,26 @@ static void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
 
                 result_str_len = strlen(current->comm) +
                                  strlen(current->nsproxy->uts_ns->name.nodename) +
-                                 strlen(current->comm) + strlen(final_path) + 128;
+                                 strlen(current->comm) + strlen(final_path) + 256;
 
                 result_str = kzalloc(result_str_len, GFP_ATOMIC);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
                 snprintf(result_str, result_str_len,
-                         "%d%s%s%s%d%s%d%s%p%s%p%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%lu%s%u",
+                         "%d%s%s%s%d%s%d%s%p%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
                          current->real_cred->uid.val, "\n", PTRACE_TYPE, "\n", request,
-                         "\n", pid, "\n", addr, "\n", data, "\n", final_path, "\n",
+                         "\n", pid, "\n", addr, "\n", &data, "\n", final_path, "\n",
                          current->pid, "\n", current->real_parent->pid, "\n",
                          pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                         current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                         orig_ptrace_syscall_res, "\n", sessionid);
+                         current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
                 send_msg_to_user(result_str, 1);
 #elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
                 snprintf(result_str, result_str_len,
-                         "%d%s%s%s%d%s%d%s%p%s%p%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%lu%s%u",
+                         "%d%s%s%s%d%s%d%s%p%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
                          current->real_cred->uid, "\n", PTRACE_TYPE, "\n", request,
-                         "\n", pid, "\n", addr, "\n", data, "\n", final_path, "\n",
+                         "\n", pid, "\n", addr, "\n", &data, "\n", final_path, "\n",
                          current->pid, "\n", current->real_parent->pid, "\n",
                          pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                         current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                         orig_ptrace_syscall_res, "\n", sessionid);
+                         current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
                 send_msg_to_user(result_str, 1);
 #endif
             }
@@ -693,8 +705,44 @@ static void recvfrom_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
 
 static void load_module_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
 {
+    int i = 0;
+    int result_str_len;
+    unsigned int sessionid;
+    char *cwd = NULL;
+    char *result_str = NULL;
+    struct path files_path;
+    struct files_struct *current_files;
+    struct fdtable *files_table;
+
 	if (share_mem_flag != -1) {
-	    send_msg_to_user("load_module---------------------------------\n", 0);
+        sessionid = get_sessionid();
+        current_files = current->files;
+        files_table = files_fdtable(current_files);
+        char init_module_buf[PATH_MAX];
+
+        while (files_table->fd[i] != NULL)
+            i++;
+
+        files_path = files_table->fd[i - 1]->f_path;
+        cwd = d_path(&files_path, init_module_buf, PATH_MAX);
+        result_str_len = strlen(cwd) + 192;
+        result_str = kzalloc(result_str_len, GFP_ATOMIC);
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+        snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
+                 current->real_cred->uid.val, "\n", LOAD_MODULE_TYPE, "\n", cwd,
+                 "\n", current->pid, "\n", current->real_parent->pid, "\n",
+                 pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                 current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
+        send_msg_to_user(result_str, 1);
+#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
+        snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
+                 current->real_cred->uid, "\n", LOAD_MODULE_TYPE, "\n", cwd,
+                 "\n", current->pid, "\n", current->real_parent->pid, "\n",
+                 pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                 current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
+        send_msg_to_user(result_str, 1);
+#endif
 	}
 }
 
