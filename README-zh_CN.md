@@ -212,7 +212,18 @@ AgentSmith-HIDS 目前已经在点融经过压力测试/稳定性测试，目前
 
 ### 作者微信
 
+如有疑问，还请加微信前还请先仔细阅读README或者自己进行简单对Google/Baidu检索后再来和作者讨论，尊重彼此时间。最近太多诸如：Ubuntu18是否支持？Hook了那些函数？kprobe是什么？这样类似对问题，这些问题无论是看README还是源码或者百度一下都会有答案的问题。
+
+**请尊重彼此时间和耐心。**
+
 <img src="./wechat.jpg" width="50%" height="50%"/>
+
+
+### 灾难控制局微信公众号
+
+会时不时有一些AgentSmith-HIDS的更新介绍和能力详解，有兴趣的可以关注：
+
+<img src="./SecDamageControl.jpg" width="50%" height="50%"/>
 
 
 ## License
