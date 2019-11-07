@@ -203,6 +203,10 @@ Credits to [@yuzunzhi](https://github.com/yuzunzhi) and [@hapood](https://github
 <img src="./wechat.jpg" width="50%" height="50%"/>
 
 
+### WebChat Offical Account
+
+<img src="./SecDamageControl.jpg" width="50%" height="50%"/>
+
 ## License
 
 AgentSmith-HIDS kernel module are distributed under the GNU GPLv2 license.
