@@ -403,7 +403,7 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                              strlen(current->comm) + strlen(final_path) + 128;
 
             result_str = kzalloc(result_str_len, GFP_ATOMIC);
-#if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
             snprintf(result_str, result_str_len,
                     "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%u",
                     current->real_cred->uid.val, "\n", CONNECT_TYPE, "\n", sa_family,
@@ -441,7 +441,6 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
     int result_str_len;
     int pid_check_res = -1;
     int file_check_res = -1;
-    char *filename = NULL;
     unsigned int sessionid;
     char *result_str = NULL;
     char *abs_path = NULL;
@@ -541,8 +540,6 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
         if (abs_path != "-1")
             tmp_putname(path);
 	}
-out:
-    return;
 }
 #elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
 static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
@@ -917,7 +914,7 @@ static int __init smith_init(void)
 	int ret;
 	checkCPUendianRes = checkCPUendian();
 
-#if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
     tmp_getname = (void *)kallsyms_lookup_name("getname");
 
     if(!tmp_getname) {
