@@ -62,6 +62,8 @@
 typedef unsigned short int uint16;
 typedef unsigned long int uint32;
 
+#define NAME_MAX	(PATH_MAX - sizeof(struct filename))
+
 #define NIPQUAD(addr) \
     ((unsigned char *)&addr)[0], \
     ((unsigned char *)&addr)[1], \
@@ -91,6 +93,10 @@ char recvfrom_kprobe_state = 0x0;
 char load_module_kprobe_state = 0x0;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+
+struct filename *(*tmp_getname)(const char __user *filename);
+void (*tmp_putname)(struct filename *name);
+
 struct user_arg_ptr
 {
     #ifdef CONFIG_COMPAT
@@ -435,14 +441,16 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
     int result_str_len;
     int pid_check_res = -1;
     int file_check_res = -1;
-    char *filename;
+    char *filename = NULL;
     unsigned int sessionid;
     char *result_str = NULL;
+    char *abs_path = NULL;
     char *pname = NULL;
     char *tmp_stdin = NULL;
     char *tmp_stdout = NULL;
     char *argv_res = NULL;
     char *argv_res_tmp = NULL;
+    struct filename *path;
     struct fdtable *files;
     const char __user *native;
 
@@ -453,7 +461,11 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
         char tmp_stdout_fd[PATH_MAX];
         char pname_buf[PATH_MAX];
 
-        filename = (char *) regs->di;
+        path = tmp_getname((char *) regs->di);
+        if (!IS_ERR(path))
+            abs_path = path->name;
+        else
+            abs_path = "-1";
 
 	    files = files_fdtable(current->files);
 
@@ -508,14 +520,14 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
         else
             argv_res_tmp = "";
 
-        result_str_len = strlen(argv_res_tmp) + strlen(pname) + strlen(filename) +
-                         strlen(current->nsproxy->uts_ns->name.nodename) + 128;
+        result_str_len = strlen(argv_res_tmp) + strlen(pname) + strlen(abs_path) +
+                         strlen(current->nsproxy->uts_ns->name.nodename) + 1024;
 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
         snprintf(result_str, result_str_len,
                  "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%u",
                  current->real_cred->uid.val, "\n", EXECVE_TYPE, "\n", pname, "\n",
-                 filename, "\n", argv_res_tmp, "\n", current->pid, "\n",
+                 abs_path, "\n", argv_res_tmp, "\n", current->pid, "\n",
                  current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
                  "\n", current->tgid, "\n", current->comm, "\n",
                  current->nsproxy->uts_ns->name.nodename,"\n",tmp_stdin,"\n",tmp_stdout,
@@ -525,7 +537,12 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
 
         if(argv_len > 0)
             kfree(argv_res);
+
+        if (abs_path != "-1")
+            tmp_putname(path);
 	}
+out:
+    return;
 }
 #elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
 static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
@@ -899,6 +916,21 @@ static int __init smith_init(void)
 {
 	int ret;
 	checkCPUendianRes = checkCPUendian();
+
+#if LINUX_VERSION_CODE == KERNEL_VERSION(3, 10, 0)
+    tmp_getname = (void *)kallsyms_lookup_name("getname");
+
+    if(!tmp_getname) {
+            printk(KERN_INFO "[SMITH] UNKNOW_SYMBOL: getname()\n");
+            return -1;
+    }
+    tmp_putname = (void *)kallsyms_lookup_name("putname");
+
+    if(!tmp_putname) {
+            printk(KERN_INFO "[SMITH] UNKNOW_SYMBOL: putname()\n");
+            return -1;
+    }
+#endif
 
     ret = init_share_mem();
 

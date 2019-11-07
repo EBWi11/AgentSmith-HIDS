@@ -2451,13 +2451,11 @@ static int lkm_init(void)
 
     if(!tmp_getname) {
             pr_err("UNKNOW_SYMBOL: getname()\n");
-            return -1;
     }
     tmp_putname = (void *)kallsyms_lookup_name("putname");
 
     if(!tmp_putname) {
             pr_err("UNKNOW_SYMBOL: putname()\n");
-            return -1;
     }
 
     if(!tmp_putname || !tmp_getname) {
@@ -2465,6 +2463,7 @@ static int lkm_init(void)
         device_destroy(class, MKDEV(major, 0));
         class_destroy(class);
         unregister_chrdev(major, DEVICE_NAME);
+        return -1;
     }
 #endif
 
