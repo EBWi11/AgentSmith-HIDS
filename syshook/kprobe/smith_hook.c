@@ -62,7 +62,7 @@
 typedef unsigned short int uint16;
 typedef unsigned long int uint32;
 
-#define NAME_MAX	(PATH_MAX - sizeof(struct filename))
+#define SMITH_NAME_MAX	(PATH_MAX - sizeof(struct filename))
 
 #define NIPQUAD(addr) \
     ((unsigned char *)&addr)[0], \
