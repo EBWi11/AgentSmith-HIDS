@@ -346,27 +346,17 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                              strlen(current->comm) + strlen(final_path) + 128;
 
             result_str = kzalloc(result_str_len, GFP_ATOMIC);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+
             snprintf(result_str, result_str_len,
                     "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%u",
-                    current->real_cred->uid.val, "\n", CONNECT_TYPE, "\n", sa_family,
+                    get_current_uid(), "\n", CONNECT_TYPE, "\n", sa_family,
                     "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
                     current->pid, "\n", current->real_parent->pid, "\n",
                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
                     current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
                     sip, "\n", sport, "\n", retval, "\n", pid_check_res, "\n",
                     file_check_res, "\n", sessionid);
-#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
-            snprintf(result_str, result_str_len,
-                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%u",
-                    current->real_cred->uid, "\n", CONNECT_TYPE, "\n", sa_family,
-                    "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
-                    current->pid, "\n", current->real_parent->pid, "\n",
-                    pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                    current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                    sip, "\n", sport, "\n", retval, "\n", pid_check_res, "\n",
-                    file_check_res, "\n", sessionid);
-#endif
+
             send_msg_to_user(result_str, 1);
         }
     }
@@ -467,7 +457,7 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
         snprintf(result_str, result_str_len,
                  "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%u",
-                 current->real_cred->uid.val, "\n", EXECVE_TYPE, "\n", pname, "\n",
+                 get_current_uid(), "\n", EXECVE_TYPE, "\n", pname, "\n",
                  abs_path, "\n", argv_res_tmp, "\n", current->pid, "\n",
                  current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
                  "\n", current->tgid, "\n", current->comm, "\n",
@@ -574,7 +564,7 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
         snprintf(result_str, result_str_len,
                  "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%u",
-                 current->real_cred->uid, "\n", EXECVE_TYPE, "\n", pname, "\n",
+                 get_current_uid(), "\n", EXECVE_TYPE, "\n", pname, "\n",
                  filename, "\n", argv_res_tmp, "\n", current->pid, "\n",
                  current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
                  "\n", current->tgid, "\n", current->comm, "\n",
@@ -628,25 +618,16 @@ static void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
                                  strlen(current->comm) + strlen(final_path) + 256;
 
                 result_str = kzalloc(result_str_len, GFP_ATOMIC);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+
                 snprintf(result_str, result_str_len,
                          "%d%s%s%s%d%s%d%s%p%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
-                         current->real_cred->uid.val, "\n", PTRACE_TYPE, "\n", request,
+                         get_current_uid(), "\n", PTRACE_TYPE, "\n", request,
                          "\n", pid, "\n", addr, "\n", &data, "\n", final_path, "\n",
                          current->pid, "\n", current->real_parent->pid, "\n",
                          pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
                          current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
+
                 send_msg_to_user(result_str, 1);
-#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
-                snprintf(result_str, result_str_len,
-                         "%d%s%s%s%d%s%d%s%p%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
-                         current->real_cred->uid, "\n", PTRACE_TYPE, "\n", request,
-                         "\n", pid, "\n", addr, "\n", &data, "\n", final_path, "\n",
-                         current->pid, "\n", current->real_parent->pid, "\n",
-                         pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                         current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
-                send_msg_to_user(result_str, 1);
-#endif
             }
 	    }
 	}
@@ -684,21 +665,13 @@ static void load_module_post_handler(struct kprobe *p, struct pt_regs *regs, uns
         result_str_len = strlen(cwd) + 192;
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
         snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
-                 current->real_cred->uid.val, "\n", LOAD_MODULE_TYPE, "\n", cwd,
+                 get_current_uid(), "\n", LOAD_MODULE_TYPE, "\n", cwd,
                  "\n", current->pid, "\n", current->real_parent->pid, "\n",
                  pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
                  current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
+
         send_msg_to_user(result_str, 1);
-#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
-        snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
-                 current->real_cred->uid, "\n", LOAD_MODULE_TYPE, "\n", cwd,
-                 "\n", current->pid, "\n", current->real_parent->pid, "\n",
-                 pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                 current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
-        send_msg_to_user(result_str, 1);
-#endif
 	}
 }
 
