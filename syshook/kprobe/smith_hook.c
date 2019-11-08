@@ -43,7 +43,6 @@
 
 #define EXECVE_TYPE "59"
 #define CONNECT_TYPE "42"
-#define ACCEPT_TYPE "43"
 #define PTRACE_TYPE "101"
 #define DNS_TYPE "601"
 #define CREATE_FILE "602"
@@ -52,7 +51,6 @@
 #define EXIT_PROTECT 0
 
 #define CONNECT_HOOK 1
-#define ACCEPT_HOOK 1
 #define EXECVE_HOOK 1
 #define FSNOTIFY_HOOK 0
 #define PTRACE_HOOK 1
@@ -327,7 +325,7 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         copy_res = copy_from_user(&tmp_dirp, data->dirp, 16);
 
         if(socket) {
-            if(!copy_res) {
+            if(unlikely(!copy_res)) {
                 sockfd_put(socket);
                 goto out;
             }
@@ -386,7 +384,7 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             sockfd_put(socket);
         }
 
-        if(flag == 1) {
+        if(likely(flag == 1)) {
             if (current->active_mm) {
                 if (current->mm->exe_file) {
                     char connect_pathname[PATH_MAX];
@@ -394,7 +392,7 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                 }
             }
 
-            if (final_path == NULL) {
+            if (unlikely(final_path == NULL)) {
                 final_path = "-1";
             }
 
@@ -461,19 +459,19 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
         char pname_buf[PATH_MAX];
 
         path = tmp_getname((char *) regs->di);
-        if (!IS_ERR(path))
+        if (likely(!IS_ERR(path)))
             abs_path = path->name;
         else
             abs_path = "-1";
 
 	    files = files_fdtable(current->files);
 
-        if(files->fd[0] != NULL)
+        if(likely(files->fd[0] != NULL))
             tmp_stdin = d_path(&(files->fd[0]->f_path), tmp_stdin_fd, PATH_MAX);
         else
             tmp_stdin = "-1";
 
-        if(files->fd[1] != NULL)
+        if(likely(files->fd[1] != NULL))
             tmp_stdout = d_path(&(files->fd[1]->f_path), tmp_stdout_fd, PATH_MAX);
         else
             tmp_stdout = "-1";
@@ -481,13 +479,13 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
         pname = dentry_path_raw(current->fs->pwd.dentry, pname_buf, PATH_MAX - 1);
 
         argv_len = count(argv_ptr, MAX_ARG_STRINGS);
-        if(argv_len > 0)
+        if(likely(argv_len > 0))
             argv_res = kzalloc(128 * argv_len + 1, GFP_ATOMIC);
 
-        if (argv_len > 0) {
+        if (likely(argv_len > 0)) {
             for (i = 0; i < argv_len; i++) {
                 native = get_user_arg_ptr(argv_ptr, i);
-                if (IS_ERR(native)) {
+                if (unlikely(IS_ERR(native))) {
                     flag = -1;
                     break;
                 }
@@ -534,10 +532,10 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
 
         send_msg_to_user(result_str, 1);
 
-        if(argv_len > 0)
+        if(likely(argv_len > 0))
             kfree(argv_res);
 
-        if (abs_path != "-1")
+        if (likely(abs_path != "-1"))
             tmp_putname(path);
 	}
 }
@@ -571,12 +569,12 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
 
 	    files = files_fdtable(current->files);
 
-        if(files->fd[0] != NULL)
+        if(likely(files->fd[0] != NULL))
             tmp_stdin = d_path(&(files->fd[0]->f_path), tmp_stdin_fd, PATH_MAX);
         else
             tmp_stdin = "-1";
 
-        if(files->fd[1] != NULL)
+        if(likely(files->fd[1] != NULL))
             tmp_stdout = d_path(&(files->fd[1]->f_path), tmp_stdout_fd, PATH_MAX);
         else
             tmp_stdout = "-1";
@@ -584,10 +582,10 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
         pname = dentry_path_raw();
 
         argv_len = count(argv, MAX_ARG_STRINGS);
-        if(argv_len > 0)
+        if(likely(argv_len > 0))
             argv_res = kzalloc(128 * argv_len + 1, GFP_ATOMIC);
 
-        if (argv_len > 0) {
+        if (likely(argv_len > 0)) {
             for(i = 0; i < argv_len; i ++) {
                 if(i == 0) {
                     continue;
@@ -641,7 +639,7 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
 
         send_msg_to_user(result_str, 1);
 
-        if(argv_len > 0)
+        if(likely(argv_len > 0))
             kfree(argv_res);
 	}
 }
