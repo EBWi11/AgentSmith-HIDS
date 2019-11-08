@@ -18,35 +18,7 @@
 * see <https://www.gnu.org/licenses/>.
 *******************************************************************/
 #include "share_mem.h"
-#include <asm/syscall.h>
-#include <linux/kprobes.h>
-#include <linux/binfmts.h>
-#include <linux/fdtable.h>
-#include <linux/file.h>
-#include <linux/fs.h>
-#include <linux/fs_struct.h>
-#include <linux/init.h>
-#include <linux/interrupt.h>
-#include <linux/kernel.h>
-#include <linux/module.h>
-#include <linux/net.h>
-#include <linux/sched.h>
-#include <linux/skbuff.h>
-#include <linux/syscalls.h>
-#include <linux/utsname.h>
-#include <linux/version.h>
-#include <linux/types.h>
-#include <linux/ptrace.h>
-#include <linux/namei.h>
-#include <net/inet_sock.h>
-#include <net/tcp.h>
-
-#define EXECVE_TYPE "59"
-#define CONNECT_TYPE "42"
-#define PTRACE_TYPE "101"
-#define DNS_TYPE "601"
-#define CREATE_FILE "602"
-#define LOAD_MODULE_TYPE "603"
+#include "smith_hook.h"
 
 #define EXIT_PROTECT 0
 
@@ -56,30 +28,6 @@
 #define PTRACE_HOOK 1
 #define RECVFROM_HOOK 1
 #define LOAD_MODULE_HOOK 1
-
-typedef unsigned short int uint16;
-typedef unsigned long int uint32;
-
-#define SMITH_NAME_MAX	(PATH_MAX - sizeof(struct filename))
-
-#define NIPQUAD(addr) \
-    ((unsigned char *)&addr)[0], \
-    ((unsigned char *)&addr)[1], \
-    ((unsigned char *)&addr)[2], \
-    ((unsigned char *)&addr)[3]
-
-#define NIP6(addr) \
-    ntohs((addr).s6_addr16[0]), \
-    ntohs((addr).s6_addr16[1]), \
-    ntohs((addr).s6_addr16[2]), \
-    ntohs((addr).s6_addr16[3]), \
-    ntohs((addr).s6_addr16[4]), \
-    ntohs((addr).s6_addr16[5]), \
-    ntohs((addr).s6_addr16[6]), \
-    ntohs((addr).s6_addr16[7])
-
-#define BigLittleSwap16(A) ((((uint16)(A)&0xff00) >> 8) | \
-                           (((uint16)(A)&0x10ff) << 8))
 
 int share_mem_flag = -1;
 int checkCPUendianRes = 0;
@@ -460,7 +408,7 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
 
         path = tmp_getname((char *) regs->di);
         if (likely(!IS_ERR(path)))
-            abs_path = path->name;
+            abs_path = (char *)path->name;
         else
             abs_path = "-1";
 
@@ -535,7 +483,7 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
         if(likely(argv_len > 0))
             kfree(argv_res);
 
-        if (likely(abs_path != "-1"))
+        if (strcmp(abs_path, "-1"))
             tmp_putname(path);
 	}
 }
@@ -759,14 +707,15 @@ static void load_module_post_handler(struct kprobe *p, struct pt_regs *regs, uns
 }
 
 static struct kretprobe connect_kretprobe = {
-    .kp.symbol_name = "sys_connect",
+    .kp.symbol_name = P_GET_SYSCALL_NAME(connect),
     .data_size  = sizeof(struct connect_data),
 	.handler = connect_handler,
     .entry_handler = connect_entry_handler,
+    .maxactive = 40,
 };
 
 static struct kprobe execve_kprobe = {
-    .symbol_name = "sys_execve",
+    .symbol_name = P_GET_SYSCALL_NAME(execve),
 	.post_handler = execve_post_handler,
 };
 
@@ -776,12 +725,12 @@ static struct kprobe fsnotify_kprobe = {
 };
 
 static struct kprobe ptrace_kprobe = {
-    .symbol_name = "sys_ptrace",
+    .symbol_name = P_GET_SYSCALL_NAME(ptrace),
 	.post_handler = ptrace_post_handler,
 };
 
 static struct kprobe recvfrom_kprobe = {
-    .symbol_name = "sys_recvfrom",
+    .symbol_name = P_GET_SYSCALL_NAME(recvfrom),
 	.post_handler = recvfrom_post_handler,
 };
 
