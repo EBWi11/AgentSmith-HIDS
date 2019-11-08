@@ -19,6 +19,7 @@
 *******************************************************************/
 #include "share_mem.h"
 #include "smith_hook.h"
+#include "struct_wrap.h"
 
 #define EXIT_PROTECT 0
 
@@ -26,7 +27,7 @@
 #define EXECVE_HOOK 1
 #define FSNOTIFY_HOOK 0
 #define PTRACE_HOOK 1
-#define RECVFROM_HOOK 1
+#define RECVFROM_HOOK 0
 #define LOAD_MODULE_HOOK 1
 
 int share_mem_flag = -1;
@@ -190,9 +191,6 @@ struct fsnotify_data {
     int fd;
 };
 
-struct load_module_data {
-    int fd;
-};
 
 #if EXIT_PROTECT == 1
 static void exit_protect_action(void)
@@ -229,8 +227,8 @@ static int connect_entry_handler(struct kretprobe_instance *ri, struct pt_regs *
 {
     struct connect_data *data;
     data = (struct connect_data *)ri->data;
-    data->fd = regs->di;
-    data->dirp = (struct sockaddr *)regs->si;
+    data->fd = p_get_arg1(regs);
+    data->dirp = (struct sockaddr *)p_get_arg2(regs);
     return 0;
 }
 
@@ -401,12 +399,12 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
 
 	if (share_mem_flag != -1) {
 	    sessionid = get_sessionid();
-	    struct user_arg_ptr argv_ptr = {.ptr.native = regs->si};
+	    struct user_arg_ptr argv_ptr = {.ptr.native = p_get_arg2(regs)};
 	    char tmp_stdin_fd[PATH_MAX];
         char tmp_stdout_fd[PATH_MAX];
         char pname_buf[PATH_MAX];
 
-        path = tmp_getname((char *) regs->di);
+        path = tmp_getname((char *) p_get_arg1(regs));
         if (likely(!IS_ERR(path)))
             abs_path = (char *)path->name;
         else
@@ -424,8 +422,7 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
         else
             tmp_stdout = "-1";
 
-        pname = dentry_path_raw(current->fs->pwd.dentry, pname_buf, PATH_MAX - 1);
-
+        pname = dentry_path_raw(current->fs->pwd.dentry, pname_buf, PATH_MAX);
         argv_len = count(argv_ptr, MAX_ARG_STRINGS);
         if(likely(argv_len > 0))
             argv_res = kzalloc(128 * argv_len + 1, GFP_ATOMIC);
@@ -506,12 +503,12 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
 
 	if (share_mem_flag != -1) {
 	    sessionid = get_sessionid();
-	    char **argv = (char **) regs->si;
+	    char **argv = (char **) p_get_arg2(regs);
 	    char tmp_stdin_fd[PATH_MAX];
         char tmp_stdout_fd[PATH_MAX];
 
-        char filename[2048];
-        int copy_res = copy_from_user(filename, (char *) regs->di, 2048);
+        char filename[PATH_MAX];
+        int copy_res = copy_from_user(filename, (char *) p_get_arg1(regs), PATH_MAX);
         if(copy_res)
             copy_res = "";
 
@@ -612,10 +609,10 @@ static void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
     unsigned int sessionid;
 
 	if (share_mem_flag != -1) {
-	    request = (long) regs->di;
-	    pid = (long) regs->si;
-	    addr = (unsigned long) regs->dx;
-	    data = (unsigned long) regs->r10;
+	    request = (long) p_get_arg1(regs);
+	    pid = (long) p_get_arg2(regs);
+	    addr = (unsigned long) p_get_arg3(regs);
+	    data = (unsigned long) p_get_arg4(regs);
 	    if (request == PTRACE_POKETEXT || request == PTRACE_POKEDATA) {
 	        sessionid = get_sessionid();
 	        if (current->active_mm) {

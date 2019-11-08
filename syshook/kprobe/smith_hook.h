@@ -52,7 +52,7 @@ typedef unsigned long int uint32;
 #define BigLittleSwap16(A) ((((uint16)(A)&0xff00) >> 8) | \
                            (((uint16)(A)&0x10ff) << 8))
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0) && defined(CONFIG_ARCH_HAS_SYSCALL_WRAPPER)
   #define P_SYSCALL_LAYOUT_4_17
  #ifdef CONFIG_X86_64
   #define P_SYSCALL_PREFIX(x) P_TO_STRING(__x64_sys_ ## x)
