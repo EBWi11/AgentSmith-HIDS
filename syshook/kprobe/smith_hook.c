@@ -267,11 +267,10 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             goto out;
 
         socket = sockfd_lookup(fd, &err);
-
-        copy_res = copy_from_user(&tmp_dirp, data->dirp, 16);
-
         if(socket) {
-            if(unlikely(!copy_res)) {
+            copy_res = copy_from_user(&tmp_dirp, data->dirp, 16);
+
+            if(unlikely(copy_res)) {
                 sockfd_put(socket);
                 goto out;
             }
