@@ -79,6 +79,23 @@ static const char __user *get_user_arg_ptr(struct user_arg_ptr argv, int nr)
     return native;
 }
 
+static void *getDNSQuery(unsigned char *data, int index, char *res) {
+    int i = 0;
+    int flag = -1;
+    for (i;i<strlen(data + index);i++) {
+        if (flag == -1) {
+            flag = (data + index)[i];
+        } else if (flag == 0) {
+            flag = (data + index)[i];
+            res[i-1] = 46;
+        } else {
+            res[i-1] = (data + index)[i];
+            flag = flag - 1;
+        }
+    }
+}
+
+
 static int count(struct user_arg_ptr argv, int max)
 {
     int i = 0;
@@ -181,10 +198,6 @@ static char *str_replace(char *orig, char *rep, char *with)
 struct connect_data {
     int fd;
     struct sockaddr *dirp;
-};
-
-struct recvfrom_data {
-    int fd;
 };
 
 struct fsnotify_data {
@@ -633,11 +646,147 @@ static void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
 	}
 }
 
-static void recvfrom_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
+static void recvfrom_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
 {
+    int err;
+    int flag = 0;
+    int sa_family = 0;
+    int copy_res = 0;
+    int recv_data_copy_res = 0;
+    int result_str_len;
+    int opcode = 0;
+    int qr = 0;
+    int fd;
+    int size;
+    int rcode = 0;
+    int addrlen;
+    void *ubuf;
+    unsigned int sessionid;
+    char dip[64];
+    char dport[16];
+    char sip[64] = "-1";
+    char sport[16] = "-1";
+    unsigned char *recv_data = NULL;
+    char *query = NULL;
+    char *final_path = NULL;
+    char *result_str = NULL;
+    struct sockaddr tmp_dirp;
+    struct sockaddr_in *sin;
+    struct sockaddr_in6 *sin6;
+    struct socket *sock;
+    struct sockaddr_in source_addr;
+    struct sockaddr_in6 source_addr6;
+
 	if (share_mem_flag != -1) {
-	    send_msg_to_user("recvfrom---------------------------------\n", 0);
+	    copy_res = copy_from_user(&tmp_dirp, (struct sockaddr *) p_get_arg5(regs), 16);
+        if (copy_res != 0)
+            return;
+
+        sessionid = get_sessionid();
+        fd = (int)p_get_arg1(regs);
+        ubuf = (void *)p_get_arg2(regs);
+        size = (int)p_get_arg3(regs);
+        addrlen = (int)p_get_arg6(regs);
+
+        if (tmp_dirp.sa_family == AF_INET) {
+            sa_family = 4;
+            sock = sockfd_lookup(fd, &err);
+            sin = (struct sockaddr_in *)&tmp_dirp;
+            if (sin->sin_port == 13568 || sin->sin_port == 59668) {
+                recv_data = kzalloc(size, GFP_ATOMIC);
+                recv_data_copy_res = copy_from_user(recv_data, ubuf, size);
+                if (recv_data_copy_res != 0)
+                    goto out;
+
+                if (sizeof(recv_data) >= 8) {
+                    printk("--> %s\n", recv_data);
+    	            qr = (recv_data[2] & 0x80) ? 1 : 0;
+    	            if (qr == 1 ) {
+    	    	        flag = 1;
+    	                opcode = (recv_data[2] >> 3) & 0x0f;
+    	    	        rcode = recv_data[3] & 0x0f;
+    	    	        query = kzalloc(strlen(recv_data+12), GFP_ATOMIC);
+    	    	        getDNSQuery(recv_data, 12, query);
+    	    	        snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr.s_addr));
+                        snprintf(dport, 16, "%d", Ntohs(sin->sin_port));
+                        if (sock) {
+                            kernel_getsockname(sock, (struct sockaddr *)&source_addr, &addrlen);
+                            snprintf(sport, 16, "%d", Ntohs(source_addr.sin_port));
+                            snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(source_addr.sin_addr));
+                            sockfd_put(sock);
+                        }
+    	            }
+    	        }
+            }
+        } else if (tmp_dirp.sa_family == AF_INET6) {
+            sa_family = 6;
+            sock = sockfd_lookup(fd, &err);
+            sin6 = (struct sockaddr_in6 *)&tmp_dirp;
+            if (sin6->sin6_port == 13568 || sin6->sin6_port == 59668) {
+                recv_data = kzalloc(size, GFP_ATOMIC);
+                recv_data_copy_res = copy_from_user(recv_data, ubuf, size);
+                if (recv_data_copy_res != 0)
+                    goto out;
+
+                if (sizeof(recv_data) >= 8) {
+                    qr = (recv_data[2] & 0x80) ? 1 : 0;
+    	            if (qr == 1 ) {
+    	    	        flag = 1;
+    	                opcode = (recv_data[2] >> 3) & 0x0f;
+    	    	        rcode = recv_data[3] & 0x0f;
+    	    	        query = kzalloc(strlen(recv_data+12), GFP_ATOMIC);
+    	    	        getDNSQuery(recv_data, 12, query);
+    	    	        snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sin6->sin6_addr));
+                        snprintf(dport, 16, "%d", Ntohs(sin6->sin6_port));
+                        if (sock) {
+                            kernel_getsockname(sock, (struct sockaddr *)&source_addr6, &addrlen);
+                            snprintf(sport, 16, "%d", Ntohs(source_addr6.sin6_port));
+                            snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(source_addr6.sin6_addr));
+                            sockfd_put(sock);
+                        }
+    	            }
+                }
+            }
+        }
+
+        if (flag == 1) {
+            if (current->active_mm) {
+                if (current->mm->exe_file) {
+                    char recvfrom_pathname[PATH_MAX];
+                    final_path = d_path(&current->mm->exe_file->f_path, recvfrom_pathname, PATH_MAX);
+                }
+            }
+
+            if (final_path == NULL) {
+                final_path = "-1";
+            }
+
+            result_str_len = strlen(current->comm) + strlen(query) +
+                             strlen(current->nsproxy->uts_ns->name.nodename) +
+                             strlen(current->comm) + strlen(final_path) + 172;
+
+            result_str = kzalloc(result_str_len, GFP_ATOMIC);
+
+            snprintf(result_str, result_str_len,
+                     "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%s%s%u",
+                     get_current_uid(), "\n", DNS_TYPE, "\n", sa_family,
+                     "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
+                     current->pid, "\n", current->real_parent->pid, "\n",
+                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                     current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
+                     sip, "\n", sport, "\n", qr, "\n", opcode, "\n", rcode, "\n", query, "\n", sessionid);
+
+            send_msg_to_user(result_str, 1);
+            kfree(query);
+            kfree(recv_data);
+        }
+        return;
 	}
+
+out:
+    sockfd_put(sock);
+    return;
+
 }
 
 static void load_module_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
@@ -700,7 +849,7 @@ static struct kprobe ptrace_kprobe = {
 
 static struct kprobe recvfrom_kprobe = {
     .symbol_name = P_GET_SYSCALL_NAME(recvfrom),
-	.post_handler = recvfrom_post_handler,
+	.pre_handler = recvfrom_handler,
 };
 
 static struct kprobe load_module_kprobe = {
