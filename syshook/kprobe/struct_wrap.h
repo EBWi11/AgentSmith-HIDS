@@ -49,7 +49,7 @@ static inline unsigned long p_get_arg4(struct pt_regs *p_regs) {
 #endif
 
 static inline int get_current_uid(void) {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0)
     return current->real_cred->uid.val;
 #else
     return current->real_cred->uid;
