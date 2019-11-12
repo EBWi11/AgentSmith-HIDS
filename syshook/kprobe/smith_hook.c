@@ -79,27 +79,6 @@ static const char __user *get_user_arg_ptr(struct user_arg_ptr argv, int nr)
     return native;
 }
 
-static void *getDNSQuery(unsigned char *data, int index, char *res) {
-    int i;
-    int flag = -1;
-    int len;
-    len = strlen(data + index);
-
-    for (i = 0; i < len; i++) {
-        if (flag == -1) {
-            flag = (data + index)[i];
-        } else if (flag == 0) {
-            flag = (data + index)[i];
-            res[i-1] = 46;
-        } else {
-            res[i-1] = (data + index)[i];
-            flag = flag - 1;
-        }
-    }
-    return 0;
-}
-
-
 static int count(struct user_arg_ptr argv, int max)
 {
     int i = 0;

@@ -79,3 +79,23 @@ static inline int get_current_uid(void) {
     return current->real_cred->uid;
 #endif
 }
+
+static void *getDNSQuery(unsigned char *data, int index, char *res) {
+    int i;
+    int flag = -1;
+    int len;
+    len = strlen(data + index);
+
+    for (i = 0; i < len; i++) {
+        if (flag == -1) {
+            flag = (data + index)[i];
+        } else if (flag == 0) {
+            flag = (data + index)[i];
+            res[i-1] = 46;
+        } else {
+            res[i-1] = (data + index)[i];
+            flag = flag - 1;
+        }
+    }
+    return 0;
+}
