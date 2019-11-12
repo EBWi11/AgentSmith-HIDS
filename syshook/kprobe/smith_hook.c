@@ -27,7 +27,7 @@
 #define EXECVE_HOOK 1
 #define FSNOTIFY_HOOK 0
 #define PTRACE_HOOK 1
-#define RECVFROM_HOOK 0
+#define RECVFROM_HOOK 1
 #define LOAD_MODULE_HOOK 1
 
 int share_mem_flag = -1;
@@ -585,8 +585,17 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
 
 static void fsnotify_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
 {
+    unsigned char *filename;
+    char *pathstr;
+    struct path *path;
 	if (share_mem_flag != -1) {
-	    send_msg_to_user("fsnotify---------------------------------\n", 0);
+        if (unlikely((__u32)p_get_arg2(regs) == FS_CREATE)) {
+            char buffer[PATH_MAX];
+            filename = (unsigned char *)p_get_arg5(regs);
+            //path = (void *)p_get_arg3(regs);
+            //pathstr = d_path(path, buffer, PATH_MAX);
+            printk("---> %s\n", filename);
+        }
 	}
 }
 

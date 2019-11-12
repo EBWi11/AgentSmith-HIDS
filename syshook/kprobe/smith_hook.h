@@ -18,6 +18,7 @@
 #include <linux/types.h>
 #include <linux/ptrace.h>
 #include <linux/namei.h>
+#include <linux/fsnotify.h>
 #include <net/inet_sock.h>
 #include <net/tcp.h>
 
