@@ -681,8 +681,6 @@ static int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     int result_str_len;
     int opcode = 0;
     int qr;
-    int fd;
-    int size;
     int rcode = 0;
     int addrlen;
     unsigned int sessionid;
@@ -704,8 +702,6 @@ static int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
 	if (share_mem_flag != -1) {
 	    data = (struct recvfrom_data *)ri->data;
-        fd = data->fd;
-        size = data->size;
         addrlen = data->addr_len;
 
 	    copy_res = copy_from_user(&tmp_dirp, data->dirp, 16);
@@ -716,11 +712,11 @@ static int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
         if (tmp_dirp.sa_family == AF_INET) {
             sa_family = 4;
-            sock = sockfd_lookup(fd, &err);
+            sock = sockfd_lookup(data->fd, &err);
             sin = (struct sockaddr_in *)&tmp_dirp;
             if (sin->sin_port == 13568 || sin->sin_port == 59668) {
-                recv_data = kzalloc(size, GFP_ATOMIC);
-                recv_data_copy_res = copy_from_user(recv_data, data->ubuf, size);
+                recv_data = kzalloc(data->size, GFP_ATOMIC);
+                recv_data_copy_res = copy_from_user(recv_data, data->ubuf, data->size);
                 if (sizeof(recv_data) >= 8) {
     	            qr = (recv_data[2] & 0x80) ? 1 : 0;
 
@@ -743,11 +739,11 @@ static int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             }
         } else if (tmp_dirp.sa_family == AF_INET6) {
             sa_family = 6;
-            sock = sockfd_lookup(fd, &err);
+            sock = sockfd_lookup(data->fd, &err);
             sin6 = (struct sockaddr_in6 *)&tmp_dirp;
             if (sin6->sin6_port == 13568 || sin6->sin6_port == 59668) {
-                recv_data = kzalloc(size, GFP_ATOMIC);
-                recv_data_copy_res = copy_from_user(recv_data, (void *)p_get_arg2(regs), size);
+                recv_data = kzalloc(data->size, GFP_ATOMIC);
+                recv_data_copy_res = copy_from_user(recv_data, (void *)p_get_arg2(regs), data->size);
 
                 if (sizeof(recv_data) >= 8) {
                     qr = (recv_data[2] & 0x80) ? 1 : 0;
@@ -791,7 +787,7 @@ static int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             snprintf(result_str, result_str_len,
                      "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%s%s%u",
                      get_current_uid(), "\n", DNS_TYPE, "\n", sa_family,
-                     "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
+                     "\n", data->fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
                      current->pid, "\n", current->real_parent->pid, "\n",
                      pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
                      current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
