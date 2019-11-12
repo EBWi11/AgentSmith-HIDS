@@ -27,7 +27,7 @@
 #define EXECVE_HOOK 1
 #define FSNOTIFY_HOOK 0
 #define PTRACE_HOOK 1
-#define RECVFROM_HOOK 1
+#define RECVFROM_HOOK 0
 #define LOAD_MODULE_HOOK 1
 
 int share_mem_flag = -1;
@@ -686,7 +686,6 @@ static int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     int rcode = 0;
     int addrlen;
     unsigned int sessionid;
-    void *ubuf;
     char dip[64];
     char dport[16];
     char sip[64] = "-1";
@@ -708,7 +707,6 @@ static int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         fd = data->fd;
         size = data->size;
         addrlen = data->addr_len;
-        ubuf = data->ubuf;
 
 	    copy_res = copy_from_user(&tmp_dirp, data->dirp, 16);
         if (copy_res != 0)
@@ -722,7 +720,7 @@ static int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             sin = (struct sockaddr_in *)&tmp_dirp;
             if (sin->sin_port == 13568 || sin->sin_port == 59668) {
                 recv_data = kzalloc(size, GFP_ATOMIC);
-                recv_data_copy_res = copy_from_user(recv_data, ubuf, size);
+                recv_data_copy_res = copy_from_user(recv_data, data->ubuf, size);
                 if (sizeof(recv_data) >= 8) {
     	            qr = (recv_data[2] & 0x80) ? 1 : 0;
 
