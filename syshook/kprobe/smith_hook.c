@@ -27,7 +27,7 @@
 #define EXECVE_HOOK 1
 #define FSNOTIFY_HOOK 0
 #define PTRACE_HOOK 1
-#define RECVFROM_HOOK 0
+#define RECVFROM_HOOK 1
 #define LOAD_MODULE_HOOK 1
 
 int share_mem_flag = -1;
@@ -80,9 +80,12 @@ static const char __user *get_user_arg_ptr(struct user_arg_ptr argv, int nr)
 }
 
 static void *getDNSQuery(unsigned char *data, int index, char *res) {
-    int i = 0;
+    int i;
     int flag = -1;
-    for (i;i<strlen(data + index);i++) {
+    int len;
+    len = strlen(data + index);
+
+    for (i = 0; i < len; i++) {
         if (flag == -1) {
             flag = (data + index)[i];
         } else if (flag == 0) {
@@ -93,6 +96,7 @@ static void *getDNSQuery(unsigned char *data, int index, char *res) {
             flag = flag - 1;
         }
     }
+    return 0;
 }
 
 
@@ -198,6 +202,14 @@ static char *str_replace(char *orig, char *rep, char *with)
 struct connect_data {
     int fd;
     struct sockaddr *dirp;
+};
+
+struct recvfrom_data {
+    int fd;
+    struct sockaddr *dirp;
+    void *ubuf;
+    size_t size;
+    int *addr_len;
 };
 
 struct fsnotify_data {
@@ -646,7 +658,20 @@ static void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
 	}
 }
 
-static void recvfrom_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
+static int recvfrom_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
+{
+    struct recvfrom_data *data;
+    data = (struct recvfrom_data *)ri->data;
+
+    data->fd = p_get_arg1(regs);
+    data->ubuf = (void *)p_get_arg2(regs);
+    data->size = (size_t)p_get_arg3(regs);
+    data->dirp = (struct sockaddr *)p_get_arg5(regs);
+    data->addr_len = (int *)p_get_arg6(regs);
+    return 0;
+}
+
+static int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
     int err;
     int flag = 0;
@@ -655,13 +680,13 @@ static void recvfrom_handler(struct kprobe *p, struct pt_regs *regs, unsigned lo
     int recv_data_copy_res = 0;
     int result_str_len;
     int opcode = 0;
-    int qr = 0;
+    int qr;
     int fd;
     int size;
     int rcode = 0;
     int addrlen;
-    void *ubuf;
     unsigned int sessionid;
+    void *ubuf;
     char dip[64];
     char dport[16];
     char sip[64] = "-1";
@@ -670,6 +695,7 @@ static void recvfrom_handler(struct kprobe *p, struct pt_regs *regs, unsigned lo
     char *query = NULL;
     char *final_path = NULL;
     char *result_str = NULL;
+    struct recvfrom_data *data;
     struct sockaddr tmp_dirp;
     struct sockaddr_in *sin;
     struct sockaddr_in6 *sin6;
@@ -678,15 +704,17 @@ static void recvfrom_handler(struct kprobe *p, struct pt_regs *regs, unsigned lo
     struct sockaddr_in6 source_addr6;
 
 	if (share_mem_flag != -1) {
-	    copy_res = copy_from_user(&tmp_dirp, (struct sockaddr *) p_get_arg5(regs), 16);
+	    data = (struct recvfrom_data *)ri->data;
+        fd = data->fd;
+        size = data->size;
+        addrlen = data->addr_len;
+        ubuf = data->ubuf;
+
+	    copy_res = copy_from_user(&tmp_dirp, data->dirp, 16);
         if (copy_res != 0)
-            return;
+            return 0;
 
         sessionid = get_sessionid();
-        fd = (int)p_get_arg1(regs);
-        ubuf = (void *)p_get_arg2(regs);
-        size = (int)p_get_arg3(regs);
-        addrlen = (int)p_get_arg6(regs);
 
         if (tmp_dirp.sa_family == AF_INET) {
             sa_family = 4;
@@ -695,12 +723,9 @@ static void recvfrom_handler(struct kprobe *p, struct pt_regs *regs, unsigned lo
             if (sin->sin_port == 13568 || sin->sin_port == 59668) {
                 recv_data = kzalloc(size, GFP_ATOMIC);
                 recv_data_copy_res = copy_from_user(recv_data, ubuf, size);
-                if (recv_data_copy_res != 0)
-                    goto out;
-
                 if (sizeof(recv_data) >= 8) {
-                    printk("--> %s\n", recv_data);
     	            qr = (recv_data[2] & 0x80) ? 1 : 0;
+
     	            if (qr == 1 ) {
     	    	        flag = 1;
     	                opcode = (recv_data[2] >> 3) & 0x0f;
@@ -724,9 +749,7 @@ static void recvfrom_handler(struct kprobe *p, struct pt_regs *regs, unsigned lo
             sin6 = (struct sockaddr_in6 *)&tmp_dirp;
             if (sin6->sin6_port == 13568 || sin6->sin6_port == 59668) {
                 recv_data = kzalloc(size, GFP_ATOMIC);
-                recv_data_copy_res = copy_from_user(recv_data, ubuf, size);
-                if (recv_data_copy_res != 0)
-                    goto out;
+                recv_data_copy_res = copy_from_user(recv_data, (void *)p_get_arg2(regs), size);
 
                 if (sizeof(recv_data) >= 8) {
                     qr = (recv_data[2] & 0x80) ? 1 : 0;
@@ -780,13 +803,8 @@ static void recvfrom_handler(struct kprobe *p, struct pt_regs *regs, unsigned lo
             kfree(query);
             kfree(recv_data);
         }
-        return;
 	}
-
-out:
-    sockfd_put(sock);
-    return;
-
+    return 0;
 }
 
 static void load_module_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
@@ -847,9 +865,12 @@ static struct kprobe ptrace_kprobe = {
 	.post_handler = ptrace_post_handler,
 };
 
-static struct kprobe recvfrom_kprobe = {
-    .symbol_name = P_GET_SYSCALL_NAME(recvfrom),
-	.pre_handler = recvfrom_handler,
+static struct kretprobe recvfrom_kretprobe = {
+    .kp.symbol_name = P_GET_SYSCALL_NAME(recvfrom),
+    .data_size  = sizeof(struct recvfrom_data),
+	.handler = recvfrom_handler,
+	.entry_handler = recvfrom_entry_handler,
+	.maxactive = 40,
 };
 
 static struct kprobe load_module_kprobe = {
@@ -924,7 +945,7 @@ static void unregister_kprobe_ptrace(void)
 static int recvfrom_register_kprobe(void)
 {
 	int ret;
-	ret = register_kprobe(&recvfrom_kprobe);
+	ret = register_kretprobe(&recvfrom_kretprobe);
 
 	if (ret == 0)
         recvfrom_kprobe_state = 0x1;
@@ -934,7 +955,7 @@ static int recvfrom_register_kprobe(void)
 
 static void unregister_kprobe_recvfrom(void)
 {
-	unregister_kprobe(&recvfrom_kprobe);
+	unregister_kretprobe(&recvfrom_kretprobe);
 }
 
 static int load_module_register_kprobe(void)
