@@ -337,6 +337,7 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             if (current->active_mm) {
                 if (current->mm->exe_file) {
                     char connect_pathname[PATH_MAX];
+                    memset(connect_pathname, 0, PATH_MAX);
                     final_path = d_path(&current->mm->exe_file->f_path, connect_pathname, PATH_MAX);
                 }
             }
@@ -394,8 +395,11 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
 	    sessionid = get_sessionid();
 	    struct user_arg_ptr argv_ptr = {.ptr.native = p_get_arg2(regs)};
 	    char tmp_stdin_fd[PATH_MAX];
+	    memset(tmp_stdin_fd, 0, PATH_MAX);
         char tmp_stdout_fd[PATH_MAX];
+        memset(tmp_stdout_fd, 0, PATH_MAX);
         char pname_buf[PATH_MAX];
+        memset(pname_buf, 0, PATH_MAX);
 
         path = tmp_getname((char *) p_get_arg1(regs));
         if (likely(!IS_ERR(path)))
@@ -498,9 +502,12 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
 	    sessionid = get_sessionid();
 	    char **argv = (char **) p_get_arg2(regs);
 	    char tmp_stdin_fd[PATH_MAX];
+	    memset(tmp_stdin_fd, 0, PATH_MAX);
         char tmp_stdout_fd[PATH_MAX];
+        memset(tmp_stdout_fd, 0, PATH_MAX);
 
         char filename[PATH_MAX];
+        memset(filename, 0, PATH_MAX);
         int copy_res = copy_from_user(filename, (char *) p_get_arg1(regs), PATH_MAX);
         if(copy_res)
             copy_res = "";
@@ -591,6 +598,7 @@ static void fsnotify_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
 	if (share_mem_flag != -1) {
         if (unlikely((__u32)p_get_arg2(regs) == FS_CREATE)) {
             char buffer[PATH_MAX];
+            memset(buffer, 0, sizeof(PATH_MAX));
             filename = (unsigned char *)p_get_arg5(regs);
             //path = (void *)p_get_arg3(regs);
             //pathstr = d_path(path, buffer, PATH_MAX);
@@ -620,6 +628,7 @@ static void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
 	        if (current->active_mm) {
                 if (current->mm->exe_file) {
                     char ptrace_pathname[PATH_MAX];
+                    memset(ptrace_pathname, 0, PATH_MAX);
                     final_path = d_path(&current->mm->exe_file->f_path, ptrace_pathname, PATH_MAX);
                 }
 
@@ -758,6 +767,7 @@ static int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             if (current->active_mm) {
                 if (current->mm->exe_file) {
                     char recvfrom_pathname[PATH_MAX];
+                    memset(recvfrom_pathname, 0, PATH_MAX);
                     final_path = d_path(&current->mm->exe_file->f_path, recvfrom_pathname, PATH_MAX);
                 }
             }
@@ -805,6 +815,7 @@ static void load_module_post_handler(struct kprobe *p, struct pt_regs *regs, uns
         current_files = current->files;
         files_table = files_fdtable(current_files);
         char init_module_buf[PATH_MAX];
+        memset(init_module_buf, 0, PATH_MAX);
 
         while (files_table->fd[i] != NULL)
             i++;
