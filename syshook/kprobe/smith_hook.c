@@ -124,7 +124,7 @@ static int count(char __user * __user * argv, int max)
 	return i;
 }
 
-static char *dentry_path_raw(void)
+static char *_dentry_path_raw(void)
 {
     char *cwd;
     char *pname_buf = NULL;
@@ -524,7 +524,7 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
         else
             tmp_stdout = "-1";
 
-        pname = dentry_path_raw();
+        pname = _dentry_path_raw();
 
         argv_len = count(argv, MAX_ARG_STRINGS);
         if(likely(argv_len > 0))
@@ -592,17 +592,35 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
 
 static void fsnotify_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
 {
-    unsigned char *filename;
-    char *pathstr;
+    int result_str_len;
+    char *result_str = NULL;
+    char *pathstr = NULL;
     struct path *path;
+    unsigned int sessionid;
+
 	if (share_mem_flag != -1) {
-        if (unlikely((__u32)p_get_arg2(regs) == FS_CREATE)) {
+	    __u32 flag = (__u32)p_get_arg2(regs);
+        if (flag == FS_CREATE) {
             char buffer[PATH_MAX];
             memset(buffer, 0, sizeof(PATH_MAX));
-            filename = (unsigned char *)p_get_arg5(regs);
-            //path = (void *)p_get_arg3(regs);
-            //pathstr = d_path(path, buffer, PATH_MAX);
-            printk("---> %s\n", filename);
+            path = (struct path *)p_get_arg3(regs);
+            if(path->dentry) {
+                //pathstr = dentry_path_raw(path->dentry, buffer, PATH_MAX);
+                sessionid = get_sessionid();
+
+                result_str_len = strlen(current->comm) +
+                                 strlen(current->nsproxy->uts_ns->name.nodename) +
+                                 strlen(current->comm) + strlen(pathstr) + 172;
+                result_str = kzalloc(result_str_len, GFP_ATOMIC);
+
+                snprintf(result_str, result_str_len,
+                        "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
+                        get_current_uid(), "\n", CREATE_FILE, "\n", pathstr,
+                        "\n", current->pid, "\n",current->real_parent->pid, "\n",
+                        pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n", current->comm, "\n",
+                        current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
+                send_msg_to_user(result_str, 1);
+            }
         }
 	}
 }
