@@ -25,7 +25,7 @@
 
 #define CONNECT_HOOK 1
 #define EXECVE_HOOK 1
-#define FSNOTIFY_HOOK 0
+#define FSNOTIFY_HOOK 1
 #define PTRACE_HOOK 1
 #define RECVFROM_HOOK 1
 #define LOAD_MODULE_HOOK 1
@@ -139,6 +139,36 @@ static char *_dentry_path_raw(void)
     return cwd;
 }
 #endif
+
+static char *getfullpath(struct inode *inod,char *buffer,int len)
+{
+	struct hlist_node* plist = NULL;
+	struct dentry* tmp = NULL;
+	struct dentry* dent = NULL;
+	char* name = NULL;
+	struct inode* pinode = inod;
+
+	buffer[len - 1] = '\0';
+	if(pinode == NULL)
+		return NULL;
+
+	hlist_for_each(plist, &pinode->i_dentry)
+	{
+		tmp = hlist_entry(plist, struct dentry, d_alias);
+		if(tmp->d_inode == pinode)
+		{
+			dent = tmp;
+			break;
+		}
+	}
+	if(dent == NULL)
+	{
+		return NULL;
+	}
+
+	name= dentry_path_raw(dent, buffer, len);
+	return name;
+}
 
 static char *str_replace(char *orig, char *rep, char *with)
 {
@@ -392,14 +422,16 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
     const char __user *native;
 
 	if (share_mem_flag != -1) {
-	    sessionid = get_sessionid();
-	    struct user_arg_ptr argv_ptr = {.ptr.native = p_get_arg2(regs)};
 	    char tmp_stdin_fd[PATH_MAX];
-	    memset(tmp_stdin_fd, 0, PATH_MAX);
         char tmp_stdout_fd[PATH_MAX];
-        memset(tmp_stdout_fd, 0, PATH_MAX);
         char pname_buf[PATH_MAX];
+
+        memset(tmp_stdin_fd, 0, PATH_MAX);
+        memset(tmp_stdout_fd, 0, PATH_MAX);
         memset(pname_buf, 0, PATH_MAX);
+
+	    struct user_arg_ptr argv_ptr = {.ptr.native = p_get_arg2(regs)};
+	    sessionid = get_sessionid();
 
         path = tmp_getname((char *) p_get_arg1(regs));
         if (likely(!IS_ERR(path)))
@@ -499,15 +531,17 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
     const char __user *native;
 
 	if (share_mem_flag != -1) {
-	    sessionid = get_sessionid();
 	    char **argv = (char **) p_get_arg2(regs);
+	    char filename[PATH_MAX];
 	    char tmp_stdin_fd[PATH_MAX];
-	    memset(tmp_stdin_fd, 0, PATH_MAX);
         char tmp_stdout_fd[PATH_MAX];
+
+        memset(filename, 0, PATH_MAX);
+        memset(tmp_stdin_fd, 0, PATH_MAX);
         memset(tmp_stdout_fd, 0, PATH_MAX);
 
-        char filename[PATH_MAX];
-        memset(filename, 0, PATH_MAX);
+        sessionid = get_sessionid();
+
         int copy_res = copy_from_user(filename, (char *) p_get_arg1(regs), PATH_MAX);
         if(copy_res)
             copy_res = "";
@@ -595,7 +629,7 @@ static void fsnotify_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
     int result_str_len;
     char *result_str = NULL;
     char *pathstr = NULL;
-    struct path *path;
+    struct inode *inode;
     unsigned int sessionid;
 
 	if (share_mem_flag != -1) {
@@ -603,14 +637,16 @@ static void fsnotify_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
         if (flag == FS_CREATE) {
             char buffer[PATH_MAX];
             memset(buffer, 0, sizeof(PATH_MAX));
-            path = (struct path *)p_get_arg3(regs);
-            if(path->dentry) {
-                //pathstr = dentry_path_raw(path->dentry, buffer, PATH_MAX);
+
+            inode = (struct inode*)p_get_arg3(regs);
+            if (likely(inode)) {
+                char pname_buf[PATH_MAX];
+                pathstr = getfullpath(inode, pname_buf, PATH_MAX);
+                printk("--> %s\n", pathstr);
                 sessionid = get_sessionid();
 
-                result_str_len = strlen(current->comm) +
-                                 strlen(current->nsproxy->uts_ns->name.nodename) +
-                                 strlen(current->comm) + strlen(pathstr) + 172;
+                result_str_len = strlen(current->comm) + strlen(current->nsproxy->uts_ns->name.nodename)
+                                 + strlen(current->comm) + strlen(pathstr) + 172;
                 result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
                 snprintf(result_str, result_str_len,
@@ -829,11 +865,12 @@ static void load_module_post_handler(struct kprobe *p, struct pt_regs *regs, uns
     struct fdtable *files_table;
 
 	if (share_mem_flag != -1) {
+	    char init_module_buf[PATH_MAX];
+	    memset(init_module_buf, 0, PATH_MAX);
+
         sessionid = get_sessionid();
         current_files = current->files;
         files_table = files_fdtable(current_files);
-        char init_module_buf[PATH_MAX];
-        memset(init_module_buf, 0, PATH_MAX);
 
         while (files_table->fd[i] != NULL)
             i++;
