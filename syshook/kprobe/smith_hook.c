@@ -40,7 +40,6 @@ char recvfrom_kprobe_state = 0x0;
 char load_module_kprobe_state = 0x0;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
-
 struct filename *(*tmp_getname)(const char __user *filename);
 void (*tmp_putname)(struct filename *name);
 
@@ -376,8 +375,7 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                 final_path = "-1";
             }
 
-            result_str_len = strlen(current->comm) +
-                             strlen(current->nsproxy->uts_ns->name.nodename) +
+            result_str_len = strlen(current->nsproxy->uts_ns->name.nodename) +
                              strlen(current->comm) + strlen(final_path) + 128;
 
             result_str = kzalloc(result_str_len, GFP_ATOMIC);
@@ -644,7 +642,7 @@ static void fsnotify_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
                 pathstr = getfullpath(inode, pname_buf, PATH_MAX);
                 sessionid = get_sessionid();
 
-                result_str_len = strlen(current->comm) + strlen(current->nsproxy->uts_ns->name.nodename)
+                result_str_len = strlen(current->nsproxy->uts_ns->name.nodename)
                                  + strlen(current->comm) + strlen(pathstr) + 128;
                 result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
@@ -678,18 +676,17 @@ static void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
 	    data = (unsigned long) p_get_arg4(regs);
 	    if (request == PTRACE_POKETEXT || request == PTRACE_POKEDATA) {
 	        sessionid = get_sessionid();
-	        if (current->active_mm) {
+	        if (likely(current->active_mm)) {
                 if (current->mm->exe_file) {
                     char ptrace_pathname[PATH_MAX];
                     memset(ptrace_pathname, 0, PATH_MAX);
                     final_path = d_path(&current->mm->exe_file->f_path, ptrace_pathname, PATH_MAX);
                 }
 
-                if (final_path == NULL)
+                if (unlikely(final_path == NULL))
                     final_path = "-1";
 
-                result_str_len = strlen(current->comm) +
-                                 strlen(current->nsproxy->uts_ns->name.nodename) +
+                result_str_len = strlen(current->nsproxy->uts_ns->name.nodename) +
                                  strlen(current->comm) + strlen(final_path) + 256;
 
                 result_str = kzalloc(result_str_len, GFP_ATOMIC);
@@ -829,8 +826,7 @@ static int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                 final_path = "-1";
             }
 
-            result_str_len = strlen(current->comm) + strlen(query) +
-                             strlen(current->nsproxy->uts_ns->name.nodename) +
+            result_str_len = strlen(query) + strlen(current->nsproxy->uts_ns->name.nodename) +
                              strlen(current->comm) + strlen(final_path) + 172;
 
             result_str = kzalloc(result_str_len, GFP_ATOMIC);

@@ -87,6 +87,7 @@ static int device_close(struct inode *indoe, struct file *file)
 {
     mutex_unlock(&mchar_mutex);
     share_mem_flag = -1;
+
     return 0;
 }
 
@@ -144,84 +145,76 @@ static void fix_write_index(int index)
 static int send_msg_to_user_memshare(char *msg, int kfree_flag)
 {
     int raw_data_len = 0;
-    int write_index_lock_flag = 0;
     int curr_write_index = -1;
     int now_write_index = -1;
     int now_read_index = -1;
     struct msg_slot new_msg_slot;
 
-    if (share_mem_flag == 1) {
-        write_index_lock();
-        write_index_lock_flag = 1;
-
-        if (write_index_lock_flag) {
-
-            raw_data_len = strlen(msg);
-
-            if (raw_data_len == 0) {
-                write_index_unlock();
-                if (msg && kfree_flag == 1)
-                    kfree(msg);
-
-                return 0;
-            }
-
-            curr_write_index = get_write_index();
-
-            if (pre_slot_len != 0)
-                now_write_index = curr_write_index + 1;
-            else
-                now_write_index = curr_write_index;
-
-            if (check_read_index_flag == 1) {
-                now_read_index = get_read_index();
-                if (now_read_index > curr_write_index + 1) {
-                    if ((curr_write_index + 1024 + raw_data_len) > now_read_index)
-                        goto out;
-                }
-            }
-
-            if ((curr_write_index + CHECK_WRITE_INDEX_THRESHOLD) >= MAX_SIZE) {
-                now_read_index = get_read_index();
-                if (now_read_index <= CHECK_READ_INDEX_THRESHOLD) {
-#if (KERNEL_PRINT == 1)
-                    printk("READ IS TOO SLOW!! READ_INDEX:%d\n", now_read_index);
-#endif
-                    check_read_index_flag = 1;
-                }
-                else
-                    check_read_index_flag = -1;
-
-                new_msg_slot = get_solt(raw_data_len, 1);
-                memcpy(&sh_mem[now_write_index], &new_msg_slot, 8);
-                memcpy(&sh_mem[now_write_index + 8], msg, raw_data_len);
-                fix_write_index(7);
-
-#if (KERNEL_PRINT == 1)
-                printk("curr_write_index:%d pre_slot_len:%d now_write_index:%d now_read_index:%d\n",
-                       curr_write_index, pre_slot_len, now_write_index, now_read_index);
-#endif
-            } else {
-                new_msg_slot = get_solt(raw_data_len, -1);
-                memcpy(&sh_mem[now_write_index], &new_msg_slot, 8);
-                memcpy(&sh_mem[now_write_index + 8], msg, raw_data_len);
-                fix_write_index(now_write_index + 8 + raw_data_len);
-            }
-
-            pre_slot_len = raw_data_len + 8;
-            write_index_unlock();
+    if(share_mem_flag == 1) {
+        raw_data_len = strlen(msg);
+        if(raw_data_len == 0) {
+            if (msg && kfree_flag == 1)
+                kfree(msg);
+            return 0;
         }
+
+        write_index_lock();
+
+        curr_write_index = get_write_index();
+
+        if(unlikely(pre_slot_len != 0))
+            now_write_index = curr_write_index + 1;
+        else
+            now_write_index = curr_write_index;
+
+        if(unlikely(check_read_index_flag == 1)) {
+            now_read_index = get_read_index();
+            if (now_read_index > curr_write_index + 1) {
+                if ((curr_write_index + 1024 + raw_data_len) > now_read_index)
+                    goto out;
+            }
+        }
+
+        if(unlikely((curr_write_index + raw_data_len) >= MAX_SIZE - 1)) {
+            now_read_index = get_read_index();
+            if (now_read_index <= CHECK_READ_INDEX_THRESHOLD) {
+#if (KERNEL_PRINT == 1)
+                printk("READ IS TOO SLOW!! READ_INDEX:%d\n", now_read_index);
+#endif
+                check_read_index_flag = 1;
+            } else
+                check_read_index_flag = -1;
+
+            new_msg_slot = get_solt(raw_data_len, 1);
+            memcpy(&sh_mem[now_write_index], &new_msg_slot, 8);
+            memcpy(&sh_mem[now_write_index + 8], msg, raw_data_len);
+            fix_write_index(7);
+
+#if (KERNEL_PRINT == 1)
+            printk("curr_write_index:%d pre_slot_len:%d now_write_index:%d now_read_index:%d\n",
+                   curr_write_index, pre_slot_len, now_write_index, now_read_index);
+#endif
+        } else {
+            new_msg_slot = get_solt(raw_data_len, -1);
+            memcpy(&sh_mem[now_write_index], &new_msg_slot, 8);
+            memcpy(&sh_mem[now_write_index + 8], msg, raw_data_len);
+            fix_write_index(now_write_index + 8 + raw_data_len);
+        }
+
+        pre_slot_len = raw_data_len + 8;
+        write_index_unlock();
     }
 
-    if (msg && kfree_flag == 1)
+    if(likely(msg && kfree_flag == 1))
         kfree(msg);
 
     return 0;
 
 out:
     write_index_unlock();
-    if (msg && kfree_flag == 1)
+    if(likely(msg && kfree_flag == 1))
         kfree(msg);
+
     return 0;
 }
 
@@ -232,7 +225,7 @@ int send_msg_to_user(char *msg, int kfree_flag)
 #endif
 
 #if (DELAY_TEST == 1)
-    if (kfree_flag == 1) {
+    if(kfree_flag == 1) {
         send_msg_to_user_memshare(get_timespec(), 1);
 
         if (msg)
@@ -248,7 +241,7 @@ int init_share_mem(void)
 {
     int i;
     share_mem_flag = -1;
-
+    list_head_char = kzalloc(8, GFP_ATOMIC);
     major = register_chrdev(0, DEVICE_NAME, &mchar_fops);
 
     if (major < 0) {
@@ -279,8 +272,7 @@ int init_share_mem(void)
         unregister_chrdev(major, DEVICE_NAME);
         pr_err("[SMITH] SHMEM_INIT_ERROR\n");
         return -ENOMEM;
-    }
-    else {
+    } else {
         for (i = 0; i < MAX_SIZE; i += PAGE_SIZE)
             SetPageReserved(virt_to_page(((unsigned long)sh_mem) + i));
     }
@@ -292,8 +284,18 @@ int init_share_mem(void)
 
 void uninstall_share_mem(void)
 {
+    int i;
     device_destroy(class, MKDEV(major, 0));
     class_unregister(class);
     class_destroy(class);
     unregister_chrdev(major, DEVICE_NAME);
+
+    if (list_head_char)
+        kfree(list_head_char);
+
+    if (sh_mem) {
+        for (i = 0; i < MAX_SIZE; i += PAGE_SIZE)
+            ClearPageReserved(virt_to_page(((unsigned long)sh_mem) + i));
+        kfree(sh_mem);
+    }
 }
