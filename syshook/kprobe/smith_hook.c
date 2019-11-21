@@ -39,7 +39,24 @@ char ptrace_kprobe_state = 0x0;
 char recvfrom_kprobe_state = 0x0;
 char load_module_kprobe_state = 0x0;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 38)
+static char *_dentry_path_raw(void)
+{
+    char *cwd;
+    char *pname_buf = NULL;
+    struct path pwd, root;
+    pwd = current->fs->pwd;
+    path_get(&pwd);
+    root = current->fs->root;
+    path_get(&root);
+    pname_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
+    cwd = d_path(&pwd, pname_buf, PATH_MAX);
+    kfree(pname_buf);
+    return cwd;
+}
+#endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0)
 struct filename *(*tmp_getname)(const char __user *filename);
 void (*tmp_putname)(struct filename *name);
 
@@ -98,7 +115,8 @@ static int count(struct user_arg_ptr argv, int max)
     }
     return i;
 }
-#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
+#else
+
 static int count(char __user * __user * argv, int max)
 {
 	int i = 0;
@@ -122,23 +140,9 @@ static int count(char __user * __user * argv, int max)
 	}
 	return i;
 }
-
-static char *_dentry_path_raw(void)
-{
-    char *cwd;
-    char *pname_buf = NULL;
-    struct path pwd, root;
-    pwd = current->fs->pwd;
-    path_get(&pwd);
-    root = current->fs->root;
-    path_get(&root);
-    pname_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
-    cwd = d_path(&pwd, pname_buf, PATH_MAX);
-    kfree(pname_buf);
-    return cwd;
-}
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 38)
 static char *getfullpath(struct inode *inod,char *buffer,int len)
 {
 	struct hlist_node* plist = NULL;
@@ -151,23 +155,71 @@ static char *getfullpath(struct inode *inod,char *buffer,int len)
 	if(pinode == NULL)
 		return NULL;
 
-	hlist_for_each(plist, &pinode->i_dentry)
-	{
+	hlist_for_each(plist, &pinode->i_dentry) {
 		tmp = hlist_entry(plist, struct dentry, d_alias);
-		if(tmp->d_inode == pinode)
-		{
+		if(tmp->d_inode == pinode) {
 			dent = tmp;
 			break;
 		}
 	}
-	if(dent == NULL)
-	{
+
+	if(dent == NULL) {
 		return NULL;
 	}
 
-	name= dentry_path_raw(dent, buffer, len);
+	name = dentry_path_raw(dent, buffer, len);
 	return name;
 }
+#else
+static char *getfullpath(struct inode *inod,char* buffer,int len)
+{
+	struct list_head* plist = NULL;
+	struct dentry* tmp = NULL;
+	struct dentry* dent = NULL;
+	struct dentry* parent = NULL;
+	char* name = NULL;
+	char* pbuf = buffer + PATH_MAX - 1;
+	struct inode* pinode = inod;
+	int length = 0;
+
+	buffer[PATH_MAX - 1] = '\0';
+	if(pinode == NULL)
+		return NULL;
+
+	list_for_each(plist,&pinode->i_dentry) {
+		tmp = list_entry(plist,struct dentry,d_alias);
+		if(tmp->d_inode == pinode) {
+			dent = tmp;
+			break;
+		}
+	}
+
+	if(dent == NULL)
+		return NULL;
+
+	name = (char*)(dent->d_name.name);
+	name = name + strlen(name) - 4;
+
+	while(pinode && pinode ->i_ino != 2 && pinode->i_ino != 1) {
+		if(dent == NULL)
+			break;
+
+		name = (char*)(dent->d_name.name);
+		if(!name)
+			break;
+
+		pbuf = pbuf - strlen(name) - 1;
+		*pbuf = '/';
+		memcpy(pbuf+1,name,strlen(name));
+
+		if((parent = dent->d_parent)) {
+			dent = parent;
+			pinode = dent->d_inode;
+		}
+	}
+	return pbuf;
+}
+#endif
 
 static char *str_replace(char *orig, char *rep, char *with)
 {
@@ -313,7 +365,7 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                     sk = socket->sk;
                     inet = (struct inet_sock*)sk;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
                     if (inet->inet_dport) {
                         snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_daddr));
                         snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_saddr));
@@ -321,7 +373,7 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                         snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
                         flag = 1;
                     }
-#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
+#else
                     if (inet->dport) {
                         snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->daddr));
                         snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->saddr));
@@ -336,7 +388,7 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                 case AF_INET6:
                     sk = socket->sk;
                     inet = (struct inet_sock*)sk;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
                     if (inet->inet_dport) {
                         snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sk->sk_v6_daddr));
                         snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sk->sk_v6_rcv_saddr));
@@ -344,7 +396,7 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                         snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
                         flag = 1;
                     }
-#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
+#else
                     if (inet->dport) {
                         snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(inet->pinet6->daddr));
                         snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(inet->pinet6->saddr));
@@ -400,7 +452,7 @@ out:
     return 0;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0)
 static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
 {
     int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, flag = 0;
@@ -511,7 +563,7 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
             tmp_putname(path);
 	}
 }
-#elif LINUX_VERSION_CODE == KERNEL_VERSION(2, 6, 32)
+#else
 static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
 {
     int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, flag = 0;
@@ -643,7 +695,12 @@ static void fsnotify_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
                 sessionid = get_sessionid();
 
                 result_str_len = strlen(current->nsproxy->uts_ns->name.nodename)
-                                 + strlen(current->comm) + strlen(pathstr) + 128;
+                                 + strlen(current->comm) + 128;
+                if(pathstr)
+                    result_str_len = result_str_len + strlen(pathstr);
+                else
+                    pathstr = "-1";
+
                 result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
                 snprintf(result_str, result_str_len,
@@ -1043,7 +1100,7 @@ static int __init smith_init(void)
 	int ret;
 	checkCPUendianRes = checkCPUendian();
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0)
     tmp_getname = (void *)kallsyms_lookup_name("getname");
 
     if(!tmp_getname) {
