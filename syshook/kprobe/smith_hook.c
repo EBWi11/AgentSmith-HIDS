@@ -642,11 +642,10 @@ static void fsnotify_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
             if (likely(inode)) {
                 char pname_buf[PATH_MAX];
                 pathstr = getfullpath(inode, pname_buf, PATH_MAX);
-                printk("--> %s\n", pathstr);
                 sessionid = get_sessionid();
 
                 result_str_len = strlen(current->comm) + strlen(current->nsproxy->uts_ns->name.nodename)
-                                 + strlen(current->comm) + strlen(pathstr) + 172;
+                                 + strlen(current->comm) + strlen(pathstr) + 128;
                 result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
                 snprintf(result_str, result_str_len,
