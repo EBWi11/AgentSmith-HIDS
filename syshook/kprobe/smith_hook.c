@@ -229,7 +229,7 @@ static char *getfullpath(struct inode *inod,char* buffer,int len)
 		return NULL;
 
 	list_for_each(plist,&pinode->i_dentry) {
-		tmp = list_entry(plist,struct dentry,d_alias);
+		tmp = list_entry(plist, struct dentry, d_alias);
 		if(tmp->d_inode == pinode) {
 			dent = tmp;
 			break;
@@ -510,10 +510,7 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
 	    sessionid = get_sessionid();
 
         path = tmp_getname((char *) p_get_arg1(regs));
-        if (likely(!IS_ERR(path)))
-            abs_path = (char *)path->name;
-        else
-            abs_path = "-1";
+        abs_path = (char *)path->name;
 
 	    files = files_fdtable(current->files);
 
@@ -859,7 +856,11 @@ static int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     	    	        snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr.s_addr));
                         snprintf(dport, 16, "%d", Ntohs(sin->sin_port));
                         if (sock) {
+                        #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0)
+                            kernel_getsockname(sock, (struct sockaddr *)&source_addr);
+                        #else
                             kernel_getsockname(sock, (struct sockaddr *)&source_addr, &addrlen);
+                        #endif
                             snprintf(sport, 16, "%d", Ntohs(source_addr.sin_port));
                             snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(source_addr.sin_addr));
                             sockfd_put(sock);
@@ -886,7 +887,11 @@ static int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     	    	        snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sin6->sin6_addr));
                         snprintf(dport, 16, "%d", Ntohs(sin6->sin6_port));
                         if (sock) {
-                            kernel_getsockname(sock, (struct sockaddr *)&source_addr6, &addrlen);
+                        #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0)
+                            kernel_getsockname(sock, (struct sockaddr *)&source_addr);
+                        #else
+                            kernel_getsockname(sock, (struct sockaddr *)&source_addr, &addrlen);
+                        #endif
                             snprintf(sport, 16, "%d", Ntohs(source_addr6.sin6_port));
                             snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(source_addr6.sin6_addr));
                             sockfd_put(sock);
