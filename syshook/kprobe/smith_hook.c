@@ -514,7 +514,10 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
 	    sessionid = get_sessionid();
 
         path = tmp_getname((char *) p_get_arg1(regs));
-        abs_path = (char *)path->name;
+        if (likely(!IS_ERR(path)))
+            abs_path = (char *)path->name;
+        else
+            abs_path = "-1";
 
 	    files = files_fdtable(current->files);
 
@@ -569,7 +572,7 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
             argv_res_tmp = "";
 
         result_str_len = strlen(argv_res_tmp) + strlen(pname) + strlen(abs_path) +
-                         strlen(current->nsproxy->uts_ns->name.nodename) + 1024;
+                         strlen(current->nsproxy->uts_ns->name.nodename) + 516;
 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
         snprintf(result_str, result_str_len,
