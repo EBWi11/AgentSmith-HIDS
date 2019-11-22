@@ -514,13 +514,13 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
 	    sessionid = get_sessionid();
 
         path = tmp_getname((char *) p_get_arg1(regs));
-        if (likely(!IS_ERR(path)))
+        if (likely(!IS_ERR(path))) {
             abs_path = (char *)path->name;
-        else
+        } else {
             abs_path = "-1";
+        }
 
 	    files = files_fdtable(current->files);
-
         if(likely(files->fd[0] != NULL))
             tmp_stdin = d_path(&(files->fd[0]->f_path), tmp_stdin_fd, PATH_MAX);
         else
@@ -572,7 +572,7 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
             argv_res_tmp = "";
 
         result_str_len = strlen(argv_res_tmp) + strlen(pname) + strlen(abs_path) +
-                         strlen(current->nsproxy->uts_ns->name.nodename) + 516;
+                         strlen(current->nsproxy->uts_ns->name.nodename) + 256;
 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
         snprintf(result_str, result_str_len,
@@ -684,7 +684,7 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
 
         result_str_len = strlen(argv_res_tmp) + strlen(pname) +
                          strlen(filename) +
-                         strlen(current->nsproxy->uts_ns->name.nodename) + 128;
+                         strlen(current->nsproxy->uts_ns->name.nodename) + 256;
 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
         snprintf(result_str, result_str_len,
@@ -779,7 +779,7 @@ static void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
                 result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
                 snprintf(result_str, result_str_len,
-                         "%d%s%s%s%d%s%d%s%p%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
+                         "%d%s%s%s%ld%s%ld%s%ld%s%ln%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
                          get_current_uid(), "\n", PTRACE_TYPE, "\n", request,
                          "\n", pid, "\n", addr, "\n", &data, "\n", final_path, "\n",
                          current->pid, "\n", current->real_parent->pid, "\n",
@@ -816,7 +816,7 @@ static int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     int opcode = 0;
     int qr;
     int rcode = 0;
-    int addrlen;
+    int *addrlen;
     unsigned int sessionid;
     char dip[64];
     char dport[16];
@@ -832,7 +832,7 @@ static int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     struct sockaddr_in6 *sin6;
     struct socket *sock;
     struct sockaddr_in source_addr;
-    struct sockaddr_in6 source_addr6;
+    struct sockaddr_in6 source_addr6 = {};
 
 	if (share_mem_flag != -1) {
 	    data = (struct recvfrom_data *)ri->data;
@@ -866,7 +866,7 @@ static int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                         #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0)
                             kernel_getsockname(sock, (struct sockaddr *)&source_addr);
                         #else
-                            kernel_getsockname(sock, (struct sockaddr *)&source_addr, &addrlen);
+                            kernel_getsockname(sock, (struct sockaddr *)&source_addr, addrlen);
                         #endif
                             snprintf(sport, 16, "%d", Ntohs(source_addr.sin_port));
                             snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(source_addr.sin_addr));
@@ -897,7 +897,7 @@ static int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                         #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0)
                             kernel_getsockname(sock, (struct sockaddr *)&source_addr);
                         #else
-                            kernel_getsockname(sock, (struct sockaddr *)&source_addr, &addrlen);
+                            kernel_getsockname(sock, (struct sockaddr *)&source_addr, addrlen);
                         #endif
                             snprintf(sport, 16, "%d", Ntohs(source_addr6.sin6_port));
                             snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(source_addr6.sin6_addr));
