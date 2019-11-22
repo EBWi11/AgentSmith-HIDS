@@ -194,7 +194,6 @@ static char *__dentry_path(struct dentry *dentry, char *buf, int buflen)
 	prepend(&end, &buflen, "\0", 1);
 	if (buflen < 1)
 		goto Elong;
-	/* Get '/' right */
 	retval = end-1;
 	*retval = '/';
 
