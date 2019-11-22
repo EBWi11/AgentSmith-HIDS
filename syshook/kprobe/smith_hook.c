@@ -171,16 +171,59 @@ static char *getfullpath(struct inode *inod,char *buffer,int len)
 	return name;
 }
 #else
+static int prepend(char **buffer, int *buflen, const char *str, int namelen)
+{
+	*buflen -= namelen;
+	if (*buflen < 0)
+		return -ENAMETOOLONG;
+	*buffer -= namelen;
+	memcpy(*buffer, str, namelen);
+	return 0;
+}
+
+static int prepend_name(char **buffer, int *buflen, struct qstr *name)
+{
+	return prepend(buffer, buflen, name->name, name->len);
+}
+
+static char *__dentry_path(struct dentry *dentry, char *buf, int buflen)
+{
+	char *end = buf + buflen;
+	char *retval;
+
+	prepend(&end, &buflen, "\0", 1);
+	if (buflen < 1)
+		goto Elong;
+	/* Get '/' right */
+	retval = end-1;
+	*retval = '/';
+
+	while (!IS_ROOT(dentry)) {
+		struct dentry *parent = dentry->d_parent;
+		int error;
+
+		prefetch(parent);
+		spin_lock(&dentry->d_lock);
+		error = prepend_name(&end, &buflen, &dentry->d_name);
+		spin_unlock(&dentry->d_lock);
+		if (error != 0 || prepend(&end, &buflen, "/", 1) != 0)
+			goto Elong;
+
+		retval = end;
+		dentry = parent;
+	}
+	return retval;
+Elong:
+	return ERR_PTR(-ENAMETOOLONG);
+}
+
 static char *getfullpath(struct inode *inod,char* buffer,int len)
 {
 	struct list_head* plist = NULL;
 	struct dentry* tmp = NULL;
 	struct dentry* dent = NULL;
-	struct dentry* parent = NULL;
 	char* name = NULL;
-	char* pbuf = buffer + PATH_MAX - 1;
 	struct inode* pinode = inod;
-	int length = 0;
 
 	buffer[PATH_MAX - 1] = '\0';
 	if(pinode == NULL)
@@ -197,27 +240,8 @@ static char *getfullpath(struct inode *inod,char* buffer,int len)
 	if(dent == NULL)
 		return NULL;
 
-	name = (char*)(dent->d_name.name);
-	name = name + strlen(name) - 4;
-
-	while(pinode && pinode ->i_ino != 2 && pinode->i_ino != 1) {
-		if(dent == NULL)
-			break;
-
-		name = (char*)(dent->d_name.name);
-		if(!name)
-			break;
-
-		pbuf = pbuf - strlen(name) - 1;
-		*pbuf = '/';
-		memcpy(pbuf+1,name,strlen(name));
-
-		if((parent = dent->d_parent)) {
-			dent = parent;
-			pinode = dent->d_inode;
-		}
-	}
-	return pbuf;
+	name = __dentry_path(dent, buffer, len);
+	return name;
 }
 #endif
 
