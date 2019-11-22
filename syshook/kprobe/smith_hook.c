@@ -239,7 +239,10 @@ static char *getfullpath(struct inode *inod,char* buffer,int len)
 	if(dent == NULL)
 		return NULL;
 
+    spin_lock(&inod->i_lock);
 	name = __dentry_path(dent, buffer, len);
+	spin_unlock(&inod->i_lock);
+
 	return name;
 }
 #endif
