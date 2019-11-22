@@ -378,11 +378,11 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         data = (struct connect_data *)ri->data;
         fd = data->fd;
 
-        if(!fd)
+        if(unlikely(!fd))
             goto out;
 
         socket = sockfd_lookup(fd, &err);
-        if(socket) {
+        if(likely(socket)) {
             copy_res = copy_from_user(&tmp_dirp, data->dirp, 16);
 
             if(unlikely(copy_res)) {
@@ -623,7 +623,7 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
         sessionid = get_sessionid();
 
         int copy_res = copy_from_user(filename, (char *) p_get_arg1(regs), PATH_MAX);
-        if(copy_res)
+        if(unlikely(copy_res))
             copy_res = "";
 
 	    files = files_fdtable(current->files);
@@ -726,7 +726,7 @@ static void fsnotify_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
 
                 result_str_len = strlen(current->nsproxy->uts_ns->name.nodename)
                                  + strlen(current->comm) + 128;
-                if(pathstr)
+                if(likely(pathstr))
                     result_str_len = result_str_len + strlen(pathstr);
                 else
                     pathstr = "-1";

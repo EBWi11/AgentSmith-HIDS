@@ -150,9 +150,10 @@ static int send_msg_to_user_memshare(char *msg, int kfree_flag)
     int now_read_index = -1;
     struct msg_slot new_msg_slot;
 
-    if(share_mem_flag == 1) {
+    if(likely(share_mem_flag == 1)) {
         raw_data_len = strlen(msg);
-        if(raw_data_len == 0) {
+
+        if(unlikely(raw_data_len == 0)) {
             if (msg && kfree_flag == 1)
                 kfree(msg);
             return 0;
