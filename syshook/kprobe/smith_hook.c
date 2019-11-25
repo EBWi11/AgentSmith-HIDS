@@ -38,6 +38,9 @@ char fsnotify_kprobe_state = 0x0;
 char ptrace_kprobe_state = 0x0;
 char recvfrom_kprobe_state = 0x0;
 char load_module_kprobe_state = 0x0;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
+char execveat_kprobe_state = 0x0;
+#endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 38)
 static char *_dentry_path_raw(void)
@@ -481,6 +484,119 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 out:
     return 0;
 }
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
+static void execveat_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
+{
+    int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, flag = 0;
+    int result_str_len;
+    int pid_check_res = -1;
+    int file_check_res = -1;
+    unsigned int sessionid;
+    char *result_str = NULL;
+    char *abs_path = NULL;
+    char *pname = NULL;
+    char *tmp_stdin = NULL;
+    char *tmp_stdout = NULL;
+    char *argv_res = NULL;
+    char *argv_res_tmp = NULL;
+    struct filename *path;
+    struct fdtable *files;
+    const char __user *native;
+
+	if (share_mem_flag != -1) {
+	    char tmp_stdin_fd[PATH_MAX];
+        char tmp_stdout_fd[PATH_MAX];
+        char pname_buf[PATH_MAX];
+
+        memset(tmp_stdin_fd, 0, PATH_MAX);
+        memset(tmp_stdout_fd, 0, PATH_MAX);
+        memset(pname_buf, 0, PATH_MAX);
+
+	    struct user_arg_ptr argv_ptr = {.ptr.native = p_get_arg2(regs)};
+	    sessionid = get_sessionid();
+
+        path = tmp_getname((char *) p_get_arg1(regs));
+        if (likely(!IS_ERR(path))) {
+            abs_path = (char *)path->name;
+        } else {
+            abs_path = "-1";
+        }
+
+	    files = files_fdtable(current->files);
+        if(likely(files->fd[0] != NULL))
+            tmp_stdin = d_path(&(files->fd[0]->f_path), tmp_stdin_fd, PATH_MAX);
+        else
+            tmp_stdin = "-1";
+
+        if(likely(files->fd[1] != NULL))
+            tmp_stdout = d_path(&(files->fd[1]->f_path), tmp_stdout_fd, PATH_MAX);
+        else
+            tmp_stdout = "-1";
+
+        pname = dentry_path_raw(current->fs->pwd.dentry, pname_buf, PATH_MAX);
+        argv_len = count(argv_ptr, MAX_ARG_STRINGS);
+        if(likely(argv_len > 0))
+            argv_res = kzalloc(128 * argv_len + 1, GFP_ATOMIC);
+
+        if (likely(argv_len > 0)) {
+            for (i = 0; i < argv_len; i++) {
+                native = get_user_arg_ptr(argv_ptr, i);
+                if (unlikely(IS_ERR(native))) {
+                    flag = -1;
+                    break;
+                }
+
+                len = strnlen_user(native, MAX_ARG_STRLEN);
+                if (!len) {
+                    flag = -2;
+                    break;
+                }
+
+                if (offset + len > argv_res_len + 128 * argv_len) {
+                    flag = -3;
+                    break;
+                }
+
+                if (copy_from_user(argv_res + offset, native, len)) {
+                    flag = -4;
+                    break;
+                }
+
+                offset += len - 1;
+                *(argv_res + offset) = ' ';
+                offset += 1;
+            }
+        }
+
+        if (argv_len > 0 && flag == 0)
+            argv_res_tmp = str_replace(argv_res, "\n", " ");
+        else
+            argv_res_tmp = "";
+
+        result_str_len = strlen(argv_res_tmp) + strlen(pname) + strlen(abs_path) +
+                         strlen(current->nsproxy->uts_ns->name.nodename) + 256;
+
+        result_str = kzalloc(result_str_len, GFP_ATOMIC);
+        snprintf(result_str, result_str_len,
+                 "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%u",
+                 get_current_uid(), "\n", EXECVE_TYPE, "\n", pname, "\n",
+                 abs_path, "\n", argv_res_tmp, "\n", current->pid, "\n",
+                 current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
+                 "\n", current->tgid, "\n", current->comm, "\n",
+                 current->nsproxy->uts_ns->name.nodename,"\n",tmp_stdin,"\n",tmp_stdout,
+                 "\n",pid_check_res, "\n",file_check_res, "\n", sessionid);
+
+        send_msg_to_user(result_str, 1);
+
+        if(likely(argv_len > 0))
+            kfree(argv_res);
+
+        if (strcmp(abs_path, "-1"))
+            tmp_putname(path);
+	}
+}
+#endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0)
 static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
@@ -988,6 +1104,13 @@ static struct kretprobe connect_kretprobe = {
     .maxactive = 40,
 };
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
+static struct kprobe execveat_kprobe = {
+    .symbol_name = P_GET_SYSCALL_NAME(execveat),
+	.post_handler = execveat_post_handler,
+};
+#endif
+
 static struct kprobe execve_kprobe = {
     .symbol_name = P_GET_SYSCALL_NAME(execve),
 	.post_handler = execve_post_handler,
@@ -1042,6 +1165,19 @@ static int execve_register_kprobe(void)
 
 	return ret;
 }
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
+static int execveat_register_kprobe(void)
+{
+	int ret;
+	ret = register_kprobe(&execveat_kprobe);
+
+	if (ret == 0)
+        execveat_kprobe_state = 0x1;
+
+	return ret;
+}
+#endif
 
 static void unregister_kprobe_execve(void)
 {
@@ -1112,6 +1248,13 @@ static void unregister_kprobe_load_module(void)
 	unregister_kprobe(&load_module_kprobe);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
+static void unregister_kprobe_execveat(void)
+{
+	unregister_kprobe(&execveat_kprobe);
+}
+#endif
+
 static void uninstall_kprobe(void)
 {
     if (connect_kprobe_state == 0x1)
@@ -1131,6 +1274,12 @@ static void uninstall_kprobe(void)
 
     if (load_module_kprobe_state == 0x1)
 	    unregister_kprobe_load_module();
+
+    #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
+    if (execveat_kprobe_state == 0x1)
+        unregister_kprobe_execveat();
+    #endif
+
 }
 
 static int __init smith_init(void)
@@ -1170,17 +1319,27 @@ static int __init smith_init(void)
 	}
 
     if (EXECVE_HOOK == 1) {
-	ret = execve_register_kprobe();
+	    ret = execve_register_kprobe();
 	    if (ret < 0) {
 		    uninstall_kprobe();
 		    uninstall_share_mem();
 		    printk(KERN_INFO "[SMITH] execve register_kprobe failed, returned %d\n", ret);
 	    	return -1;
 	    }
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
+	    ret = execveat_register_kprobe();
+       	if (ret < 0) {
+       	    uninstall_kprobe();
+       	    uninstall_share_mem();
+       	    printk(KERN_INFO "[SMITH] execve register_kprobe failed, returned %d\n", ret);
+       	   	return -1;
+       	}
+#endif
 	}
 
     if (FSNOTIFY_HOOK == 1) {
-	ret = fsnotify_register_kprobe();
+	    ret = fsnotify_register_kprobe();
 	    if (ret < 0) {
 		    uninstall_kprobe();
 		    uninstall_share_mem();
@@ -1190,7 +1349,7 @@ static int __init smith_init(void)
 	}
 
     if (PTRACE_HOOK == 1) {
-	ret = ptrace_register_kprobe();
+	    ret = ptrace_register_kprobe();
 	    if (ret < 0) {
 		    uninstall_kprobe();
 		    uninstall_share_mem();
@@ -1209,7 +1368,7 @@ static int __init smith_init(void)
 	}
 
     if (LOAD_MODULE_HOOK == 1) {
-	ret = load_module_register_kprobe();
+	    ret = load_module_register_kprobe();
 	    if (ret < 0) {
 		    uninstall_kprobe();
 		    printk(KERN_INFO "[SMITH] load_module register_kprobe failed, returned %d\n", ret);
