@@ -159,7 +159,7 @@ static char *getfullpath(struct inode *inod,char *buffer,int len)
 		return NULL;
 
 	hlist_for_each(plist, &pinode->i_dentry) {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 18, 1)
 		tmp = hlist_entry(plist, struct dentry, d_u.d_alias);
 #else
 		tmp = hlist_entry(plist, struct dentry, d_alias);
