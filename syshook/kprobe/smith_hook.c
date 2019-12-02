@@ -740,7 +740,7 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
 
         int copy_res = copy_from_user(filename, (char *) p_get_arg1(regs), PATH_MAX);
         if(unlikely(copy_res))
-            copy_res = "";
+            strcpy(filename, "-1");
 
 	    files = files_fdtable(current->files);
 
@@ -765,7 +765,7 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
                 if(i == 0) {
                     continue;
                 }
-                    
+
                 if(get_user(native, argv + i)) {
                     flag = -1;
                     break;
