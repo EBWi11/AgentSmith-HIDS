@@ -710,10 +710,51 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
 	}
 }
 #else
+static int do_getname(const char __user *filename, char *page)
+{
+	int retval;
+	unsigned long len = PATH_MAX;
+
+	if (!segment_eq(get_fs(), KERNEL_DS)) {
+		if ((unsigned long) filename >= TASK_SIZE)
+			return -EFAULT;
+		if (TASK_SIZE - (unsigned long) filename < PATH_MAX)
+			len = TASK_SIZE - (unsigned long) filename;
+	}
+
+	retval = strncpy_from_user(page, filename, len);
+	if (retval > 0) {
+		if (retval < len)
+			return 0;
+		return -ENAMETOOLONG;
+	} else if (!retval)
+		retval = -ENOENT;
+	return retval;
+}
+
+char * _getname(const char __user * filename)
+{
+	char *tmp, *result;
+
+	result = ERR_PTR(-ENOMEM);
+	tmp = __getname();
+	if (tmp)  {
+		int retval = do_getname(filename, tmp);
+
+		result = tmp;
+		if (retval < 0) {
+			__putname(tmp);
+			result = ERR_PTR(retval);
+		}
+	}
+	return result;
+}
+
 static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
 {
     int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, flag = 0;
     int result_str_len;
+    int error;
     int pid_check_res = -1;
     int file_check_res = -1;
     unsigned int sessionid;
@@ -724,23 +765,27 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
     char *argv_res = NULL;
     char *argv_res_tmp = NULL;
     struct fdtable *files;
+    struct file *file;
     const char __user *native;
 
 	if (share_mem_flag != -1) {
 	    char **argv = (char **) p_get_arg2(regs);
-	    char filename[PATH_MAX];
+	    char *filename;
 	    char tmp_stdin_fd[PATH_MAX];
         char tmp_stdout_fd[PATH_MAX];
 
-        memset(filename, 0, PATH_MAX);
         memset(tmp_stdin_fd, 0, PATH_MAX);
         memset(tmp_stdout_fd, 0, PATH_MAX);
 
         sessionid = get_sessionid();
 
-        int copy_res = copy_from_user(filename, (char *) p_get_arg1(regs), PATH_MAX);
-        if(unlikely(copy_res))
-            strcpy(filename, "-1");
+        filename = getname((char __user *) p_get_arg1(regs));
+
+        if (likely(!IS_ERR(filename))) {
+            putname(filename);
+        } else {
+            filename = "-1";
+        }
 
 	    files = files_fdtable(current->files);
 
