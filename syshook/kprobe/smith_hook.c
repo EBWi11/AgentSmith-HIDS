@@ -841,6 +841,7 @@ static int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 }
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 18, 0)
 static void fsnotify_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
 {
     int result_str_len;
@@ -852,17 +853,31 @@ static void fsnotify_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
 	if (share_mem_flag != -1) {
 	    __u32 flag = (__u32)p_get_arg2(regs);
         if (flag == FS_CREATE) {
+            char *abs_path = NULL;
             char buffer[PATH_MAX];
             memset(buffer, 0, sizeof(PATH_MAX));
 
             inode = (struct inode*)p_get_arg3(regs);
             if (likely(inode)) {
+                char *pathstr = NULL;
                 char pname_buf[PATH_MAX];
                 pathstr = getfullpath(inode, pname_buf, PATH_MAX);
                 sessionid = get_sessionid();
 
+                if (likely(current->mm)) {
+                    if (likely(current->mm->exe_file)) {
+                        char pathname[PATH_MAX];
+                        memset(pathname, 0, PATH_MAX);
+                        abs_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
+                    }
+                }
+
+                if (unlikely(abs_path == NULL))
+                    abs_path = "-1";
+
                 result_str_len = strlen(current->nsproxy->uts_ns->name.nodename)
-                                 + strlen(current->comm) + 172;
+                                 + strlen(current->comm) + strlen(abs_path) + 172;
+
                 if(likely(pathstr))
                     result_str_len = result_str_len + strlen(pathstr);
                 else
@@ -871,16 +886,103 @@ static void fsnotify_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
                 result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
                 snprintf(result_str, result_str_len,
-                        "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
-                        get_current_uid(), "\n", CREATE_FILE, "\n", pathstr,
+                        "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%u",
+                        get_current_uid(), "\n", CREATE_FILE, "\n", abs_path, "\n", pathstr,
                         "\n", current->pid, "\n",current->real_parent->pid, "\n",
-                        pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n", current->comm, "\n",
+                        pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
                         current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
                 send_msg_to_user(result_str, 1);
             }
         }
 	}
 }
+#else
+
+struct do_sys_open_data {
+    int check_res;
+    int dfd;
+    const char __user *filename;
+};
+
+static int do_sys_open_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
+{
+    struct do_sys_open_data *data;
+    struct path path;
+    data = (struct do_sys_open_data *)ri->data;
+    data->check_res = 1;
+    if((int) p_regs_get_arg3(regs) & O_CREAT) {
+        data->dfd = (int) p_regs_get_arg1(regs);
+        data->filename = (const char __user *) p_regs_get_arg2(regs);
+        data->check_res = user_path_at(data->dfd, (const char __user *) p_regs_get_arg2(regs), LOOKUP_FOLLOW, &path);
+        if (!data->check_res)
+            path_put(&path);
+    }
+    return 0;
+}
+
+static int do_sys_open_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
+{
+    unsigned int sessionid;
+    char *result_str = NULL;
+    int result_str_len;
+    int ori_res;
+    int flags;
+    int retval;
+    int check_res;
+    struct do_sys_open_data *data;
+    if (share_mem_flag != -1) {
+        retval = regs_return_value(regs);
+        if (likely(retval > 0)) {
+            data = (struct do_sys_open_data *)ri->data;
+            check_res = data -> check_res;
+            if (check_res == -2) {
+                char *pathstr = NULL;
+                char *abs_path = NULL;
+                struct path path;
+
+                check_res = user_path_at(data->dfd, data->filename, LOOKUP_FOLLOW, &path);
+                if (!check_res) {
+                    char pname_buf[PATH_MAX];
+                    memset(pname_buf, 0, PATH_MAX);
+                    pathstr = d_path(&path, pname_buf, PATH_MAX);
+                    path_put(&path);
+
+                    if (likely(current->mm)) {
+                        if (likely(current->mm->exe_file)) {
+                            char pathname[PATH_MAX];
+                            memset(pathname, 0, PATH_MAX);
+                            abs_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
+                        }
+                    }
+
+                    if (unlikely(abs_path == NULL))
+                        abs_path = "-1";
+
+                    sessionid = get_sessionid();
+
+                    result_str_len = strlen(current->nsproxy->uts_ns->name.nodename)
+                                    + strlen(current->comm) + strlen(abs_path) + 172;
+                    if(likely(pathstr))
+                        result_str_len = result_str_len + strlen(pathstr);
+                    else
+                        pathstr = "-1";
+
+                    result_str = kzalloc(result_str_len, GFP_ATOMIC);
+
+                    snprintf(result_str, result_str_len,
+                            "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%u",
+                            get_current_uid(), "\n", CREATE_FILE, "\n", abs_path, "\n", pathstr,
+                            "\n", current->pid, "\n",current->real_parent->pid, "\n",
+                            pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                            current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
+                    send_msg_to_user(result_str, 1);
+                }
+            }
+        }
+    }
+    return 0;
+}
+#endif
 
 static void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
 {
@@ -1146,10 +1248,20 @@ static struct kprobe execve_kprobe = {
 };
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 18, 0)
 static struct kprobe fsnotify_kprobe = {
     .symbol_name = "fsnotify",
 	.post_handler = fsnotify_post_handler,
 };
+#else
+static struct kretprobe do_sys_open_kretprobe = {
+    .kp.symbol_name = "do_sys_open",
+    .data_size = sizeof(struct do_sys_open_data),
+	.handler = do_sys_open_handler,
+	.entry_handler = do_sys_open_entry_handler,
+	.maxactive = 120,
+};
+#endif
 
 static struct kprobe ptrace_kprobe = {
     .symbol_name = P_GET_SYSCALL_NAME(ptrace),
@@ -1225,8 +1337,11 @@ static void unregister_kprobe_execve(void)
 static int fsnotify_register_kprobe(void)
 {
 	int ret;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 18, 0)
 	ret = register_kprobe(&fsnotify_kprobe);
-
+#else
+	ret = register_kretprobe(&do_sys_open_kretprobe);
+#endif
 	if (ret == 0)
         fsnotify_kprobe_state = 0x1;
 
@@ -1235,7 +1350,11 @@ static int fsnotify_register_kprobe(void)
 
 static void unregister_kprobe_fsnotify(void)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4, 18, 0)
 	unregister_kprobe(&fsnotify_kprobe);
+#else
+	unregister_kretprobe(&do_sys_open_kretprobe);
+#endif
 }
 
 static int ptrace_register_kprobe(void)
@@ -1435,6 +1554,6 @@ module_init(smith_init)
 module_exit(smith_exit)
 
 MODULE_LICENSE("GPL v2");
-MODULE_VERSION("0.2.0");
+MODULE_VERSION("1.0.0");
 MODULE_AUTHOR("E_Bwill <cy_sniper@yeah.net>");
 MODULE_DESCRIPTION("hook sys_execve,sys_connect,sys_ptrace,load_module,fsnotify,sys_recvfrom");
