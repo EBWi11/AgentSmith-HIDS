@@ -32,6 +32,7 @@
 
 int share_mem_flag = -1;
 int checkCPUendianRes = 0;
+
 char connect_kprobe_state = 0x0;
 char execve_kprobe_state = 0x0;
 char fsnotify_kprobe_state = 0x0;
@@ -118,7 +119,7 @@ static char *_dentry_path_raw(void)
     return cwd;
 }
 
-static int count(char ** argv, int max)
+static int count(char **argv, int max)
 {
 	int i = 0;
 
@@ -397,7 +398,7 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                     inet = (struct inet_sock*)sk;
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
-                    if (inet->inet_dport) {
+                    if (likely(inet->inet_dport)) {
                         snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_daddr));
                         snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_saddr));
                         snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
@@ -405,7 +406,7 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                         flag = 1;
                     }
 #else
-                    if (inet->dport) {
+                    if (likely(inet->dport)) {
                         snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->daddr));
                         snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->saddr));
                         snprintf(sport, 16, "%d", Ntohs(inet->sport));
@@ -420,7 +421,7 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                     sk = socket->sk;
                     inet = (struct inet_sock*)sk;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
-                    if (inet->inet_dport) {
+                    if (likely(inet->inet_dport)) {
                         snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sk->sk_v6_daddr));
                         snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sk->sk_v6_rcv_saddr));
                         snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
@@ -428,7 +429,7 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                         flag = 1;
                     }
 #else
-                    if (inet->dport) {
+                    if (likely(inet->dport)) {
                         snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(inet->pinet6->daddr));
                         snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(inet->pinet6->saddr));
                         snprintf(sport, 16, "%d", Ntohs(inet->sport));
@@ -445,16 +446,16 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             sockfd_put(socket);
         }
 
-        if(likely(flag == 1)) {
-            if (current->mm) {
-                if (current->mm->exe_file) {
+        if(flag == 1) {
+            if (likely(current->mm)) {
+                if (likely(current->mm->exe_file)) {
                     char pathname[PATH_MAX];
                     memset(pathname, 0, PATH_MAX);
                     final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
                 }
             }
 
-            if (final_path == NULL)
+            if (unlikely(final_path == NULL))
                 final_path = "-1";
 
             result_str_len = strlen(current->nsproxy->uts_ns->name.nodename) +
@@ -520,7 +521,7 @@ static void execveat_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
             }
         }
 
-        if (abs_path == NULL)
+        if (unlikely(abs_path == NULL))
             abs_path = "-1";
 
 	    files = files_fdtable(current->files);
@@ -817,7 +818,7 @@ static int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             }
         }
 
-        if (abs_path == NULL)
+        if (unlikely(abs_path == NULL))
             abs_path = "-1";
 
         pname = _dentry_path_raw();
@@ -911,7 +912,7 @@ static void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
                 }
             }
 
-            if (final_path == NULL)
+            if (unlikely(final_path == NULL))
                 final_path = "-1";
 
             result_str_len = strlen(current->nsproxy->uts_ns->name.nodename) +
@@ -936,7 +937,6 @@ static int recvfrom_entry_handler(struct kretprobe_instance *ri, struct pt_regs 
 {
     struct recvfrom_data *data;
     data = (struct recvfrom_data *)ri->data;
-
     data->fd = p_get_arg1(regs);
     data->ubuf = (void *)p_get_arg2(regs);
     data->size = (size_t)p_get_arg3(regs);
@@ -979,7 +979,7 @@ static int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         addrlen = data->addr_len;
 
 	    copy_res = copy_from_user(&tmp_dirp, data->dirp, 16);
-        if (copy_res != 0)
+        if (unlikely(copy_res != 0))
             return 0;
 
         sessionid = get_sessionid();
@@ -1048,7 +1048,7 @@ static int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             }
         }
 
-        if (likely(flag == 1)) {
+        if (flag == 1) {
             if (likely(current->mm)) {
                 if (likely(current->mm->exe_file)) {
                     char pathname[PATH_MAX];
