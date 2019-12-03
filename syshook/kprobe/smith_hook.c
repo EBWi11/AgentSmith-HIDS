@@ -38,25 +38,9 @@ char fsnotify_kprobe_state = 0x0;
 char ptrace_kprobe_state = 0x0;
 char recvfrom_kprobe_state = 0x0;
 char load_module_kprobe_state = 0x0;
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
 char execveat_kprobe_state = 0x0;
-#endif
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 38)
-static char *_dentry_path_raw(void)
-{
-    char *cwd;
-    char *pname_buf = NULL;
-    struct path pwd, root;
-    pwd = current->fs->pwd;
-    path_get(&pwd);
-    root = current->fs->root;
-    path_get(&root);
-    pname_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
-    cwd = d_path(&pwd, pname_buf, PATH_MAX);
-    kfree(pname_buf);
-    return cwd;
-}
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0)
@@ -119,14 +103,28 @@ static int count(struct user_arg_ptr argv, int max)
     return i;
 }
 #else
+static char *_dentry_path_raw(void)
+{
+    char *cwd;
+    char *pname_buf = NULL;
+    struct path pwd, root;
+    pwd = current->fs->pwd;
+    path_get(&pwd);
+    root = current->fs->root;
+    path_get(&root);
+    pname_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
+    cwd = d_path(&pwd, pname_buf, PATH_MAX);
+    kfree(pname_buf);
+    return cwd;
+}
 
-static int count(char __user * __user * argv, int max)
+static int count(char ** argv, int max)
 {
 	int i = 0;
 
 	if (argv != NULL) {
 		for (;;) {
-			char __user * p;
+			char * p;
 
 			if (get_user(p, argv))
 				return -EFAULT;
@@ -223,7 +221,7 @@ Elong:
 	return ERR_PTR(-ENAMETOOLONG);
 }
 
-static char *getfullpath(struct inode *inod,char* buffer,int len)
+static char *getfullpath(struct inode *inod, char* buffer, int len)
 {
 	struct list_head* plist = NULL;
 	struct dentry* tmp = NULL;
@@ -448,17 +446,16 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         }
 
         if(likely(flag == 1)) {
-            if (current->active_mm) {
+            if (current->mm) {
                 if (current->mm->exe_file) {
-                    char connect_pathname[PATH_MAX];
-                    memset(connect_pathname, 0, PATH_MAX);
-                    final_path = d_path(&current->mm->exe_file->f_path, connect_pathname, PATH_MAX);
+                    char pathname[PATH_MAX];
+                    memset(pathname, 0, PATH_MAX);
+                    final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
                 }
             }
 
-            if (unlikely(final_path == NULL)) {
+            if (final_path == NULL)
                 final_path = "-1";
-            }
 
             result_str_len = strlen(current->nsproxy->uts_ns->name.nodename) +
                              strlen(current->comm) + strlen(final_path) + 128;
@@ -500,7 +497,6 @@ static void execveat_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
     char *tmp_stdout = NULL;
     char *argv_res = NULL;
     char *argv_res_tmp = NULL;
-    struct filename *path;
     struct fdtable *files;
     const char __user *native;
 
@@ -516,12 +512,16 @@ static void execveat_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
 	    struct user_arg_ptr argv_ptr = {.ptr.native = p_get_arg2(regs)};
 	    sessionid = get_sessionid();
 
-        path = tmp_getname((char *) p_get_arg1(regs));
-        if (likely(!IS_ERR(path))) {
-            abs_path = (char *)path->name;
-        } else {
-            abs_path = "-1";
+        if (likely(current->mm)) {
+            if (likely(current->mm->exe_file)) {
+                char pathname[PATH_MAX];
+                memset(pathname, 0, PATH_MAX);
+                abs_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
+            }
         }
+
+        if (abs_path == NULL)
+            abs_path = "-1";
 
 	    files = files_fdtable(current->files);
         if(likely(files->fd[0] != NULL))
@@ -575,7 +575,7 @@ static void execveat_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
             argv_res_tmp = "";
 
         result_str_len = strlen(argv_res_tmp) + strlen(pname) + strlen(abs_path) +
-                         strlen(current->nsproxy->uts_ns->name.nodename) + 256;
+                         strlen(current->nsproxy->uts_ns->name.nodename) + 128;
 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
         snprintf(result_str, result_str_len,
@@ -688,7 +688,7 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
             argv_res_tmp = "";
 
         result_str_len = strlen(argv_res_tmp) + strlen(pname) + strlen(abs_path) +
-                         strlen(current->nsproxy->uts_ns->name.nodename) + 256;
+                         strlen(current->nsproxy->uts_ns->name.nodename) + 128;
 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
         snprintf(result_str, result_str_len,
@@ -710,51 +710,70 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
 	}
 }
 #else
-static int do_getname(const char __user *filename, char *page)
-{
-	int retval;
-	unsigned long len = PATH_MAX;
 
-	if (!segment_eq(get_fs(), KERNEL_DS)) {
-		if ((unsigned long) filename >= TASK_SIZE)
-			return -EFAULT;
-		if (TASK_SIZE - (unsigned long) filename < PATH_MAX)
-			len = TASK_SIZE - (unsigned long) filename;
-	}
+struct execve_data {
+    char *argv;
+};
 
-	retval = strncpy_from_user(page, filename, len);
-	if (retval > 0) {
-		if (retval < len)
-			return 0;
-		return -ENAMETOOLONG;
-	} else if (!retval)
-		retval = -ENOENT;
-	return retval;
-}
-
-char * _getname(const char __user * filename)
-{
-	char *tmp, *result;
-
-	result = ERR_PTR(-ENOMEM);
-	tmp = __getname();
-	if (tmp)  {
-		int retval = do_getname(filename, tmp);
-
-		result = tmp;
-		if (retval < 0) {
-			__putname(tmp);
-			result = ERR_PTR(retval);
-		}
-	}
-	return result;
-}
-
-static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
+static int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
     int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, flag = 0;
+    char *argv_res = NULL;
+    char *argv_res_tmp = NULL;
+    struct execve_data *data;
+    const char __user *native;
+    char **argv = (char **) p_get_arg2(regs);
+    data = (struct execve_data *)ri->data;
+
+    argv_len = count(argv, MAX_ARG_STRINGS);
+    if(argv_len > 0)
+        argv_res = kzalloc(128 * argv_len, GFP_ATOMIC);
+
+    if (argv_len > 0) {
+        for(i = 0; i < argv_len; i ++) {
+            if(get_user(native, argv + i)) {
+                flag = -1;
+                break;
+            }
+
+            len = strnlen_user(native, MAX_ARG_STRLEN);
+            if(!len) {
+                flag = -2;
+                break;
+            }
+
+            if(offset + len > argv_res_len + 128 * argv_len) {
+                flag = -3;
+                break;
+            }
+
+            if (copy_from_user(argv_res + offset, native, len)) {
+                flag = -4;
+                break;
+            }
+
+            offset += len - 1;
+            *(argv_res + offset) = ' ';
+            offset += 1;
+        }
+    }
+
+    if (argv_len > 0 && flag == 0)
+        argv_res_tmp = str_replace(argv_res, "\n", " ");
+    else
+        argv_res_tmp = "";
+
+    data->argv = argv_res_tmp;
+
+    if(argv_len > 0)
+        kfree(argv_res);
+
+    return 0;
+}
+
+static int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
+{
     int result_str_len;
-    int error;
     int pid_check_res = -1;
     int file_check_res = -1;
     unsigned int sessionid;
@@ -762,30 +781,21 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
     char *pname = NULL;
     char *tmp_stdin = NULL;
     char *tmp_stdout = NULL;
-    char *argv_res = NULL;
-    char *argv_res_tmp = NULL;
     struct fdtable *files;
-    struct file *file;
-    const char __user *native;
-
+    struct execve_data *data;
 	if (share_mem_flag != -1) {
-	    char **argv = (char **) p_get_arg2(regs);
-	    char *filename;
+	    char *argv;
+	    char *abs_path = NULL;
 	    char tmp_stdin_fd[PATH_MAX];
         char tmp_stdout_fd[PATH_MAX];
 
         memset(tmp_stdin_fd, 0, PATH_MAX);
         memset(tmp_stdout_fd, 0, PATH_MAX);
 
+        data = (struct execve_data *)ri->data;
+        argv = data -> argv;
+
         sessionid = get_sessionid();
-
-        filename = getname((char __user *) p_get_arg1(regs));
-
-        if (likely(!IS_ERR(filename))) {
-            putname(filename);
-        } else {
-            filename = "-1";
-        }
 
 	    files = files_fdtable(current->files);
 
@@ -799,69 +809,37 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
         else
             tmp_stdout = "-1";
 
-        pname = _dentry_path_raw();
-
-        argv_len = count(argv, MAX_ARG_STRINGS);
-        if(likely(argv_len > 0))
-            argv_res = kzalloc(128 * argv_len + 1, GFP_ATOMIC);
-
-        if (likely(argv_len > 0)) {
-            for(i = 0; i < argv_len; i ++) {
-                if(i == 0) {
-                    continue;
-                }
-
-                if(get_user(native, argv + i)) {
-                    flag = -1;
-                    break;
-                }
-
-                len = strnlen_user(native, MAX_ARG_STRLEN);
-                if(!len) {
-                    flag = -2;
-                    break;
-                }
-
-                if(offset + len > argv_res_len + 128 * argv_len) {
-                    flag = -3;
-                    break;
-                }
-
-                if (copy_from_user(argv_res + offset, native, len)) {
-                    flag = -4;
-                    break;
-                }
-
-                offset += len - 1;
-                *(argv_res + offset) = ' ';
-                offset += 1;
+        if (likely(current->mm)) {
+            if (likely(current->mm->exe_file)) {
+                char pathname[PATH_MAX];
+                memset(pathname, 0, PATH_MAX);
+                abs_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
             }
         }
 
-        if (argv_len > 0 && flag == 0)
-            argv_res_tmp = str_replace(argv_res, "\n", " ");
-        else
-            argv_res_tmp = "";
+        if (abs_path == NULL)
+            abs_path = "-1";
 
-        result_str_len = strlen(argv_res_tmp) + strlen(pname) +
-                         strlen(filename) +
-                         strlen(current->nsproxy->uts_ns->name.nodename) + 256;
+        pname = _dentry_path_raw();
+
+        result_str_len = strlen(argv) + strlen(pname) +
+                         strlen(abs_path) +
+                         strlen(current->nsproxy->uts_ns->name.nodename) + 128;
 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
         snprintf(result_str, result_str_len,
                  "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%u",
                  get_current_uid(), "\n", EXECVE_TYPE, "\n", pname, "\n",
-                 filename, "\n", argv_res_tmp, "\n", current->pid, "\n",
+                 abs_path, "\n", argv, "\n", current->pid, "\n",
                  current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
                  "\n", current->tgid, "\n", current->comm, "\n",
                  current->nsproxy->uts_ns->name.nodename,"\n",tmp_stdin,"\n",tmp_stdout,
                  "\n",pid_check_res, "\n",file_check_res, "\n", sessionid);
 
         send_msg_to_user(result_str, 1);
-
-        if(likely(argv_len > 0))
-            kfree(argv_res);
 	}
+
+	return 0;
 }
 #endif
 
@@ -924,31 +902,32 @@ static void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
 	    data = (unsigned long) p_get_arg4(regs);
 	    if (request == PTRACE_POKETEXT || request == PTRACE_POKEDATA) {
 	        sessionid = get_sessionid();
-	        if (likely(current->active_mm)) {
-                if (current->mm->exe_file) {
-                    char ptrace_pathname[PATH_MAX];
-                    memset(ptrace_pathname, 0, PATH_MAX);
-                    final_path = d_path(&current->mm->exe_file->f_path, ptrace_pathname, PATH_MAX);
+
+            if (likely(current->mm)) {
+                if (likely(current->mm->exe_file)) {
+                    char pathname[PATH_MAX];
+                    memset(pathname, 0, PATH_MAX);
+                    final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
                 }
-
-                if (unlikely(final_path == NULL))
-                    final_path = "-1";
-
-                result_str_len = strlen(current->nsproxy->uts_ns->name.nodename) +
-                                 strlen(current->comm) + strlen(final_path) + 256;
-
-                result_str = kzalloc(result_str_len, GFP_ATOMIC);
-
-                snprintf(result_str, result_str_len,
-                         "%d%s%s%s%ld%s%ld%s%ld%s%ln%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
-                         get_current_uid(), "\n", PTRACE_TYPE, "\n", request,
-                         "\n", pid, "\n", addr, "\n", &data, "\n", final_path, "\n",
-                         current->pid, "\n", current->real_parent->pid, "\n",
-                         pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                         current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
-
-                send_msg_to_user(result_str, 1);
             }
+
+            if (final_path == NULL)
+                final_path = "-1";
+
+            result_str_len = strlen(current->nsproxy->uts_ns->name.nodename) +
+                             strlen(current->comm) + strlen(final_path) + 256;
+
+            result_str = kzalloc(result_str_len, GFP_ATOMIC);
+
+            snprintf(result_str, result_str_len,
+                     "%d%s%s%s%ld%s%ld%s%ld%s%ln%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
+                     get_current_uid(), "\n", PTRACE_TYPE, "\n", request,
+                     "\n", pid, "\n", addr, "\n", &data, "\n", final_path, "\n",
+                     current->pid, "\n", current->real_parent->pid, "\n",
+                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                     current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
+
+            send_msg_to_user(result_str, 1);
 	    }
 	}
 }
@@ -1069,18 +1048,17 @@ static int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             }
         }
 
-        if (flag == 1) {
-            if (current->active_mm) {
-                if (current->mm->exe_file) {
-                    char recvfrom_pathname[PATH_MAX];
-                    memset(recvfrom_pathname, 0, PATH_MAX);
-                    final_path = d_path(&current->mm->exe_file->f_path, recvfrom_pathname, PATH_MAX);
+        if (likely(flag == 1)) {
+            if (likely(current->mm)) {
+                if (likely(current->mm->exe_file)) {
+                    char pathname[PATH_MAX];
+                    memset(pathname, 0, PATH_MAX);
+                    final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
                 }
             }
 
-            if (final_path == NULL) {
+            if (unlikely(final_path == NULL))
                 final_path = "-1";
-            }
 
             result_str_len = strlen(query) + strlen(current->nsproxy->uts_ns->name.nodename) +
                              strlen(current->comm) + strlen(final_path) + 172;
@@ -1146,7 +1124,7 @@ static struct kretprobe connect_kretprobe = {
     .data_size  = sizeof(struct connect_data),
 	.handler = connect_handler,
     .entry_handler = connect_entry_handler,
-    .maxactive = 40,
+    .maxactive = 120,
 };
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
@@ -1156,10 +1134,20 @@ static struct kprobe execveat_kprobe = {
 };
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
+static struct kretprobe execve_kretprobe = {
+    .kp.symbol_name = P_GET_SYSCALL_NAME(execve),
+    .data_size  = sizeof(struct execve_data),
+	.handler = execve_handler,
+	.entry_handler = execve_entry_handler,
+	.maxactive = 120,
+};
+#else
 static struct kprobe execve_kprobe = {
     .symbol_name = P_GET_SYSCALL_NAME(execve),
 	.post_handler = execve_post_handler,
 };
+#endif
 
 static struct kprobe fsnotify_kprobe = {
     .symbol_name = "fsnotify",
@@ -1176,7 +1164,7 @@ static struct kretprobe recvfrom_kretprobe = {
     .data_size  = sizeof(struct recvfrom_data),
 	.handler = recvfrom_handler,
 	.entry_handler = recvfrom_entry_handler,
-	.maxactive = 40,
+	.maxactive = 120,
 };
 
 static struct kprobe load_module_kprobe = {
@@ -1203,7 +1191,11 @@ static void unregister_kretprobe_connect(void)
 static int execve_register_kprobe(void)
 {
 	int ret;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
+	ret = register_kretprobe(&execve_kretprobe);
+#else
 	ret = register_kprobe(&execve_kprobe);
+#endif
 
 	if (ret == 0)
         execve_kprobe_state = 0x1;
@@ -1226,7 +1218,11 @@ static int execveat_register_kprobe(void)
 
 static void unregister_kprobe_execve(void)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
+	unregister_kretprobe(&execve_kretprobe);
+#else
 	unregister_kprobe(&execve_kprobe);
+#endif
 }
 
 static int fsnotify_register_kprobe(void)
