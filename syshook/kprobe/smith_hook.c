@@ -458,7 +458,7 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                 final_path = "-1";
 
             result_str_len = strlen(current->nsproxy->uts_ns->name.nodename) +
-                             strlen(current->comm) + strlen(final_path) + 128;
+                             strlen(current->comm) + strlen(final_path) + 172;
 
             result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
@@ -575,7 +575,7 @@ static void execveat_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
             argv_res_tmp = "";
 
         result_str_len = strlen(argv_res_tmp) + strlen(pname) + strlen(abs_path) +
-                         strlen(current->nsproxy->uts_ns->name.nodename) + 128;
+                         strlen(current->nsproxy->uts_ns->name.nodename) + 172;
 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
         snprintf(result_str, result_str_len,
@@ -688,7 +688,7 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
             argv_res_tmp = "";
 
         result_str_len = strlen(argv_res_tmp) + strlen(pname) + strlen(abs_path) +
-                         strlen(current->nsproxy->uts_ns->name.nodename) + 128;
+                         strlen(current->nsproxy->uts_ns->name.nodename) + 172;
 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
         snprintf(result_str, result_str_len,
@@ -824,7 +824,7 @@ static int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
         result_str_len = strlen(argv) + strlen(pname) +
                          strlen(abs_path) +
-                         strlen(current->nsproxy->uts_ns->name.nodename) + 128;
+                         strlen(current->nsproxy->uts_ns->name.nodename) + 172;
 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
         snprintf(result_str, result_str_len,
@@ -864,7 +864,7 @@ static void fsnotify_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
                 sessionid = get_sessionid();
 
                 result_str_len = strlen(current->nsproxy->uts_ns->name.nodename)
-                                 + strlen(current->comm) + 128;
+                                 + strlen(current->comm) + 172;
                 if(likely(pathstr))
                     result_str_len = result_str_len + strlen(pathstr);
                 else
@@ -915,7 +915,7 @@ static void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
                 final_path = "-1";
 
             result_str_len = strlen(current->nsproxy->uts_ns->name.nodename) +
-                             strlen(current->comm) + strlen(final_path) + 256;
+                             strlen(current->comm) + strlen(final_path) + 172;
 
             result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
