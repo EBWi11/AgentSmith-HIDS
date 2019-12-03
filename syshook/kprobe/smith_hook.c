@@ -498,6 +498,7 @@ static void execveat_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
     char *tmp_stdout = NULL;
     char *argv_res = NULL;
     char *argv_res_tmp = NULL;
+    struct filename *path;
     struct fdtable *files;
     const char __user *native;
 
@@ -513,16 +514,12 @@ static void execveat_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
 	    struct user_arg_ptr argv_ptr = {.ptr.native = p_get_arg2(regs)};
 	    sessionid = get_sessionid();
 
-        if (likely(current->mm)) {
-            if (likely(current->mm->exe_file)) {
-                char pathname[PATH_MAX];
-                memset(pathname, 0, PATH_MAX);
-                abs_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
-            }
-        }
-
-        if (unlikely(abs_path == NULL))
+        path = tmp_getname((char *) p_get_arg1(regs));
+        if (likely(!IS_ERR(path))) {
+            abs_path = (char *)path->name;
+        } else {
             abs_path = "-1";
+        }
 
 	    files = files_fdtable(current->files);
         if(likely(files->fd[0] != NULL))
@@ -1438,6 +1435,6 @@ module_init(smith_init)
 module_exit(smith_exit)
 
 MODULE_LICENSE("GPL v2");
-MODULE_VERSION("0.1.1");
+MODULE_VERSION("0.2.0");
 MODULE_AUTHOR("E_Bwill <cy_sniper@yeah.net>");
 MODULE_DESCRIPTION("hook sys_execve,sys_connect,sys_ptrace,load_module,fsnotify,sys_recvfrom");
