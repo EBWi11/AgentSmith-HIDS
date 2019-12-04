@@ -1,0 +1,5 @@
+- [x] support data send to kafka
+- [ ] support data send to API
+- [x] support heartbeat
+- [ ] support get ELF file MD5
+- [ ] support whitelist
