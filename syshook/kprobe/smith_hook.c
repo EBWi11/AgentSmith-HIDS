@@ -20,7 +20,6 @@
 #include "share_mem.h"
 #include "smith_hook.h"
 #include "struct_wrap.h"
-#include "rootkit_check.h"
 
 #define EXIT_PROTECT 0
 
@@ -28,7 +27,7 @@
 #define EXECVE_HOOK 1
 #define FSNOTIFY_HOOK 1
 #define PTRACE_HOOK 1
-#define RECVFROM_HOOK 1
+#define DNS_HOOK 1
 #define LOAD_MODULE_HOOK 1
 
 int share_mem_flag = -1;
@@ -371,6 +370,7 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     char sport[16] = "-1";
     char *final_path = NULL;
     char *result_str;
+    char *comm;
 
 	if (share_mem_flag != -1) {
 	    sessionid = get_sessionid();
@@ -457,8 +457,13 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             if (unlikely(final_path == NULL))
                 final_path = "-1";
 
+            if(strlen(current->comm) > 0)
+                comm = str_replace(current->comm, "\n", " ");
+            else
+                comm = "";
+
             result_str_len = strlen(current->nsproxy->uts_ns->name.nodename) +
-                             strlen(current->comm) + strlen(final_path) + 172;
+                             strlen(comm) + strlen(final_path) + 172;
 
             result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
@@ -468,7 +473,7 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                     "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
                     current->pid, "\n", current->real_parent->pid, "\n",
                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                    current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
+                    comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
                     sip, "\n", sport, "\n", retval, "\n", sessionid);
 
             send_msg_to_user(result_str, 1);
@@ -494,6 +499,7 @@ static void execveat_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
     char *tmp_stdout = NULL;
     char *argv_res = NULL;
     char *argv_res_tmp = NULL;
+    char *comm;
     struct filename *path;
     struct fdtable *files;
     const char __user *native;
@@ -568,7 +574,12 @@ static void execveat_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
         else
             argv_res_tmp = "";
 
-        result_str_len = strlen(argv_res_tmp) + strlen(pname) + strlen(abs_path) +
+        if(strlen(current->comm) > 0)
+            comm = str_replace(current->comm, "\n", " ");
+        else
+            comm = "";
+
+        result_str_len = strlen(argv_res_tmp) + strlen(comm) + strlen(pname) + strlen(abs_path) +
                          strlen(current->nsproxy->uts_ns->name.nodename) + 172;
 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
@@ -578,7 +589,7 @@ static void execveat_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
                  get_current_uid(), "\n", EXECVE_TYPE, "\n", pname, "\n",
                  abs_path, "\n", argv_res_tmp, "\n", current->pid, "\n",
                  current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
-                 "\n", current->tgid, "\n", current->comm, "\n",
+                 "\n", current->tgid, "\n", comm, "\n",
                  current->nsproxy->uts_ns->name.nodename,"\n",tmp_stdin,"\n",tmp_stdout,
                  "\n", sessionid);
 
@@ -606,6 +617,7 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
     char *tmp_stdout = NULL;
     char *argv_res = NULL;
     char *argv_res_tmp = NULL;
+    char *comm;
     struct filename *path;
     struct fdtable *files;
     const char __user *native;
@@ -680,8 +692,13 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
         else
             argv_res_tmp = "";
 
+        if(strlen(current->comm) > 0)
+            comm = str_replace(current->comm, "\n", " ");
+        else
+            comm = "";
+
         result_str_len = strlen(argv_res_tmp) + strlen(pname) + strlen(abs_path) +
-                         strlen(current->nsproxy->uts_ns->name.nodename) + 172;
+                         strlen(comm) + strlen(current->nsproxy->uts_ns->name.nodename) + 172;
 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
@@ -690,7 +707,7 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
                  get_current_uid(), "\n", EXECVE_TYPE, "\n", pname, "\n",
                  abs_path, "\n", argv_res_tmp, "\n", current->pid, "\n",
                  current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
-                 "\n", current->tgid, "\n", current->comm, "\n",
+                 "\n", current->tgid, "\n", comm, "\n",
                  current->nsproxy->uts_ns->name.nodename,"\n",tmp_stdin,"\n",tmp_stdout,
                  "\n", sessionid);
 
@@ -773,8 +790,10 @@ static int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     char *pname = NULL;
     char *tmp_stdin = NULL;
     char *tmp_stdout = NULL;
+    char *comm;
     struct fdtable *files;
     struct execve_data *data;
+
 	if (share_mem_flag != -1) {
 	    char *argv;
 	    char *abs_path = NULL;
@@ -814,8 +833,13 @@ static int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
         pname = _dentry_path_raw();
 
+        if(strlen(current->comm) > 0)
+            comm = str_replace(current->comm, "\n", " ");
+        else
+            comm = "";
+
         result_str_len = strlen(argv) + strlen(pname) +
-                         strlen(abs_path) +
+                         strlen(abs_path) + strlen(comm) +
                          strlen(current->nsproxy->uts_ns->name.nodename) + 172;
 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
@@ -825,7 +849,7 @@ static int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                  get_current_uid(), "\n", EXECVE_TYPE, "\n", pname, "\n",
                  abs_path, "\n", argv, "\n", current->pid, "\n",
                  current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
-                 "\n", current->tgid, "\n", current->comm, "\n",
+                 "\n", current->tgid, "\n", comm, "\n",
                  current->nsproxy->uts_ns->name.nodename,"\n",tmp_stdin,"\n",tmp_stdout,
                  "\n", sessionid);
 
@@ -842,6 +866,7 @@ static void fsnotify_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
     int result_str_len;
     char *result_str = NULL;
     char *pathstr = NULL;
+    char *comm;
     struct inode *inode;
     unsigned int sessionid;
 
@@ -870,8 +895,13 @@ static void fsnotify_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
                 if (unlikely(abs_path == NULL))
                     abs_path = "-1";
 
+                if(strlen(current->comm) > 0)
+                    comm = str_replace(current->comm, "\n", " ");
+                else
+                    comm = "";
+
                 result_str_len = strlen(current->nsproxy->uts_ns->name.nodename)
-                                 + strlen(current->comm) + strlen(abs_path) + 172;
+                                 + strlen(comm) + strlen(abs_path) + 172;
 
                 if(likely(pathstr))
                     result_str_len = result_str_len + strlen(pathstr);
@@ -881,11 +911,11 @@ static void fsnotify_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
                 result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
                 snprintf(result_str, result_str_len,
-                        "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%u",
+                        "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
                         get_current_uid(), "\n", CREATE_FILE, "\n", abs_path, "\n", pathstr,
                         "\n", current->pid, "\n",current->real_parent->pid, "\n",
                         pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                        current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
+                        comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
                 send_msg_to_user(result_str, 1);
             }
         }
@@ -903,14 +933,20 @@ static int do_sys_open_entry_handler(struct kretprobe_instance *ri, struct pt_re
 {
     struct do_sys_open_data *data;
     struct path path;
+    struct filename *tmp;
     data = (struct do_sys_open_data *)ri->data;
     data->check_res = 1;
     if((int) p_regs_get_arg3(regs) & O_CREAT) {
         data->dfd = (int) p_regs_get_arg1(regs);
         data->filename = (const char __user *) p_regs_get_arg2(regs);
-        data->check_res = user_path_at(data->dfd, (const char __user *) p_regs_get_arg2(regs), LOOKUP_FOLLOW, &path);
-        if (!data->check_res)
-            path_put(&path);
+        if (likely(data->filename)) {
+            tmp = tmp_getname(data->filename);
+            if (likely(!IS_ERR(tmp))) {
+                data->check_res = user_path_at(data->dfd, data->filename, LOOKUP_FOLLOW, &path);
+                if (!data->check_res)
+                    path_put(&path);
+            }
+        }
     }
     return 0;
 }
@@ -920,11 +956,11 @@ static int do_sys_open_handler(struct kretprobe_instance *ri, struct pt_regs *re
     unsigned int sessionid;
     char *result_str = NULL;
     int result_str_len;
-    int ori_res;
-    int flags;
     int retval;
     int check_res;
+    char *comm;
     struct do_sys_open_data *data;
+
     if (share_mem_flag != -1) {
         retval = regs_return_value(regs);
         if (likely(retval > 0)) {
@@ -955,8 +991,13 @@ static int do_sys_open_handler(struct kretprobe_instance *ri, struct pt_regs *re
 
                     sessionid = get_sessionid();
 
+                    if(strlen(current->comm) > 0)
+                        comm = str_replace(current->comm, "\n", " ");
+                    else
+                        comm = "";
+
                     result_str_len = strlen(current->nsproxy->uts_ns->name.nodename)
-                                    + strlen(current->comm) + strlen(abs_path) + 172;
+                                    + strlen(comm) + strlen(abs_path) + 172;
                     if(likely(pathstr))
                         result_str_len = result_str_len + strlen(pathstr);
                     else
@@ -965,11 +1006,11 @@ static int do_sys_open_handler(struct kretprobe_instance *ri, struct pt_regs *re
                     result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
                     snprintf(result_str, result_str_len,
-                            "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%u",
+                            "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
                             get_current_uid(), "\n", CREATE_FILE, "\n", abs_path, "\n", pathstr,
                             "\n", current->pid, "\n",current->real_parent->pid, "\n",
                             pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                            current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
+                            "\n", comm, current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
                     send_msg_to_user(result_str, 1);
                 }
             }
@@ -984,17 +1025,18 @@ static void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
     int result_str_len;
     long request;
     long pid;
-    unsigned long addr;
-    unsigned long data;
+    void *addr;
+    char *data;
     char *final_path = NULL;
     char *result_str = NULL;
+    char *comm;
     unsigned int sessionid;
 
 	if (share_mem_flag != -1) {
 	    request = (long) p_get_arg1(regs);
 	    pid = (long) p_get_arg2(regs);
-	    addr = (unsigned long) p_get_arg3(regs);
-	    data = (unsigned long) p_get_arg4(regs);
+	    addr = (void *) p_get_arg3(regs);
+	    data = (char *) p_get_arg4(regs);
 	    if (request == PTRACE_POKETEXT || request == PTRACE_POKEDATA) {
 	        sessionid = get_sessionid();
 
@@ -1009,18 +1051,23 @@ static void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
             if (unlikely(final_path == NULL))
                 final_path = "-1";
 
+            if(strlen(current->comm) > 0)
+                comm = str_replace(current->comm, "\n", " ");
+            else
+                comm = "";
+
             result_str_len = strlen(current->nsproxy->uts_ns->name.nodename) +
-                             strlen(current->comm) + strlen(final_path) + 172;
+                             strlen(comm) + strlen(final_path) + 172;
 
             result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
             snprintf(result_str, result_str_len,
-                     "%d%s%s%s%ld%s%ld%s%ld%s%ln%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
+                     "%d%s%s%s%ld%s%ld%s%p%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
                      get_current_uid(), "\n", PTRACE_TYPE, "\n", request,
                      "\n", pid, "\n", addr, "\n", &data, "\n", final_path, "\n",
                      current->pid, "\n", current->real_parent->pid, "\n",
                      pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                     current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
+                     comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
 
             send_msg_to_user(result_str, 1);
 	    }
@@ -1052,6 +1099,7 @@ static int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     int rcode = 0;
     int *addrlen;
     unsigned int sessionid;
+    char *comm;
     char dip[64];
     char dport[16];
     char sip[64] = "-1";
@@ -1154,8 +1202,13 @@ static int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             if (unlikely(final_path == NULL))
                 final_path = "-1";
 
+            if(strlen(current->comm) > 0)
+                comm = str_replace(current->comm, "\n", " ");
+            else
+                comm = "";
+
             result_str_len = strlen(query) + strlen(current->nsproxy->uts_ns->name.nodename) +
-                             strlen(current->comm) + strlen(final_path) + 172;
+                             strlen(comm) + strlen(final_path) + 172;
 
             result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
@@ -1165,7 +1218,7 @@ static int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                      "\n", data->fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
                      current->pid, "\n", current->real_parent->pid, "\n",
                      pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                     current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
+                     comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
                      sip, "\n", sport, "\n", qr, "\n", opcode, "\n", rcode, "\n", query, "\n", sessionid);
 
             send_msg_to_user(result_str, 1);
@@ -1183,11 +1236,13 @@ static void load_module_post_handler(struct kprobe *p, struct pt_regs *regs, uns
     unsigned int sessionid;
     char *cwd = NULL;
     char *result_str = NULL;
+    char *comm;
     struct path files_path;
     struct files_struct *current_files;
     struct fdtable *files_table;
 
 	if (share_mem_flag != -1) {
+	    char *abs_path = NULL;
 	    char init_module_buf[PATH_MAX];
 	    memset(init_module_buf, 0, PATH_MAX);
 
@@ -1198,16 +1253,35 @@ static void load_module_post_handler(struct kprobe *p, struct pt_regs *regs, uns
         while (files_table->fd[i] != NULL)
             i++;
 
+        if (likely(current->mm)) {
+            if (likely(current->mm->exe_file)) {
+                char pathname[PATH_MAX];
+                memset(pathname, 0, PATH_MAX);
+                abs_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
+            }
+        }
+
+        if (unlikely(abs_path == NULL))
+            abs_path = "-1";
+
         files_path = files_table->fd[i - 1]->f_path;
         cwd = d_path(&files_path, init_module_buf, PATH_MAX);
-        result_str_len = strlen(cwd) + 192;
+
+        if(strlen(current->comm) > 0)
+            comm = str_replace(current->comm, "\n", " ");
+        else
+            comm = "";
+
+        result_str_len = strlen(cwd) + strlen(current->nsproxy->uts_ns->name.nodename)
+                         + strlen(comm) + strlen(abs_path) + 192;
+
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
-        snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
-                 get_current_uid(), "\n", LOAD_MODULE_TYPE, "\n", cwd,
+        snprintf(result_str, result_str_len, "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
+                 get_current_uid(), "\n", LOAD_MODULE_TYPE, "\n",abs_path,"\n" ,cwd ,
                  "\n", current->pid, "\n", current->real_parent->pid, "\n",
                  pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                 current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
+                 comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
 
         send_msg_to_user(result_str, 1);
 	}
@@ -1510,7 +1584,7 @@ static int __init smith_init(void)
 	    }
 	}
 
-    if (RECVFROM_HOOK == 1) {
+    if (DNS_HOOK == 1) {
 	ret = recvfrom_register_kprobe();
 	    if (ret < 0) {
 		    uninstall_kprobe();
@@ -1532,8 +1606,8 @@ static int __init smith_init(void)
     exit_protect_action()
 #endif
 
-	printk(KERN_INFO "[SMITH] register_kprobe success: connect_hook: %d,load_module_hook: %d,execve_hook: %d,fsnotify_hook: %d,ptrace_hook: %d,recvfrom_hook: %d\n",
-	       CONNECT_HOOK, LOAD_MODULE_HOOK, EXECVE_HOOK, FSNOTIFY_HOOK, PTRACE_HOOK, RECVFROM_HOOK);
+	printk(KERN_INFO "[SMITH] register_kprobe success: connect_hook: %d,load_module_hook: %d,execve_hook: %d,fsnotify_hook: %d,ptrace_hook: %d,DNS_HOOK: %d\n",
+	       CONNECT_HOOK, LOAD_MODULE_HOOK, EXECVE_HOOK, FSNOTIFY_HOOK, PTRACE_HOOK, DNS_HOOK);
 
 	return 0;
 }
