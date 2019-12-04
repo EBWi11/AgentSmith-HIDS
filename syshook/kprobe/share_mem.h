@@ -2,7 +2,7 @@
 * Project:	AgentSmith-HIDS
 * Author:	E_BWill
 * Year:		2018
-* File:		smith_hook.h
+* File:		share_mem.h
 * Description:	share memory
 *******************************************************************/
 #include <linux/mm.h>

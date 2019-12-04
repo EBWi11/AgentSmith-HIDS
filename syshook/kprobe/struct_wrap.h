@@ -1,3 +1,10 @@
+/*******************************************************************
+* Project:	AgentSmith-HIDS
+* Author:	E_BWill
+* Year:		2019
+* File:		struct_wrap.h
+* Description:	some struct wrap && some until functions
+*******************************************************************/
 #ifdef CONFIG_X86
 static inline unsigned long p_regs_get_arg1(struct pt_regs *p_regs) {
    return p_regs->di;

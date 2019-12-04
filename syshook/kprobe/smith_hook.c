@@ -20,6 +20,7 @@
 #include "share_mem.h"
 #include "smith_hook.h"
 #include "struct_wrap.h"
+#include "rootkit_check.h"
 
 #define EXIT_PROTECT 0
 
@@ -358,8 +359,6 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     int retval;
     int sa_family;
     int result_str_len;
-    int pid_check_res = -1;
-    int file_check_res = -1;
     unsigned int sessionid;
     struct socket *socket;
     struct sock *sk;
@@ -464,14 +463,13 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
             snprintf(result_str, result_str_len,
-                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%u",
+                    "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%u",
                     get_current_uid(), "\n", CONNECT_TYPE, "\n", sa_family,
                     "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
                     current->pid, "\n", current->real_parent->pid, "\n",
                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
                     current->comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                    sip, "\n", sport, "\n", retval, "\n", pid_check_res, "\n",
-                    file_check_res, "\n", sessionid);
+                    sip, "\n", sport, "\n", retval, "\n", sessionid);
 
             send_msg_to_user(result_str, 1);
         }
@@ -488,8 +486,6 @@ static void execveat_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
 {
     int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, flag = 0;
     int result_str_len;
-    int pid_check_res = -1;
-    int file_check_res = -1;
     unsigned int sessionid;
     char *result_str = NULL;
     char *abs_path = NULL;
@@ -576,14 +572,15 @@ static void execveat_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
                          strlen(current->nsproxy->uts_ns->name.nodename) + 172;
 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
+
         snprintf(result_str, result_str_len,
-                 "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%u",
+                 "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%u",
                  get_current_uid(), "\n", EXECVE_TYPE, "\n", pname, "\n",
                  abs_path, "\n", argv_res_tmp, "\n", current->pid, "\n",
                  current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
                  "\n", current->tgid, "\n", current->comm, "\n",
                  current->nsproxy->uts_ns->name.nodename,"\n",tmp_stdin,"\n",tmp_stdout,
-                 "\n",pid_check_res, "\n",file_check_res, "\n", sessionid);
+                 "\n", sessionid);
 
         send_msg_to_user(result_str, 1);
 
@@ -601,8 +598,6 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
 {
     int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, flag = 0;
     int result_str_len;
-    int pid_check_res = -1;
-    int file_check_res = -1;
     unsigned int sessionid;
     char *result_str = NULL;
     char *abs_path = NULL;
@@ -689,14 +684,15 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
                          strlen(current->nsproxy->uts_ns->name.nodename) + 172;
 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
+
         snprintf(result_str, result_str_len,
-                 "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%u",
+                 "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%u",
                  get_current_uid(), "\n", EXECVE_TYPE, "\n", pname, "\n",
                  abs_path, "\n", argv_res_tmp, "\n", current->pid, "\n",
                  current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
                  "\n", current->tgid, "\n", current->comm, "\n",
                  current->nsproxy->uts_ns->name.nodename,"\n",tmp_stdin,"\n",tmp_stdout,
-                 "\n",pid_check_res, "\n",file_check_res, "\n", sessionid);
+                 "\n", sessionid);
 
         send_msg_to_user(result_str, 1);
 
@@ -772,8 +768,6 @@ static int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
 static int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
     int result_str_len;
-    int pid_check_res = -1;
-    int file_check_res = -1;
     unsigned int sessionid;
     char *result_str = NULL;
     char *pname = NULL;
@@ -825,14 +819,15 @@ static int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                          strlen(current->nsproxy->uts_ns->name.nodename) + 172;
 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
+
         snprintf(result_str, result_str_len,
-                 "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%u",
+                 "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%u",
                  get_current_uid(), "\n", EXECVE_TYPE, "\n", pname, "\n",
                  abs_path, "\n", argv, "\n", current->pid, "\n",
                  current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
                  "\n", current->tgid, "\n", current->comm, "\n",
                  current->nsproxy->uts_ns->name.nodename,"\n",tmp_stdin,"\n",tmp_stdout,
-                 "\n",pid_check_res, "\n",file_check_res, "\n", sessionid);
+                 "\n", sessionid);
 
         send_msg_to_user(result_str, 1);
 	}
@@ -1554,6 +1549,6 @@ module_init(smith_init)
 module_exit(smith_exit)
 
 MODULE_LICENSE("GPL v2");
-MODULE_VERSION("1.0.0");
+MODULE_VERSION("1.0.1");
 MODULE_AUTHOR("E_Bwill <cy_sniper@yeah.net>");
 MODULE_DESCRIPTION("hook sys_execve,sys_connect,sys_ptrace,load_module,fsnotify,sys_recvfrom");

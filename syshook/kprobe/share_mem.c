@@ -1,3 +1,10 @@
+/*******************************************************************
+* Project:	AgentSmith-HIDS
+* Author:	E_BWill
+* Year:		2018
+* File:		smith_hook.c
+* Description:	share memory
+*******************************************************************/
 #include "share_mem.h"
 
 static DEFINE_MUTEX(mchar_mutex);
