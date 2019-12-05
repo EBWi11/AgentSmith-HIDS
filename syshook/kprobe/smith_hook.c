@@ -253,6 +253,30 @@ static char *getfullpath(struct inode *inod, char* buffer, int len)
 }
 #endif
 
+static char *get_exe_file(struct task_struct *task, char *buffer, int size) {
+    char *exe_file_str = "-1";
+    
+    if (unlikely(!buffer)) {
+        exe_file_str = "-1";
+        return exe_file_str;
+    }
+
+    if (likely(task->mm)) {
+        if (likely(task->mm->exe_file)) {
+            char pathname[PATH_MAX];
+            memset(pathname, 0, PATH_MAX);
+            exe_file_str = d_path(&task->mm->exe_file->f_path, buffer, size);
+        }
+    }
+
+    if (unlikely(IS_ERR(exe_file_str))) {
+        exe_file_str = "-1";
+    }
+    
+    kfree(buffer);
+    return exe_file_str;
+}
+
 static char *str_replace(char *orig, char *rep, char *with)
 {
     char *result, *ins, *tmp;
@@ -368,9 +392,10 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     char sip[64];
     char dport[16] = "-1";
     char sport[16] = "-1";
-    char *final_path = NULL;
+    char *abs_path = NULL;
     char *result_str;
-    char *comm;
+    char *comm = NULL;
+    char *buffer = NULL;
 
 	if (share_mem_flag != -1) {
 	    sessionid = get_sessionid();
@@ -446,16 +471,8 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         }
 
         if(flag == 1) {
-            if (likely(current->mm)) {
-                if (likely(current->mm->exe_file)) {
-                    char pathname[PATH_MAX];
-                    memset(pathname, 0, PATH_MAX);
-                    final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
-                }
-            }
-
-            if (unlikely(final_path == NULL))
-                final_path = "-1";
+            buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
+            abs_path = get_exe_file(current, buffer, PATH_MAX);
 
             if(strlen(current->comm) > 0)
                 comm = str_replace(current->comm, "\n", " ");
@@ -463,14 +480,14 @@ static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                 comm = "";
 
             result_str_len = strlen(current->nsproxy->uts_ns->name.nodename) +
-                             strlen(comm) + strlen(final_path) + 172;
+                             strlen(comm) + strlen(abs_path) + 172;
 
             result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
             snprintf(result_str, result_str_len,
                     "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%u",
                     get_current_uid(), "\n", CONNECT_TYPE, "\n", sa_family,
-                    "\n", fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
+                    "\n", fd, "\n", dport, "\n", dip, "\n", abs_path, "\n",
                     current->pid, "\n", current->real_parent->pid, "\n",
                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
                     comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
@@ -499,7 +516,7 @@ static void execveat_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
     char *tmp_stdout = NULL;
     char *argv_res = NULL;
     char *argv_res_tmp = NULL;
-    char *comm;
+    char *comm = NULL;
     struct filename *path;
     struct fdtable *files;
     const char __user *native;
@@ -524,15 +541,23 @@ static void execveat_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
         }
 
 	    files = files_fdtable(current->files);
-        if(likely(files->fd[0] != NULL))
+        if(likely(files->fd[0] != NULL)) {
             tmp_stdin = d_path(&(files->fd[0]->f_path), tmp_stdin_fd, PATH_MAX);
-        else
+            if (unlikely(IS_ERR(tmp_stdin))) {
+                tmp_stdin = "-1";
+            }
+        } else {
             tmp_stdin = "-1";
+        }
 
-        if(likely(files->fd[1] != NULL))
+        if(likely(files->fd[1] != NULL)) {
             tmp_stdout = d_path(&(files->fd[1]->f_path), tmp_stdout_fd, PATH_MAX);
-        else
+            if (unlikely(IS_ERR(tmp_stdout))) {
+                tmp_stdout = "-1";
+            }
+        } else {
             tmp_stdout = "-1";
+        }
 
         pname = dentry_path_raw(current->fs->pwd.dentry, pname_buf, PATH_MAX);
         argv_len = count(argv_ptr, MAX_ARG_STRINGS);
@@ -617,7 +642,7 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
     char *tmp_stdout = NULL;
     char *argv_res = NULL;
     char *argv_res_tmp = NULL;
-    char *comm;
+    char *comm = NULL;
     struct filename *path;
     struct fdtable *files;
     const char __user *native;
@@ -641,16 +666,24 @@ static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
             abs_path = "-1";
         }
 
-	    files = files_fdtable(current->files);
-        if(likely(files->fd[0] != NULL))
+        files = files_fdtable(current->files);
+        if(likely(files->fd[0] != NULL)) {
             tmp_stdin = d_path(&(files->fd[0]->f_path), tmp_stdin_fd, PATH_MAX);
-        else
+            if (unlikely(IS_ERR(tmp_stdin))) {
+                tmp_stdin = "-1";
+            }
+        } else {
             tmp_stdin = "-1";
+        }
 
-        if(likely(files->fd[1] != NULL))
+        if(likely(files->fd[1] != NULL)) {
             tmp_stdout = d_path(&(files->fd[1]->f_path), tmp_stdout_fd, PATH_MAX);
-        else
+            if (unlikely(IS_ERR(tmp_stdout))) {
+                tmp_stdout = "-1";
+            }
+        } else {
             tmp_stdout = "-1";
+        }
 
         pname = dentry_path_raw(current->fs->pwd.dentry, pname_buf, PATH_MAX);
         argv_len = count(argv_ptr, MAX_ARG_STRINGS);
@@ -790,7 +823,8 @@ static int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     char *pname = NULL;
     char *tmp_stdin = NULL;
     char *tmp_stdout = NULL;
-    char *comm;
+    char *comm = NULL;
+    char *buffer = NULL;
     struct fdtable *files;
     struct execve_data *data;
 
@@ -810,26 +844,26 @@ static int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
 	    files = files_fdtable(current->files);
 
-        if(likely(files->fd[0] != NULL))
+        if(likely(files->fd[0] != NULL)) {
             tmp_stdin = d_path(&(files->fd[0]->f_path), tmp_stdin_fd, PATH_MAX);
-        else
-            tmp_stdin = "-1";
-
-        if(likely(files->fd[1] != NULL))
-            tmp_stdout = d_path(&(files->fd[1]->f_path), tmp_stdout_fd, PATH_MAX);
-        else
-            tmp_stdout = "-1";
-
-        if (likely(current->mm)) {
-            if (likely(current->mm->exe_file)) {
-                char pathname[PATH_MAX];
-                memset(pathname, 0, PATH_MAX);
-                abs_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
+            if (unlikely(IS_ERR(tmp_stdin))) {
+                tmp_stdin = "-1"
             }
+        } else {
+            tmp_stdin = "-1";
         }
 
-        if (unlikely(abs_path == NULL))
-            abs_path = "-1";
+        if(likely(files->fd[1] != NULL)) {
+            tmp_stdout = d_path(&(files->fd[1]->f_path), tmp_stdout_fd, PATH_MAX);
+            if (unlikely(IS_ERR(tmp_stdout))) {
+                tmp_stdout = "-1"
+            }
+        } else {
+            tmp_stdout = "-1";
+        }
+
+        buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
+        abs_path = get_exe_file(current, buffer, PATH_MAX);
 
         pname = _dentry_path_raw();
 
@@ -866,34 +900,26 @@ static void fsnotify_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
     int result_str_len;
     char *result_str = NULL;
     char *pathstr = NULL;
-    char *comm;
+    char *comm = NULL;
     struct inode *inode;
     unsigned int sessionid;
 
 	if (share_mem_flag != -1) {
 	    __u32 flag = (__u32)p_get_arg2(regs);
         if (flag == FS_CREATE) {
+            char *buffer = NULL;
             char *abs_path = NULL;
-            char buffer[PATH_MAX];
-            memset(buffer, 0, sizeof(PATH_MAX));
 
             inode = (struct inode*)p_get_arg3(regs);
             if (likely(inode)) {
                 char *pathstr = NULL;
                 char pname_buf[PATH_MAX];
+
                 pathstr = getfullpath(inode, pname_buf, PATH_MAX);
                 sessionid = get_sessionid();
 
-                if (likely(current->mm)) {
-                    if (likely(current->mm->exe_file)) {
-                        char pathname[PATH_MAX];
-                        memset(pathname, 0, PATH_MAX);
-                        abs_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
-                    }
-                }
-
-                if (unlikely(abs_path == NULL))
-                    abs_path = "-1";
+                buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
+                abs_path = get_exe_file(current, buffer, PATH_MAX);
 
                 if(strlen(current->comm) > 0)
                     comm = str_replace(current->comm, "\n", " ");
@@ -958,7 +984,7 @@ static int do_sys_open_handler(struct kretprobe_instance *ri, struct pt_regs *re
     int result_str_len;
     int retval;
     int check_res;
-    char *comm;
+    char *comm = NULL;
     struct do_sys_open_data *data;
 
     if (share_mem_flag != -1) {
@@ -967,6 +993,7 @@ static int do_sys_open_handler(struct kretprobe_instance *ri, struct pt_regs *re
             data = (struct do_sys_open_data *)ri->data;
             check_res = data -> check_res;
             if (check_res == -2) {
+                char *buffer = NULL;
                 char *pathstr = NULL;
                 char *abs_path = NULL;
                 struct path path;
@@ -978,16 +1005,8 @@ static int do_sys_open_handler(struct kretprobe_instance *ri, struct pt_regs *re
                     pathstr = d_path(&path, pname_buf, PATH_MAX);
                     path_put(&path);
 
-                    if (likely(current->mm)) {
-                        if (likely(current->mm->exe_file)) {
-                            char pathname[PATH_MAX];
-                            memset(pathname, 0, PATH_MAX);
-                            abs_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
-                        }
-                    }
-
-                    if (unlikely(abs_path == NULL))
-                        abs_path = "-1";
+                    buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
+                    abs_path = get_exe_file(current, buffer, PATH_MAX);
 
                     sessionid = get_sessionid();
 
@@ -1027,9 +1046,10 @@ static void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
     long pid;
     void *addr;
     char *data;
-    char *final_path = NULL;
+    char *abs_path = NULL;
     char *result_str = NULL;
-    char *comm;
+    char *comm = NULL;
+    char *buffer = NULL;
     unsigned int sessionid;
 
 	if (share_mem_flag != -1) {
@@ -1040,16 +1060,8 @@ static void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
 	    if (request == PTRACE_POKETEXT || request == PTRACE_POKEDATA) {
 	        sessionid = get_sessionid();
 
-            if (likely(current->mm)) {
-                if (likely(current->mm->exe_file)) {
-                    char pathname[PATH_MAX];
-                    memset(pathname, 0, PATH_MAX);
-                    final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
-                }
-            }
-
-            if (unlikely(final_path == NULL))
-                final_path = "-1";
+            buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
+            abs_path = get_exe_file(current, buffer, PATH_MAX);
 
             if(strlen(current->comm) > 0)
                 comm = str_replace(current->comm, "\n", " ");
@@ -1057,14 +1069,14 @@ static void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
                 comm = "";
 
             result_str_len = strlen(current->nsproxy->uts_ns->name.nodename) +
-                             strlen(comm) + strlen(final_path) + 172;
+                             strlen(comm) + strlen(abs_path) + 172;
 
             result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
             snprintf(result_str, result_str_len,
                      "%d%s%s%s%ld%s%ld%s%p%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
                      get_current_uid(), "\n", PTRACE_TYPE, "\n", request,
-                     "\n", pid, "\n", addr, "\n", &data, "\n", final_path, "\n",
+                     "\n", pid, "\n", addr, "\n", &data, "\n", abs_path, "\n",
                      current->pid, "\n", current->real_parent->pid, "\n",
                      pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
                      comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
@@ -1099,15 +1111,16 @@ static int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     int rcode = 0;
     int *addrlen;
     unsigned int sessionid;
-    char *comm;
+    char *comm = NULL;
     char dip[64];
     char dport[16];
     char sip[64] = "-1";
     char sport[16] = "-1";
     unsigned char *recv_data = NULL;
     char *query = NULL;
-    char *final_path = NULL;
+    char *abs_path = NULL;
     char *result_str = NULL;
+    char *buffer = NULL;
     struct recvfrom_data *data;
     struct sockaddr tmp_dirp;
     struct sockaddr_in *sin;
@@ -1191,16 +1204,8 @@ static int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         }
 
         if (flag == 1) {
-            if (likely(current->mm)) {
-                if (likely(current->mm->exe_file)) {
-                    char pathname[PATH_MAX];
-                    memset(pathname, 0, PATH_MAX);
-                    final_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
-                }
-            }
-
-            if (unlikely(final_path == NULL))
-                final_path = "-1";
+            buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
+            abs_path = get_exe_file(current, buffer, PATH_MAX);
 
             if(strlen(current->comm) > 0)
                 comm = str_replace(current->comm, "\n", " ");
@@ -1208,14 +1213,14 @@ static int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                 comm = "";
 
             result_str_len = strlen(query) + strlen(current->nsproxy->uts_ns->name.nodename) +
-                             strlen(comm) + strlen(final_path) + 172;
+                             strlen(comm) + strlen(abs_path) + 172;
 
             result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
             snprintf(result_str, result_str_len,
                      "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%s%s%u",
                      get_current_uid(), "\n", DNS_TYPE, "\n", sa_family,
-                     "\n", data->fd, "\n", dport, "\n", dip, "\n", final_path, "\n",
+                     "\n", data->fd, "\n", dport, "\n", dip, "\n", abs_path, "\n",
                      current->pid, "\n", current->real_parent->pid, "\n",
                      pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
                      comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
@@ -1236,7 +1241,8 @@ static void load_module_post_handler(struct kprobe *p, struct pt_regs *regs, uns
     unsigned int sessionid;
     char *cwd = NULL;
     char *result_str = NULL;
-    char *comm;
+    char *comm = NULL;
+    char *buffer = NULL;
     struct path files_path;
     struct files_struct *current_files;
     struct fdtable *files_table;
@@ -1253,16 +1259,8 @@ static void load_module_post_handler(struct kprobe *p, struct pt_regs *regs, uns
         while (files_table->fd[i] != NULL)
             i++;
 
-        if (likely(current->mm)) {
-            if (likely(current->mm->exe_file)) {
-                char pathname[PATH_MAX];
-                memset(pathname, 0, PATH_MAX);
-                abs_path = d_path(&current->mm->exe_file->f_path, pathname, PATH_MAX);
-            }
-        }
-
-        if (unlikely(abs_path == NULL))
-            abs_path = "-1";
+        buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
+        abs_path = get_exe_file(current, buffer, PATH_MAX);
 
         files_path = files_table->fd[i - 1]->f_path;
         cwd = d_path(&files_path, init_module_buf, PATH_MAX);
