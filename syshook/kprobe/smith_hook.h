@@ -28,6 +28,7 @@
 #include <linux/fsnotify.h>
 #include <net/inet_sock.h>
 #include <net/tcp.h>
+#include <linux/namei.h>
 
 #define SMITH_NAME_MAX	(PATH_MAX - sizeof(struct filename))
 
