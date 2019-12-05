@@ -3,3 +3,4 @@
 - [x] support heartbeat
 - [ ] support get ELF file MD5
 - [ ] support whitelist
+- [ ] add LRU cache

@@ -3,7 +3,7 @@
 * Author:	E_BWill
 * Year:		2019
 * File:		smith_hook.h
-* Description:	share memory
+* Description:	smith_hook header
 *******************************************************************/
 #include <asm/syscall.h>
 #include <linux/kprobes.h>

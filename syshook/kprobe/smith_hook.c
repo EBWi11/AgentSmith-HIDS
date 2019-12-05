@@ -61,7 +61,7 @@ struct user_arg_ptr
             } ptr;
 };
 
-static const char __user *get_user_arg_ptr(struct user_arg_ptr argv, int nr)
+const char __user *get_user_arg_ptr(struct user_arg_ptr argv, int nr)
 {
     const char __user *native;
 
@@ -83,7 +83,7 @@ static const char __user *get_user_arg_ptr(struct user_arg_ptr argv, int nr)
     return native;
 }
 
-static int count(struct user_arg_ptr argv, int max)
+int count(struct user_arg_ptr argv, int max)
 {
     int i = 0;
     if (argv.ptr.native != NULL) {
@@ -104,7 +104,7 @@ static int count(struct user_arg_ptr argv, int max)
     return i;
 }
 #else
-static char *_dentry_path_raw(void)
+char *_dentry_path_raw(void)
 {
     char *cwd;
     char *pname_buf = NULL;
@@ -119,7 +119,7 @@ static char *_dentry_path_raw(void)
     return cwd;
 }
 
-static int count(char **argv, int max)
+int count(char **argv, int max)
 {
 	int i = 0;
 
@@ -145,7 +145,7 @@ static int count(char **argv, int max)
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 38)
-static char *getfullpath(struct inode *inod,char *buffer,int len)
+char *getfullpath(struct inode *inod,char *buffer,int len)
 {
 	struct hlist_node* plist = NULL;
 	struct dentry* tmp = NULL;
@@ -177,7 +177,7 @@ static char *getfullpath(struct inode *inod,char *buffer,int len)
 	return name;
 }
 #else
-static int prepend(char **buffer, int *buflen, const char *str, int namelen)
+int prepend(char **buffer, int *buflen, const char *str, int namelen)
 {
 	*buflen -= namelen;
 	if (*buflen < 0)
@@ -187,12 +187,12 @@ static int prepend(char **buffer, int *buflen, const char *str, int namelen)
 	return 0;
 }
 
-static int prepend_name(char **buffer, int *buflen, struct qstr *name)
+int prepend_name(char **buffer, int *buflen, struct qstr *name)
 {
 	return prepend(buffer, buflen, name->name, name->len);
 }
 
-static char *__dentry_path(struct dentry *dentry, char *buf, int buflen)
+char *__dentry_path(struct dentry *dentry, char *buf, int buflen)
 {
 	char *end = buf + buflen;
 	char *retval;
@@ -222,7 +222,7 @@ Elong:
 	return ERR_PTR(-ENAMETOOLONG);
 }
 
-static char *getfullpath(struct inode *inod, char* buffer, int len)
+char *getfullpath(struct inode *inod, char* buffer, int len)
 {
 	struct list_head* plist = NULL;
 	struct dentry* tmp = NULL;
@@ -252,8 +252,8 @@ static char *getfullpath(struct inode *inod, char* buffer, int len)
 	return name;
 }
 #endif
-
-static char *get_exe_file(struct task_struct *task, char *buffer, int size) {
+char *get_exe_file(struct task_struct *task, char *buffer, int size) 
+{
     char *exe_file_str = "-1";
     
     if (unlikely(!buffer)) {
@@ -277,7 +277,7 @@ static char *get_exe_file(struct task_struct *task, char *buffer, int size) {
     return exe_file_str;
 }
 
-static char *str_replace(char *orig, char *rep, char *with)
+char *str_replace(char *orig, char *rep, char *with)
 {
     char *result, *ins, *tmp;
     int len_rep, len_with, len_front, count;
@@ -334,13 +334,13 @@ struct fsnotify_data {
 
 
 #if EXIT_PROTECT == 1
-static void exit_protect_action(void)
+void exit_protect_action(void)
 {
     __module_get(THIS_MODULE);
 }
 #endif
 
-static int checkCPUendian(void)
+int checkCPUendian(void)
 {
     union {
         unsigned long int i;
@@ -355,7 +355,7 @@ unsigned short int Ntohs(unsigned short int n)
     return checkCPUendianRes ? n : BigLittleSwap16(n);
 }
 
-static unsigned int get_sessionid(void)
+unsigned int get_sessionid(void)
 {
     unsigned int sessionid = 0;
 #ifdef CONFIG_AUDITSYSCALL
@@ -364,7 +364,7 @@ static unsigned int get_sessionid(void)
     return sessionid;
 }
 
-static int connect_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
+int connect_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
     struct connect_data *data;
     data = (struct connect_data *)ri->data;
@@ -373,7 +373,7 @@ static int connect_entry_handler(struct kretprobe_instance *ri, struct pt_regs *
     return 0;
 }
 
-static int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
+int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
     int err;
     int fd;
@@ -504,7 +504,7 @@ out:
 }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
-static void execveat_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
+void execveat_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
 {
     int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, flag = 0;
     int result_str_len;
@@ -630,7 +630,7 @@ static void execveat_post_handler(struct kprobe *p, struct pt_regs *regs, unsign
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0)
-static void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
+void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
 {
     int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, flag = 0;
     int result_str_len;
@@ -759,7 +759,7 @@ struct execve_data {
     char *argv;
 };
 
-static int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
+int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
     int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, flag = 0;
     char *argv_res = NULL;
@@ -815,7 +815,7 @@ static int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
     return 0;
 }
 
-static int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
+int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
     int result_str_len;
     unsigned int sessionid;
@@ -829,7 +829,7 @@ static int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     struct execve_data *data;
 
 	if (share_mem_flag != -1) {
-	    char *argv;
+	    char *argv = NULL;
 	    char *abs_path = NULL;
 	    char tmp_stdin_fd[PATH_MAX];
         char tmp_stdout_fd[PATH_MAX];
@@ -847,7 +847,7 @@ static int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         if(likely(files->fd[0] != NULL)) {
             tmp_stdin = d_path(&(files->fd[0]->f_path), tmp_stdin_fd, PATH_MAX);
             if (unlikely(IS_ERR(tmp_stdin))) {
-                tmp_stdin = "-1"
+                tmp_stdin = "-1";
             }
         } else {
             tmp_stdin = "-1";
@@ -856,7 +856,7 @@ static int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         if(likely(files->fd[1] != NULL)) {
             tmp_stdout = d_path(&(files->fd[1]->f_path), tmp_stdout_fd, PATH_MAX);
             if (unlikely(IS_ERR(tmp_stdout))) {
-                tmp_stdout = "-1"
+                tmp_stdout = "-1";
             }
         } else {
             tmp_stdout = "-1";
@@ -895,11 +895,10 @@ static int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 18, 0)
-static void fsnotify_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
+void fsnotify_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
 {
     int result_str_len;
     char *result_str = NULL;
-    char *pathstr = NULL;
     char *comm = NULL;
     struct inode *inode;
     unsigned int sessionid;
@@ -955,7 +954,7 @@ struct do_sys_open_data {
     const char __user *filename;
 };
 
-static int do_sys_open_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
+int do_sys_open_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
     struct do_sys_open_data *data;
     struct path path;
@@ -977,7 +976,7 @@ static int do_sys_open_entry_handler(struct kretprobe_instance *ri, struct pt_re
     return 0;
 }
 
-static int do_sys_open_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
+int do_sys_open_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
     unsigned int sessionid;
     char *result_str = NULL;
@@ -1039,7 +1038,7 @@ static int do_sys_open_handler(struct kretprobe_instance *ri, struct pt_regs *re
 }
 #endif
 
-static void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
+void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
 {
     int result_str_len;
     long request;
@@ -1086,7 +1085,7 @@ static void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned
 	}
 }
 
-static int recvfrom_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
+int recvfrom_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
     struct recvfrom_data *data;
     data = (struct recvfrom_data *)ri->data;
@@ -1098,7 +1097,7 @@ static int recvfrom_entry_handler(struct kretprobe_instance *ri, struct pt_regs 
     return 0;
 }
 
-static int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
+int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
     int err;
     int flag = 0;
@@ -1234,7 +1233,7 @@ static int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     return 0;
 }
 
-static void load_module_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
+void load_module_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags)
 {
     int i = 0;
     int result_str_len;
@@ -1283,9 +1282,9 @@ static void load_module_post_handler(struct kprobe *p, struct pt_regs *regs, uns
 
         send_msg_to_user(result_str, 1);
 	}
-}
+}   
 
-static struct kretprobe connect_kretprobe = {
+struct kretprobe connect_kretprobe = {
     .kp.symbol_name = P_GET_SYSCALL_NAME(connect),
     .data_size  = sizeof(struct connect_data),
 	.handler = connect_handler,
@@ -1294,14 +1293,14 @@ static struct kretprobe connect_kretprobe = {
 };
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
-static struct kprobe execveat_kprobe = {
+struct kprobe execveat_kprobe = {
     .symbol_name = P_GET_SYSCALL_NAME(execveat),
 	.post_handler = execveat_post_handler,
 };
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
-static struct kretprobe execve_kretprobe = {
+struct kretprobe execve_kretprobe = {
     .kp.symbol_name = P_GET_SYSCALL_NAME(execve),
     .data_size  = sizeof(struct execve_data),
 	.handler = execve_handler,
@@ -1309,19 +1308,19 @@ static struct kretprobe execve_kretprobe = {
 	.maxactive = 120,
 };
 #else
-static struct kprobe execve_kprobe = {
+struct kprobe execve_kprobe = {
     .symbol_name = P_GET_SYSCALL_NAME(execve),
 	.post_handler = execve_post_handler,
 };
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 18, 0)
-static struct kprobe fsnotify_kprobe = {
+struct kprobe fsnotify_kprobe = {
     .symbol_name = "fsnotify",
 	.post_handler = fsnotify_post_handler,
 };
 #else
-static struct kretprobe do_sys_open_kretprobe = {
+struct kretprobe do_sys_open_kretprobe = {
     .kp.symbol_name = "do_sys_open",
     .data_size = sizeof(struct do_sys_open_data),
 	.handler = do_sys_open_handler,
@@ -1330,12 +1329,12 @@ static struct kretprobe do_sys_open_kretprobe = {
 };
 #endif
 
-static struct kprobe ptrace_kprobe = {
+struct kprobe ptrace_kprobe = {
     .symbol_name = P_GET_SYSCALL_NAME(ptrace),
 	.post_handler = ptrace_post_handler,
 };
 
-static struct kretprobe recvfrom_kretprobe = {
+struct kretprobe recvfrom_kretprobe = {
     .kp.symbol_name = P_GET_SYSCALL_NAME(recvfrom),
     .data_size  = sizeof(struct recvfrom_data),
 	.handler = recvfrom_handler,
@@ -1343,12 +1342,12 @@ static struct kretprobe recvfrom_kretprobe = {
 	.maxactive = 120,
 };
 
-static struct kprobe load_module_kprobe = {
+struct kprobe load_module_kprobe = {
     .symbol_name = "load_module",
 	.post_handler = load_module_post_handler,
 };
 
-static int connect_register_kprobe(void)
+int connect_register_kprobe(void)
 {
 	int ret;
 	ret = register_kretprobe(&connect_kretprobe);
@@ -1359,12 +1358,12 @@ static int connect_register_kprobe(void)
 	return ret;
 }
 
-static void unregister_kretprobe_connect(void)
+void unregister_kretprobe_connect(void)
 {
 	unregister_kretprobe(&connect_kretprobe);
 }
 
-static int execve_register_kprobe(void)
+int execve_register_kprobe(void)
 {
 	int ret;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
@@ -1380,7 +1379,7 @@ static int execve_register_kprobe(void)
 }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
-static int execveat_register_kprobe(void)
+int execveat_register_kprobe(void)
 {
 	int ret;
 	ret = register_kprobe(&execveat_kprobe);
@@ -1392,7 +1391,7 @@ static int execveat_register_kprobe(void)
 }
 #endif
 
-static void unregister_kprobe_execve(void)
+void unregister_kprobe_execve(void)
 {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
 	unregister_kretprobe(&execve_kretprobe);
@@ -1401,7 +1400,7 @@ static void unregister_kprobe_execve(void)
 #endif
 }
 
-static int fsnotify_register_kprobe(void)
+int fsnotify_register_kprobe(void)
 {
 	int ret;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 18, 0)
@@ -1415,7 +1414,7 @@ static int fsnotify_register_kprobe(void)
 	return ret;
 }
 
-static void unregister_kprobe_fsnotify(void)
+void unregister_kprobe_fsnotify(void)
 {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 18, 0)
 	unregister_kprobe(&fsnotify_kprobe);
@@ -1424,7 +1423,7 @@ static void unregister_kprobe_fsnotify(void)
 #endif
 }
 
-static int ptrace_register_kprobe(void)
+int ptrace_register_kprobe(void)
 {
 	int ret;
 	ret = register_kprobe(&ptrace_kprobe);
@@ -1435,12 +1434,12 @@ static int ptrace_register_kprobe(void)
 	return ret;
 }
 
-static void unregister_kprobe_ptrace(void)
+void unregister_kprobe_ptrace(void)
 {
 	unregister_kprobe(&ptrace_kprobe);
 }
 
-static int recvfrom_register_kprobe(void)
+int recvfrom_register_kprobe(void)
 {
 	int ret;
 	ret = register_kretprobe(&recvfrom_kretprobe);
@@ -1451,12 +1450,12 @@ static int recvfrom_register_kprobe(void)
 	return ret;
 }
 
-static void unregister_kprobe_recvfrom(void)
+void unregister_kprobe_recvfrom(void)
 {
 	unregister_kretprobe(&recvfrom_kretprobe);
 }
 
-static int load_module_register_kprobe(void)
+int load_module_register_kprobe(void)
 {
 	int ret;
 	ret = register_kprobe(&load_module_kprobe);
@@ -1467,19 +1466,19 @@ static int load_module_register_kprobe(void)
 	return ret;
 }
 
-static void unregister_kprobe_load_module(void)
+void unregister_kprobe_load_module(void)
 {
 	unregister_kprobe(&load_module_kprobe);
 }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
-static void unregister_kprobe_execveat(void)
+void unregister_kprobe_execveat(void)
 {
 	unregister_kprobe(&execveat_kprobe);
 }
 #endif
 
-static void uninstall_kprobe(void)
+void uninstall_kprobe(void)
 {
     if (connect_kprobe_state == 0x1)
 	    unregister_kretprobe_connect();
@@ -1506,7 +1505,7 @@ static void uninstall_kprobe(void)
 
 }
 
-static int __init smith_init(void)
+int __init smith_init(void)
 {
 	int ret;
 	checkCPUendianRes = checkCPUendian();
@@ -1610,7 +1609,7 @@ static int __init smith_init(void)
 	return 0;
 }
 
-static void __exit smith_exit(void)
+void __exit smith_exit(void)
 {
 	uninstall_kprobe();
 	uninstall_share_mem();
