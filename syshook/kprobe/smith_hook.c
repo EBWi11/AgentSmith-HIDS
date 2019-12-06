@@ -325,7 +325,7 @@ struct recvfrom_data {
     struct sockaddr *dirp;
     void *ubuf;
     size_t size;
-    int *addr_len;
+    int addr_len;
 };
 
 struct fsnotify_data {
@@ -1012,7 +1012,7 @@ int recvfrom_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     data->ubuf = (void *)p_get_arg2(regs);
     data->size = (size_t)p_get_arg3(regs);
     data->dirp = (struct sockaddr *)p_get_arg5(regs);
-    data->addr_len = (int *)p_get_arg6(regs);
+    data->addr_len = (int)p_get_arg6(regs);
     return 0;
 }
 
@@ -1027,7 +1027,7 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     int opcode = 0;
     int qr;
     int rcode = 0;
-    int *addrlen;
+    int addrlen;
     unsigned int sessionid;
     char *comm = NULL;
     char dip[64];
@@ -1060,6 +1060,10 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         if (tmp_dirp.sa_family == AF_INET) {
             sa_family = 4;
             sock = sockfd_lookup(data->fd, &err);
+
+            if (unlikely(IS_ERR(sock)))
+                goto out;
+
             sin = (struct sockaddr_in *)&tmp_dirp;
             if (sin->sin_port == 13568 || sin->sin_port == 59668) {
                 recv_data = kzalloc(data->size, GFP_ATOMIC);
@@ -1077,13 +1081,15 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                         snprintf(dport, 16, "%d", Ntohs(sin->sin_port));
                         if (sock) {
                         #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0)
-                            kernel_getsockname(sock, (struct sockaddr *)&source_addr);
+                            err = kernel_getsockname(sock, (struct sockaddr *)&source_addr);
                         #else
-                            kernel_getsockname(sock, (struct sockaddr *)&source_addr, addrlen);
+                            err = kernel_getsockname(sock, (struct sockaddr *)&source_addr, &addrlen);
                         #endif
-                            snprintf(sport, 16, "%d", Ntohs(source_addr.sin_port));
-                            snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(source_addr.sin_addr));
-                            sockfd_put(sock);
+                            if (likely(err == 0)) {
+                                snprintf(sport, 16, "%d", Ntohs(source_addr.sin_port));
+                                snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(source_addr.sin_addr));
+                                sockfd_put(sock);
+                            }
                         }
     	            }
     	        }
@@ -1091,6 +1097,10 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         } else if (tmp_dirp.sa_family == AF_INET6) {
             sa_family = 6;
             sock = sockfd_lookup(data->fd, &err);
+
+            if (unlikely(IS_ERR(sock)))
+                goto out;
+
             sin6 = (struct sockaddr_in6 *)&tmp_dirp;
             if (sin6->sin6_port == 13568 || sin6->sin6_port == 59668) {
                 recv_data = kzalloc(data->size, GFP_ATOMIC);
@@ -1108,13 +1118,15 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                         snprintf(dport, 16, "%d", Ntohs(sin6->sin6_port));
                         if (sock) {
                         #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0)
-                            kernel_getsockname(sock, (struct sockaddr *)&source_addr);
+                            err = kernel_getsockname(sock, (struct sockaddr *)&source_addr);
                         #else
-                            kernel_getsockname(sock, (struct sockaddr *)&source_addr, addrlen);
+                            err = kernel_getsockname(sock, (struct sockaddr *)&source_addr, &addrlen);
                         #endif
-                            snprintf(sport, 16, "%d", Ntohs(source_addr6.sin6_port));
-                            snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(source_addr6.sin6_addr));
-                            sockfd_put(sock);
+                            if (likely(err == 0)) {
+                                snprintf(sport, 16, "%d", Ntohs(source_addr6.sin6_port));
+                                snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(source_addr6.sin6_addr));
+                                sockfd_put(sock);
+                            }
                         }
     	            }
                 }
@@ -1149,6 +1161,9 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             kfree(recv_data);
         }
 	}
+    return 0;
+
+out:
     return 0;
 }
 

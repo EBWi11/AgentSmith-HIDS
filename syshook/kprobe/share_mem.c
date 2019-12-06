@@ -39,18 +39,6 @@ static int get_write_index(void);
 static void fix_write_index(int index);
 static int send_msg_to_user_memshare(char *msg, int kfree_flag);
 
-#if DELAY_TEST == 1
-static char *get_timespec(void)
-{
-    char *res = NULL;
-    struct timespec tmp_time;
-    res = kzalloc(64, GFP_ATOMIC);
-    tmp_time = current_kernel_time();
-    snprintf(res, 64, "%lu.%lu", tmp_time.tv_sec, tmp_time.tv_nsec);
-    return res;
-}
-#endif
-
 static void lock_init(void)
 {
     rwlock_init(&_write_index_lock);
@@ -231,17 +219,6 @@ int send_msg_to_user(char *msg, int kfree_flag)
 #if (KERNEL_PRINT == 2)
     printk("%s\n", msg);
 #endif
-
-#if (DELAY_TEST == 1)
-    if(kfree_flag == 1) {
-        send_msg_to_user_memshare(get_timespec(), 1);
-
-        if (msg)
-            kfree(msg);
-        return 0;
-    }
-#endif
-
     return send_msg_to_user_memshare(msg, kfree_flag);
 }
 

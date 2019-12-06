@@ -17,7 +17,6 @@
 #define MAX_SIZE 2097152
 #define CHECK_READ_INDEX_THRESHOLD 524288
 
-#define DELAY_TEST 0
 #define KERNEL_PRINT 0
 
 extern int share_mem_flag;
