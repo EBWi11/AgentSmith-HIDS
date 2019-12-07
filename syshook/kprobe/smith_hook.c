@@ -367,9 +367,11 @@ unsigned int get_sessionid(void)
 int connect_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
     struct connect_data *data;
-    data = (struct connect_data *)ri->data;
-    data->fd = p_get_arg1(regs);
-    data->dirp = (struct sockaddr *)p_get_arg2(regs);
+    if (share_mem_flag != -1) {
+        data = (struct connect_data *)ri->data;
+        data->fd = p_get_arg1(regs);
+        data->dirp = (struct sockaddr *)p_get_arg2(regs);
+    }
     return 0;
 }
 
@@ -685,52 +687,53 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     char *argv_res_tmp = NULL;
     struct execve_data *data;
     const char __user *native;
-    char **argv = (char **) p_get_arg2(regs);
-    data = (struct execve_data *)ri->data;
+    if (share_mem_flag != -1) {
+        char **argv = (char **) p_get_arg2(regs);
+        data = (struct execve_data *)ri->data;
 
-    argv_len = count(argv, MAX_ARG_STRINGS);
-    if(argv_len > 0)
-        argv_res = kzalloc(128 * argv_len, GFP_ATOMIC);
+        argv_len = count(argv, MAX_ARG_STRINGS);
+        if(argv_len > 0)
+            argv_res = kzalloc(128 * argv_len, GFP_ATOMIC);
 
-    if (argv_len > 0) {
-        for(i = 0; i < argv_len; i ++) {
-            if(get_user(native, argv + i)) {
-                flag = -1;
-                break;
+        if (argv_len > 0) {
+            for(i = 0; i < argv_len; i ++) {
+                if(get_user(native, argv + i)) {
+                    flag = -1;
+                    break;
+                }
+
+                len = strnlen_user(native, MAX_ARG_STRLEN);
+                if(!len) {
+                    flag = -2;
+                    break;
+                }
+
+                if(offset + len > argv_res_len + 128 * argv_len) {
+                    flag = -3;
+                    break;
+                }
+
+                if (copy_from_user(argv_res + offset, native, len)) {
+                    flag = -4;
+                    break;
+                }
+
+                offset += len - 1;
+                *(argv_res + offset) = ' ';
+                offset += 1;
             }
-
-            len = strnlen_user(native, MAX_ARG_STRLEN);
-            if(!len) {
-                flag = -2;
-                break;
-            }
-
-            if(offset + len > argv_res_len + 128 * argv_len) {
-                flag = -3;
-                break;
-            }
-
-            if (copy_from_user(argv_res + offset, native, len)) {
-                flag = -4;
-                break;
-            }
-
-            offset += len - 1;
-            *(argv_res + offset) = ' ';
-            offset += 1;
         }
+
+        if (argv_len > 0 && flag == 0)
+            argv_res_tmp = str_replace(argv_res, "\n", " ");
+        else
+            argv_res_tmp = "";
+
+        data->argv = argv_res_tmp;
+
+        if(argv_len > 0)
+            kfree(argv_res);
     }
-
-    if (argv_len > 0 && flag == 0)
-        argv_res_tmp = str_replace(argv_res, "\n", " ");
-    else
-        argv_res_tmp = "";
-
-    data->argv = argv_res_tmp;
-
-    if(argv_len > 0)
-        kfree(argv_res);
-
     return 0;
 }
 
@@ -878,17 +881,19 @@ int do_sys_open_entry_handler(struct kretprobe_instance *ri, struct pt_regs *reg
     struct do_sys_open_data *data;
     struct path path;
     struct filename *tmp;
-    data = (struct do_sys_open_data *)ri->data;
-    data->check_res = 1;
-    if((int) p_regs_get_arg3(regs) & O_CREAT) {
-        data->dfd = (int) p_regs_get_arg1(regs);
-        data->filename = (const char __user *) p_regs_get_arg2(regs);
-        if (likely(data->filename)) {
-            tmp = tmp_getname(data->filename);
-            if (likely(!IS_ERR(tmp))) {
-                data->check_res = user_path_at(data->dfd, data->filename, LOOKUP_FOLLOW, &path);
-                if (!data->check_res)
-                    path_put(&path);
+    if (share_mem_flag != -1) {
+        data = (struct do_sys_open_data *)ri->data;
+        data->check_res = 1;
+        if((int) p_regs_get_arg3(regs) & O_CREAT) {
+            data->dfd = (int) p_regs_get_arg1(regs);
+            data->filename = (const char __user *) p_regs_get_arg2(regs);
+            if (likely(data->filename)) {
+                tmp = tmp_getname(data->filename);
+                if (likely(!IS_ERR(tmp))) {
+                    data->check_res = user_path_at(data->dfd, data->filename, LOOKUP_FOLLOW, &path);
+                    if (!data->check_res)
+                        path_put(&path);
+                }
             }
         }
     }
@@ -1007,12 +1012,14 @@ void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long f
 int recvfrom_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
     struct recvfrom_data *data;
-    data = (struct recvfrom_data *)ri->data;
-    data->fd = p_get_arg1(regs);
-    data->ubuf = (void *)p_get_arg2(regs);
-    data->size = (size_t)p_get_arg3(regs);
-    data->dirp = (struct sockaddr *)p_get_arg5(regs);
-    data->addr_len = (int)p_get_arg6(regs);
+    if (share_mem_flag != -1) {
+        data = (struct recvfrom_data *)ri->data;
+        data->fd = p_get_arg1(regs);
+        data->ubuf = (void *)p_get_arg2(regs);
+        data->size = (size_t)p_get_arg3(regs);
+        data->dirp = (struct sockaddr *)p_get_arg5(regs);
+        data->addr_len = (int)p_get_arg6(regs);
+    }
     return 0;
 }
 
