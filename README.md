@@ -62,23 +62,23 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ```json
 {
-    "uid":"0"，
-    "data_type":"59"，
-    "run_path":"/root/AgentSmith-HIDS/agent/target/release"，
-    "exe":"/usr/bin/ls"，
-    "argv":"ls --color=auto --indicator-style=classify "，
-    "pid":"6265"，
-    "ppid":"1941"，
-    "pgid":"6265"，
-    "tgid":"6265"，
-    "comm":"fish"，
-    "nodename":"test"，
-    "stdin":"/dev/pts/0"，
-    "stdout":"/dev/pts/0"，
-    "sessionid":"1"，
-    "user":"root"，
-    "time":"1575721900051"，
-    "local_ip":"192.168.165.153"，
+    "uid":"0",
+    "data_type":"59",
+    "run_path":"/root/AgentSmith-HIDS/agent/target/release",
+    "exe":"/usr/bin/ls",
+    "argv":"ls --color=auto --indicator-style=classify ",
+    "pid":"6265",
+    "ppid":"1941",
+    "pgid":"6265",
+    "tgid":"6265",
+    "comm":"fish",
+    "nodename":"test",
+    "stdin":"/dev/pts/0",
+    "stdout":"/dev/pts/0",
+    "sessionid":"1",
+    "user":"root",
+    "time":"1575721900051",
+    "local_ip":"192.168.165.153",
     "hostname":"test"
 }
 ```
@@ -91,26 +91,26 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ```json
 {
-    "uid":"0"，
-    "data_type":"42"，
-    "sa_family":"4"，
-    "fd":"4"，
-    "dport":"1025"，
-    "dip":"180.101.49.11"，
-    "exe":"/usr/bin/ping"，
-    "pid":"6294"，
-    "ppid":"1941"，
-    "pgid":"6294"，
-    "tgid":"6294"，
-    "comm":"ping"，
-    "nodename":"test"，
-    "sip":"192.168.165.153"，
-    "sport":"45524"，
-    "res":"0"，
-    "sessionid":"1"，
-    "user":"root"，
-    "time":"1575721921240"，
-    "local_ip":"192.168.165.153"，
+    "uid":"0",
+    "data_type":"42",
+    "sa_family":"4",
+    "fd":"4",
+    "dport":"1025",
+    "dip":"180.101.49.11",
+    "exe":"/usr/bin/ping",
+    "pid":"6294",
+    "ppid":"1941",
+    "pgid":"6294",
+    "tgid":"6294",
+    "comm":"ping",
+    "nodename":"test",
+    "sip":"192.168.165.153",
+    "sport":"45524",
+    "res":"0",
+    "sessionid":"1",
+    "user":"root",
+    "time":"1575721921240",
+    "local_ip":"192.168.165.153",
     "hostname":"test"
 }
 ```
@@ -123,29 +123,29 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ```json
 {
-    "uid":"0"，
-    "data_type":"601"，
-    "sa_family":"4"，
-    "fd":"4"，
-    "sport":"53"，
-    "sip":"192.168.165.2"，
-    "exe":"/usr/bin/ping"，
-    "pid":"6294"，
-    "ppid":"1941"，
-    "pgid":"6294"，
-    "tgid":"6294"，
-    "comm":"ping"，
-    "nodename":"test"，
-    "dip":"192.168.165.153"，
-    "dport":"53178"，
-    "qr":"1"，
-    "opcode":"0"，
-    "rcode":"0"，
-    "query":"www.baidu.com"，
-    "sessionid":"1"，
-    "user":"root"，
-    "time":"1575721921240"，
-    "local_ip":"192.168.165.153"，
+    "uid":"0",
+    "data_type":"601",
+    "sa_family":"4",
+    "fd":"4",
+    "sport":"53",
+    "sip":"192.168.165.2",
+    "exe":"/usr/bin/ping",
+    "pid":"6294",
+    "ppid":"1941",
+    "pgid":"6294",
+    "tgid":"6294",
+    "comm":"ping",
+    "nodename":"test",
+    "dip":"192.168.165.153",
+    "dport":"53178",
+    "qr":"1",
+    "opcode":"0",
+    "rcode":"0",
+    "query":"www.baidu.com",
+    "sessionid":"1",
+    "user":"root",
+    "time":"1575721921240",
+    "local_ip":"192.168.165.153",
     "hostname":"test"
 }
 ```
@@ -158,20 +158,20 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ```json
 {
-    "uid":"0"，
-    "data_type":"602"，
-    "exe":"/usr/lib/jvm/java-1.8.0-openjdk-1.8.0.232.b09-0.el7_7.x86_64/jre/bin/java"，
-    "file_path":"/tmp/kafka-logs/replication-offset-checkpoint.tmp"，
-    "pid":"3341"，
-    "ppid":"1"，
-    "pgid":"2657"，
-    "tgid":"2659"，
-    "comm":"kafka-scheduler"，
-    "nodename":"test"，
-    "sessionid":"3"，
-    "user":"root"，
-    "time":"1575721984257"，
-    "local_ip":"192.168.165.153"，
+    "uid":"0",
+    "data_type":"602",
+    "exe":"/usr/lib/jvm/java-1.8.0-openjdk-1.8.0.232.b09-0.el7_7.x86_64/jre/bin/java",
+    "file_path":"/tmp/kafka-logs/replication-offset-checkpoint.tmp",
+    "pid":"3341",
+    "ppid":"1",
+    "pgid":"2657",
+    "tgid":"2659",
+    "comm":"kafka-scheduler",
+    "nodename":"test",
+    "sessionid":"3",
+    "user":"root",
+    "time":"1575721984257",
+    "local_ip":"192.168.165.153",
     "hostname":"test"
 }
 ```
@@ -184,23 +184,23 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ```json
 {
-    "uid":"0"，
-    "data_type":"101"，
-    "ptrace_request":"4"，
-    "target_pid":"7402"，
-    "addr":"00007ffe13011ee6"，
-    "data":"-a"，
-    "exe":"/root/ptrace/ptrace"，
-    "pid":"7401"，
-    "ppid":"1941"，
-    "pgid":"7401"，
-    "tgid":"7401"，
-    "comm":"ptrace"，
-    "nodename":"test"，
-    "sessionid":"1"，
-    "user":"root"，
-    "time":"1575722717065"，
-    "local_ip":"192.168.165.153"，
+    "uid":"0",
+    "data_type":"101",
+    "ptrace_request":"4",
+    "target_pid":"7402",
+    "addr":"00007ffe13011ee6",
+    "data":"-a",
+    "exe":"/root/ptrace/ptrace",
+    "pid":"7401",
+    "ppid":"1941",
+    "pgid":"7401",
+    "tgid":"7401",
+    "comm":"ptrace",
+    "nodename":"test",
+    "sessionid":"1",
+    "user":"root",
+    "time":"1575722717065",
+    "local_ip":"192.168.165.153",
     "hostname":"test"
 }
 ```
@@ -229,13 +229,13 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 原始测试数据：
 
-[benchmark_data](https://github.com/EBWi11/AgentSmith-HIDS/tree/master/benchmark_data)
+[Benchmark Data](https://github.com/EBWi11/AgentSmith-HIDS/tree/master/benchmark_data)
 
 
 
 ### 部署及测试文档
 
-[Quick-Start](https://github.com/EBWi11/AgentSmith-HIDS/blob/master/Quick-Start.md)
+[Quick Start](https://github.com/EBWi11/AgentSmith-HIDS/blob/master/doc/AgentSmith-HIDS-Quick-Start.md)
 
 
 
