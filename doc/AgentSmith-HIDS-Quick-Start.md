@@ -63,9 +63,14 @@
 4. After adding the custom detection function, you need to add the issuing instruction logic in https://github.com/DianrongSecurity/AgentSmith-HIDS/blob/master/smith_console/heartbeat_server.py. Note that you need to pass ";" interval;
 5. Implement the logic. The agent sends a heartbeat packet to the heartbeat server. The server returns the detection instruction. The agent executes the detection function indicated by the instruction through the mapping of the instruction and the detection function. The detection result is transmitted to the server through Kafka.
 
+Note: Since the Agent obtains the local IP through the command: hostname -i, please ensure that the hostname and hosts are configured correctly during the test to prevent the HIDS Console from getting a wrong one.
+
+
 
 ### 8.Uninstall
 * Before uninstalling the AgentSmith-HIDS, you need to close the user-mode agent process. The default Log path of the agent is located in: `/var/log/smith_hids.log`, and also the default pid file in: `/var/run/smith_hids.pid`. By default: `cat /var/run/smith_hids.pid |xargs kill -9` then uninstall it by `rmmod smith`
+
+
 
 
 ### 9.Smith LKM Definition
@@ -79,6 +84,8 @@
 | FSNOTIFY_HOOK    | Create File Detect Hook Switch:<br />1. Enable;<br />Default:0 |
 | LOAD_MODULE_HOOK | init_module() Hook Switch:<br />1. Enable;<br />Default:1    |
 | EXIT_PROTECT     | Protect the agent itself from being rmmod:<br />1.Enable;<br />Default: 0 |
+
+
 
 
 ### 10.Simple Demo
