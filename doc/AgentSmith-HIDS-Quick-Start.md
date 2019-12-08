@@ -59,8 +59,8 @@
 
 1. The custom detection module relies on the heartbeat detection module. You need to enable heartbeat detection to support the custom detection module;
 2. The triggering method of the custom detection module is completed by the heartbeat server sending instructions to the agent, and the detection result is transmitted to the server through Kafka, so it is not real-time;
-3. The custom detection function is added in the https://github.com/DianrongSecurity/AgentSmith-HIDS/blob/master/agent/src/lib/detection_module.rs file, and the start function definition of the Detective impl in this file needs Good mapping relationship (the relationship between the instruction issued by the server and the detection function called);
-4. After adding the custom detection function, you need to add the issuing instruction logic in https://github.com/DianrongSecurity/AgentSmith-HIDS/blob/master/smith_console/heartbeat_server.py. Note that you need to pass ";" interval;
+3. The custom detection function is added in the [](https://github.com/EBWi11/AgentSmith-HIDS/blob/master/agent/src/lib/detection_module.rs) file, and the start function definition of the Detective impl in this file needs Good mapping relationship (the relationship between the instruction issued by the server and the detection function called);
+4. After adding the custom detection function, you need to add the issuing instruction logic in [](https://github.com/EBWi11/AgentSmith-HIDS/blob/master/smith_console/heartbeat_server.py). Note that you need to pass ";" interval;
 5. Implement the logic. The agent sends a heartbeat packet to the heartbeat server. The server returns the detection instruction. The agent executes the detection function indicated by the instruction through the mapping of the instruction and the detection function. The detection result is transmitted to the server through Kafka.
 
 Note: Since the Agent obtains the local IP through the command: hostname -i, please ensure that the hostname and hosts are configured correctly during the test to prevent the HIDS Console from getting a wrong one.
