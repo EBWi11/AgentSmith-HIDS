@@ -8,7 +8,7 @@
 
 ### 2.Get Clone Project
 
-`git clone https://github.com/DianrongSecurity/AgentSmith-HIDS.git`
+`git clone https://github.com/EBWi11/AgentSmith-HIDS.git`
 
 
 
