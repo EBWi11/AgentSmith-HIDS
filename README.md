@@ -1,45 +1,43 @@
 # AgentSmith-HIDS
 
-&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;--项目名称灵感来源于电影《黑客帝国》
-
-
+&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;--The name of this project was inspired by the movie - The Matrix
 
 [![License](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://github.com/DianrongSecurity/AgentSmith-HIDS/blob/master/LICENSE)
 
-[English](README.md) | 简体中文
+English | [简体中文](README-zh_CN.md)
 
 
 
 
-### 关于AgentSmith-HIDS
+### About AgentSmith-HIDS
 
-AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection System”，因为目前开源的部分来讲它缺乏了规则引擎和相关检测的能力，但是它可以作为一个高性能“主机信息收集工具”来构建属于你自己的HIDS。
-由于AgentSmit-HIDS的特点(**从内核态获取尽可能全的数据**)，对比用户态的HIDS拥有巨大的优势：
+Technically, AgentSmith-HIDS is not a Host-based Intrusion Detection System (HIDS) due to lack of rule engine and detection function. However, it can be used as a high performance 'Host Information Collect Agent' as part of your own HIDS solution.
+The comprehensiveness of information which can be collected by this agent was one of the most important metrics during developing this project, hence it was built to function in the kernel stack and achieve huge advantage comparing to those function in user stack, such as:
 
-* **性能更优**，通过内核态驱动来获取信息，无需诸如遍历/proc这样的行为进行数据补全；传输方案使用共享内存，而不是netlink，相对来说也有更好的性能表现。
-* **难以绕过**，由于我们的信息获取是来自于内核态驱动，因此面对很多刻意隐藏自己的行为如rootkit难以绕过我们的监控。
-* **为联动而生**，我们不仅可以作为安全工具，也可以作为监控，或者梳理内部资产。我们通过内核模块对进程/用户/文件/网络连接进行梳理，如果有CMDB的信息，那么联动后你将会得到一张从网络到主机/容器/业务信息的调用/依赖关系图；如果你们还有DB Audit Tool，那么联动后你可以得到DB User/库表字段/应用/网络/主机容器的关系；等等，还可以和NIDS/威胁情报联动，达到溯源的目的。
-* **用户态+内核态**，AgentSmith-HIDS同时拥有内核态和用户态的模块，可以形成互补。
-
-
-
-### AgentSmith-HIDS实现了以下的主要功能：
-
-* 内核模块通过kprobeHook了**execve,connect,process inject,create file,DNS query,load LKM**的行为，并且通过对Linux namespace兼容的方式实现了对容器行为的信息收集
-* 用户态支持自定义检测模块，目前已内置：**系统用户列表查询**，**系统端口监听列表查询**，**系统RPM LIST查询**，**系统定时任务查询**
+* **Better performance**, Information needed are collected in kernel stack to avoid additional supplement actions such as traversal of '/proc'; and to enhance the performance of data transportation, data collected is transferred via shared ram instead of netlink.
+* **Hard to be bypassed**, Information collection was powered by specifically designed kernel drive, makes it almost impossible to bypass the detection for malicious software like rootkit, which can deliberately hide themselves.
+* **Easy to be integrated**，The AgentSmith-HIDS was built to integrate with other applications and can be used not only as security tool but also a good monitoring tool, or even a good detector of your assets. The agent is capable of collecting the users, files, processes and internet connections for you, so let's imagine when you integrate it with CMDB, you could get a comprehensive map consists of your network, host, container and business (even dependencies). What if you also have a Database audit tool at hand? The map can be extended to contain the relationship between your DB, DB User, tables, fields, applications, network, host and containers etc. Thinking of the possibility of integration with network intrusion detection system and/or threat intelligence etc., higher traceability could also be achieved. It just never gets old.
+* **Kernel stack + User stack**，AgentSmith-HIDS also provide user stack module, to further extend the functionality when working with kernel stack module.
 
 
 
+### Major abilities of AgentSmith-HIDS：
 
-### 关于内核版本兼容性
+* Kernel stack module hooks **execve, connect, process inject, create file, DNS query, load LKM** behaviors via Kprobe，and is also capable of monitoring containers by being compatible with Linux namespace.
+* User stack module utilize built in detection functions including queries of **User List**，**Listening ports list**，**System RPM list**，**Schedule jobs**
+
+
+
+
+### About the compatibility with Kernel version
 
 * Kernel > 2.6.25
 
 
 
-### 对容器的兼容
+### About the compatibility with Containers
 
-| 行为源 | Nodename       |
+| Source | Nodename       |
 | ------ | -------------- |
 | Host   | hostname       |
 | Docker | container name |
@@ -48,17 +46,20 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 
 
-### AgentSmith-HIDS的组成部分
+### Composition of AgentSmith-HIDS
 
-* **内核驱动模块（LKM）**，通过kprobe hook关键函数，进行数据捕获；
-* **用户态Agent**，收取驱动捕获的指令并进行处理，然后将数据发送到Kafka；并向Server发送心跳确认存活，以及接受Server下发的指令进行执行；
-* **Agent Server端**，向Agent下发指令，以及来查看当前Agent状态数量等信息；（可选组件）
-
-
+* **Kernel stack module (LKM)**
+    Hook key functions via Kprobe to capture information needed.
+* **User stack module** 
+    Collect data capatured by kernel stack module, perform necessary process and send it to Kafka; 
+    Keep sending heartbeat packet to server so process integrity can be identitied; 
+    Execute commands received from server.
+* **Agent Server**(Optional)
+    Send commands to user stack module and monitoring the status of user stack module.
 
 ### Execve Hook
 
-通过Hook **sys_execve/sys_execveat**实现，数据样例：
+Achieved by hooking **sys_execve/sys_execveat**, example:
 
 ```json
 {
@@ -87,7 +88,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ### Connect Hook
 
-通过Hook **sys_connect**实现，数据样例：
+Achieved by hooking **sys_connect**, example:
 
 ```json
 {
@@ -119,7 +120,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ### DNS Query Hook
 
-通过Hook sys_recvfrom实现，数据样例：
+Achieved by hooking sys_recvfrom, example:
 
 ```json
 {
@@ -154,7 +155,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ### Create File Hook
 
-通过Hook **fsnotify(kernel < 4.18.0)/do_sys_open(kernel >= 4.18.0)** 实现，数据样例：
+Achieved by hooking **fsnotify(kernel < 4.18.0)/do_sys_open(kernel >= 4.18.0)**, example:
 
 ```json
 {
@@ -180,7 +181,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ### Process Inject Hook
 
-通过Hook **sys_ptrace**实现，数据样例：
+Achieved by hooking **sys_ptrace**, example:
 
 ```json
 {
@@ -207,16 +208,16 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 
 
-### 关于性能
+### About Performance of AgentSmith-HIDS
 
-测试环境：
+Testing Environment:
 
-| CPU       | Intel(R) Core(TM) i7-4870HQ CPU @ 2.50GHz    2核 |
+| CPU       | Intel(R) Core(TM) i7-4870HQ CPU @ 2.50GHz 2 Core |
 | --------- | ------------------------------------------------ |
 | RAM       | 2GB                                              |
 | OS/Kernel | Centos7  /  3.10.0-1062.7.1.el7.x86_64           |
 
-测试结果：
+Testing Result:
 
 | Hook Handler           | Average Delay(us) |
 | ---------------------- | ----------------- |
@@ -227,36 +228,38 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 | recvfrom_entry_handler | 0.17              |
 | fsnotify_post_handler  | 0.07              |
 
-原始测试数据：
+Original Testing Data:
 
 [Benchmark Data](https://github.com/EBWi11/AgentSmith-HIDS/tree/master/benchmark_data)
 
 
 
-### 部署及测试文档
+### Documents for deployment and testing purpose:
 
 [Quick Start](https://github.com/EBWi11/AgentSmith-HIDS/blob/master/doc/AgentSmith-HIDS-Quick-Start.md)
 
 
 
 
-### 致谢(排名不分先后)
+### Special Thanks(Not in order)
 
 [yuzunzhi](https://github.com/yuzunzhi)
 
 [hapood](https://github.com/hapood)
 
+[HF-Daniel](https://github.com/HF-Daniel)
 
 
 
-### 作者微信
+
+### Wechat of developer
 
 <img src="doc/wechat.jpg" width="50%" height="50%"/>
 
 
-### 灾难控制局微信公众号
+### Wechat channel of '灾难控制局'
 
-会时不时有一些AgentSmith-HIDS的更新介绍和能力详解，有兴趣的可以关注：
+We would constantly provide information about the functionalities of AgentSmith-HIDS via this channel, a good place to receive the most updated news:)
 
 <img src="doc/SecDamageControl.jpg" width="50%" height="50%"/>
 

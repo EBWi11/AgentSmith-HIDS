@@ -1,5 +1,8 @@
 # AgentSmith-HIDS Quick Start
 
+English | [简体中文](AgentSmith-HIDS-Quick-Start-zh_CN.md)
+
+
 ### 1.AgentSmith-HIDS Work Flow Chart
 
 ![simple_flow_chart](simple_flow_chart.png)
@@ -24,7 +27,7 @@
 
 
 
-### 4.Test 'smith.ko' file
+### 4.Test 'smith.ko'
 
 * `yum` or `apt` or other package tools install `gcc`
 * go to directory:`driver/test` and execute `gcc -o test shm_user.c`,you can get 'test'
@@ -47,9 +50,11 @@
 
 * need intall rust environment: https://www.rust-lang.org/tools/install
 
-* go to directory:`agent/src/conf` and modify the related Kafka information and heartbeat configuration in configuration file of the agent: `agent/src/conf/settings.rs`, then run `cargo build --release`, on `agent/target/release/` can get agent.（maybe need `yum install openssl` && `yum install openssl-devel`)
+* go to directory:`agent/src/conf` and modify the related Kafka information and heartbeat configuration in configuration file of the agent: `agent/src/conf/settings.rs`, then run `cargo build --release`, on `agent/target/release/` can get agent.（maybe need `install openssl` && `install openssl-devel`)
 
 * Install the agent: deploy the agent to your test environment and execute it directly
+
+Note: Since the Agent obtains the local IP through the command: hostname -i, please ensure that the hostname and hosts are configured correctly during the test to prevent the HIDS Console from getting a wrong one.
 
 ![quick-start-03](quick-start-03.png)
 
@@ -62,8 +67,6 @@
 3. The custom detection function is added in the [detection_module.rs](https://github.com/EBWi11/AgentSmith-HIDS/blob/master/agent/src/lib/detection_module.rs) file, and the start function definition of the Detective impl in this file needs Good mapping relationship (the relationship between the instruction issued by the server and the detection function called);
 4. After adding the custom detection function, you need to add the issuing instruction logic in [heartbeat_server.py](https://github.com/EBWi11/AgentSmith-HIDS/blob/master/smith_console/heartbeat_server.py). Note that you need to pass ";" interval;
 5. Implement the logic. The agent sends a heartbeat packet to the heartbeat server. The server returns the detection instruction. The agent executes the detection function indicated by the instruction through the mapping of the instruction and the detection function. The detection result is transmitted to the server through Kafka.
-
-Note: Since the Agent obtains the local IP through the command: hostname -i, please ensure that the hostname and hosts are configured correctly during the test to prevent the HIDS Console from getting a wrong one.
 
 
 
