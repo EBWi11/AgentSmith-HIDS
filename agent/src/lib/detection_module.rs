@@ -76,49 +76,6 @@ fn get_machine_ip() -> String {
     String::from_utf8_lossy(&output.stdout).to_string().trim().to_string()
 }
 
-pub fn file_system_integrity_check() -> String {
-    let mut tmp_res = String::new();
-
-    let output = Command::new("rpm")
-        .arg("-Va")
-        .output()
-        .expect("DETECTION file_system_integrity_check() ERROR");
-
-    let mut target_res = Vec::new();
-
-    tmp_res = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    let res_split: Vec<&str> = tmp_res.split("\n").collect();
-
-    for i in &res_split {
-        let mut t: Vec<&str> = i.split(" ").collect();
-        if (t[0].find("5") != None) {
-            let tmp_res = t[t.len() - 1];
-            if (tmp_res.starts_with("/bin") || tmp_res.starts_with("/sbin") || tmp_res.starts_with("/usr/bin") || tmp_res.starts_with("/usr/sbin") || tmp_res.starts_with("/usr/local/bin") || tmp_res.starts_with("/lib") || tmp_res.starts_with("/usr/lib") || tmp_res.starts_with("/lib64")) {
-                target_res.push(tmp_res.to_string());
-            }
-        }
-    }
-
-    let target_res_len = target_res.len();
-
-    let res_ori = FileSystemIntegrityCheck {
-        data_type: String::from("detection_module"),
-        detection_name: String::from("FileSystemIntegrityCheck"),
-        ip: get_machine_ip(),
-        hostname: get_hostname(),
-        file_list: target_res,
-        time: get_timestamp(),
-    };
-
-    let res = serde_json::to_string(&res_ori).unwrap();
-
-    if (target_res_len == 0) {
-        return String::new();
-    } else {
-        return res;
-    }
-}
-
 pub fn check_listening_sockets() -> String {
     let mut tmp_res = String::new();
     let mut index = 0;
@@ -285,10 +242,6 @@ impl Detective {
         for i in cmd_list {
             let mut res = "".to_string();
             match i {
-                "FileSystemIntegrityCheck" => {
-                    res = file_system_integrity_check();
-                }
-
                 "ListeningSockets" => {
                     res = check_listening_sockets();
                 }

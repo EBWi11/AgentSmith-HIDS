@@ -45,21 +45,11 @@ fn get_heartbeat(msg: String) -> HeartBeat {
 fn get_data_no_callback(tx: Sender<Vec<u8>>) {
     let tmp = "\"";
     let kafka_test_data = "0".as_bytes();
-    let mut connect_white_list = HashSet::new();
-    let mut execve_white_list = HashSet::new();
-    let mut accept_white_list = HashSet::new();
+    let mut exe_white_list = HashSet::new();
     let agent_pid = process::id().to_string();
 
-    for i in whitelist::CONNET.iter() {
-        connect_white_list.insert(i.to_string());
-    }
-
-    for i in whitelist::EXECVE.iter() {
-        execve_white_list.insert(i.to_string());
-    }
-    
-    for i in whitelist::ACCEPT.iter() {
-        accept_white_list.insert(i.to_string());
+    for i in whitelist::EXE.iter() {
+        exe_white_list.insert(i.to_string());
     }
 
     let local_ip = get_machine_ip();
@@ -76,152 +66,133 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
         let msg = unsafe { CStr::from_ptr(shm_run_no_callback()) }.to_string_lossy().clone();
         if msg.len() > 16 {
             let mut send_flag = 0;
-            let mut i = 2;
+            let mut i = 1;
             let mut msg_str = String::new();
             let msg_split: Vec<&str> = msg.split("\n").collect();
-            let mut msg_syscall_type = msg_split[1];
+            let mut msg_type = msg_split[1];
             let mut argv_res = String::with_capacity(4096);
 
-            let mut syscall_execve_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"run_path\":\"".to_string(), ",\"elf\":\"".to_string(), ",\"argv\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"stdin\":\"".to_string(), ",\"stdout\":\"".to_string(), ",\"pid_rootkit_check\":\"".to_string(),",\"file_rootkit_check\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
-            let mut syscall_init_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"cwd\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), ",\"CR0_check\":".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
-            let mut syscall_finit_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"cwd\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), ",\"CR0_check\":".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
-            let mut syscall_connect_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"sa_family\":\"".to_string(), ",\"fd\":\"".to_string(), ",\"dport\":\"".to_string(), ",\"dip\":\"".to_string(), ",\"elf\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"sip\":\"".to_string(), ",\"sport\":\"".to_string(), ",\"res\":\"".to_string(), ",\"pid_rootkit_check\":\"".to_string(),",\"file_rootkit_check\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
-            let mut syscall_accept_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"sa_family\":\"".to_string(), ",\"fd\":\"".to_string(), ",\"sport\":\"".to_string(), ",\"sip\":\"".to_string(), ",\"elf\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"dip\":\"".to_string(), ",\"dport\":\"".to_string(), ",\"res\":\"".to_string(), ",\"pid_rootkit_check\":\"".to_string(),",\"file_rootkit_check\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
-            let mut syscall_ptrace_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"ptrace_request\":\"".to_string(), ",\"target_pid\":\"".to_string(), ",\"addr\":\"".to_string(), ",\"data\":\"".to_string(), ",\"elf\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"res\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
-            let mut syscall_dns_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"sa_family\":\"".to_string(), ",\"fd\":\"".to_string(), ",\"sport\":\"".to_string(), ",\"sip\":\"".to_string(), ",\"elf\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"dip\":\"".to_string(), ",\"dport\":\"".to_string(), ",\"qr\":\"".to_string(), ",\"opcode\":\"".to_string(), ",\"rcode\":\"".to_string(), ",\"query\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
-            let mut syscall_create_file_msg = ["{".to_string(), "\"data_type\":\"syscall\",".to_string(), "\"uid\":\"".to_string(), ",\"syscall\":\"".to_string(), ",\"elf\":\"".to_string(), ",\"file_path\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
+            let mut execve_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"run_path\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"argv\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"stdin\":\"".to_string(), ",\"stdout\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
+            let mut load_module_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"lkm_file\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
+            let mut connect_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"sa_family\":\"".to_string(), ",\"fd\":\"".to_string(), ",\"dport\":\"".to_string(), ",\"dip\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"sip\":\"".to_string(), ",\"sport\":\"".to_string(), ",\"res\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
+
+            let mut ptrace_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"ptrace_request\":\"".to_string(), ",\"target_pid\":\"".to_string(), ",\"addr\":\"".to_string(), ",\"data\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
+            let mut dns_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"sa_family\":\"".to_string(), ",\"fd\":\"".to_string(), ",\"sport\":\"".to_string(), ",\"sip\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"dip\":\"".to_string(), ",\"dport\":\"".to_string(), ",\"qr\":\"".to_string(), ",\"opcode\":\"".to_string(), ",\"rcode\":\"".to_string(), ",\"query\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
+            let mut create_file_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"file_path\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
 
             for mut s in msg_split {
-                if msg_syscall_type == "59" {
-                    if i == 5 {
-                        if execve_white_list.contains(s) {
-                            msg_syscall_type = "-1";
+                if msg_type == "59" {
+                    if i == 4 {
+                        if exe_white_list.contains(s) {
+                            msg_type = "-1";
+                            break;
+                        }
+                    } else if i == 6 || i == 7 || i == 8 || i == 9 {
+                        if s == agent_pid {
+                            msg_type = "-1";
                             break;
                         }
                     }
-                    if i == 7 || i == 8 || i == 9 || i == 10 {
+
+                    if i == 5 {
+                        argv_res = s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\t", " ");
+                        execve_msg[i].push_str(argv_res.as_str());
+                    } else {
+                        execve_msg[i].push_str(s);
+                    }
+                    execve_msg[i].push_str(tmp);
+                } else if msg_type == "603" {
+                    if i == 3 {
+                        if exe_white_list.contains(s) {
+                            msg_type = "-1";
+                            break;
+                        }
+                    }
+
+                    load_module_msg[i].push_str(s);
+                    load_module_msg[i].push_str(tmp);
+                } else if msg_type == "42" {
+                    if i == 8 || i == 9 || i == 10 || i == 11 {
                         if s == agent_pid {
-                            msg_syscall_type = "-1";
+                            msg_type = "-1";
+                            break;
+                        }
+                    } else if i == 7 {
+                        if exe_white_list.contains(s) {
+                            msg_type = "-1";
+                            break;
+                        }
+                    }
+
+                    connect_msg[i].push_str(s);
+                    connect_msg[i].push_str(tmp);
+                } else if msg_type == "101" {
+                    if i == 7 {
+                        if exe_white_list.contains(s) {
+                            msg_type = "-1";
                             break;
                         }
                     }
 
                     if i == 6 {
-                        argv_res = s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\t", " ");
-                        syscall_execve_msg[i].push_str(argv_res.as_str());
-                        syscall_execve_msg[i].push_str(tmp);
+                        argv_res = s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\t", " ").replace("\n", " ");
+                        ptrace_msg[i].push_str(argv_res.as_str());
                     } else {
-                        syscall_execve_msg[i].push_str(s);
-                        syscall_execve_msg[i].push_str(tmp);
+                        ptrace_msg[i].push_str(s);
                     }
-                } else if msg_syscall_type == "175" {
-                    if i == 4 {
-                        if check_cr0(s.to_string()) {
-                            syscall_init_msg[13].push_str("true");
-                        } else {
-                            syscall_init_msg[13].push_str("false");
-                        }
-                    }
-                    syscall_init_msg[i].push_str(s);
-                    syscall_init_msg[i].push_str(tmp);
-                } else if msg_syscall_type == "313" {
-                    if i == 4 {
-                        if check_cr0(s.to_string()) {
-                            syscall_finit_msg[13].push_str("true");
-                        } else {
-                            syscall_finit_msg[13].push_str("false");
-                        }
-                    }
-                    syscall_finit_msg[i].push_str(s);
-                    syscall_finit_msg[i].push_str(tmp);
-                } else if msg_syscall_type == "42" {
-                    if i == 9 || i == 10 || i == 11 || i == 12 {
+                    ptrace_msg[i].push_str(tmp);
+                } else if msg_type == "601" {
+                    if i == 8 || i == 9 || i == 10 || i == 11 {
                         if s == agent_pid {
-                            msg_syscall_type = "-1";
+                            msg_type = "-1";
                             break;
                         }
-                    }
-                    if i == 8 {
-                        if connect_white_list.contains(s) {
-                            msg_syscall_type = "-1";
-                            break;
-                        }
-                    }
-                    syscall_connect_msg[i].push_str(s);
-                    syscall_connect_msg[i].push_str(tmp);
-                } else if msg_syscall_type == "43" {
-                    if i == 9 || i == 10 || i == 11 || i == 12 {
-                        if s == agent_pid {
-                            msg_syscall_type = "-1";
-                            break;
-                        }
-                    }
-                    if i == 8 {
-                        if accept_white_list.contains(s) {
-                            msg_syscall_type = "-1";
-                            break;
-                        }
-                    }
-                    syscall_accept_msg[i].push_str(s);
-                    syscall_accept_msg[i].push_str(tmp);
-                } else if msg_syscall_type == "101" {
-                    if i == 9 || i == 10 || i == 11 || i == 12 {
-                        if s == agent_pid {
-                            msg_syscall_type = "-1";
+                    } else if i == 7 {
+                        if exe_white_list.contains(s) {
+                            msg_type = "-1";
                             break;
                         }
                     }
 
-                    syscall_ptrace_msg[i].push_str(s);
-                    syscall_ptrace_msg[i].push_str(tmp);
-                } else if msg_syscall_type == "601" {
-                    if i == 9 || i == 10 || i == 11 || i == 12 {
+                    dns_msg[i].push_str(s);
+                    dns_msg[i].push_str(tmp);
+                } else if msg_type == "602" {
+                    if i == 5 || i == 6 || i == 7 || i == 8 {
                         if s == agent_pid {
-                            msg_syscall_type = "-1";
+                            msg_type = "-1";
+                            break;
+                        }
+                    } else if i == 3 {
+                        if exe_white_list.contains(s) {
+                            msg_type = "-1";
                             break;
                         }
                     }
 
-                    syscall_dns_msg[i].push_str(s);
-                    syscall_dns_msg[i].push_str(tmp);
-                } else if msg_syscall_type == "602" {
-                    if i == 6 || i == 7 || i == 8 || i == 9 {
-                        if s == agent_pid {
-                            msg_syscall_type = "-1";
-                            break;
-                        }
-                    }
-
-                    syscall_create_file_msg[i].push_str(s);
-                    syscall_create_file_msg[i].push_str(tmp);
+                    create_file_msg[i].push_str(s);
+                    create_file_msg[i].push_str(tmp);
                 }
                 i = i + 1;
             }
 
-            if msg_syscall_type == "59" {
+            if msg_type == "59" {
                 send_flag = 1;
-                msg_str = syscall_execve_msg.join("");
-            } else if msg_syscall_type == "175" {
+                msg_str = execve_msg.join("");
+            } else if msg_type == "603" {
                 send_flag = 1;
-                msg_str = syscall_init_msg.join("");
-            } else if msg_syscall_type == "313" {
+                msg_str = load_module_msg.join("");
+            } else if msg_type == "42" {
                 send_flag = 1;
-                msg_str = syscall_finit_msg.join("");
-            } else if msg_syscall_type == "42" {
+                msg_str = connect_msg.join("");
+            } else if msg_type == "101" {
                 send_flag = 1;
-                msg_str = syscall_connect_msg.join("");
-            } else if msg_syscall_type == "43" {
+                msg_str = ptrace_msg.join("");
+            } else if msg_type == "601" {
                 send_flag = 1;
-                msg_str = syscall_accept_msg.join("");
-            } else if msg_syscall_type == "101" {
+                msg_str = dns_msg.join("");
+            } else if msg_type == "602" {
                 send_flag = 1;
-                msg_str = syscall_ptrace_msg.join("");
-            } else if msg_syscall_type == "601" {
-                send_flag = 1;
-                msg_str = syscall_dns_msg.join("");
-            } else if msg_syscall_type == "602" {
-                send_flag = 1;
-                msg_str = syscall_create_file_msg.join("");
+                msg_str = create_file_msg.join("");
             }
 
             if send_flag == 1 {
@@ -234,10 +205,6 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
 fn write_pid() {
     let mut file = File::create(settings::PID_FILE_PATH).unwrap();
     file.write_all(process::id().to_string().as_bytes()).unwrap();
-}
-
-fn check_cr0(mut path: String) -> bool {
-    false
 }
 
 fn get_hostname() -> String {
@@ -260,7 +227,7 @@ fn check_lkm() -> bool {
         .output()
         .expect("CHECK_LKM_ERROR");
     let out_str = String::from_utf8_lossy(&output.stdout);
-    out_str.contains("syshook")
+    out_str.contains("smith")
 }
 
 fn run(tx: Sender<Vec<u8>>) {
