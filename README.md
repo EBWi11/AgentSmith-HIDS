@@ -238,11 +238,6 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 [Quick-Start](https://github.com/EBWi11/AgentSmith-HIDS/blob/master/Quick-Start.md)
 
 
-### 简单演示
-
-![Demo](https://github.com/DianrongSecurity/AgentSmith-HIDS/blob/master/demo.gif)
-
-
 
 ### 致谢(排名不分先后)
 
@@ -254,14 +249,14 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ### 作者微信
 
-<img src="./wechat.jpg" width="50%" height="50%"/>
+<img src="doc/wechat.jpg" width="50%" height="50%"/>
 
 
 ### 灾难控制局微信公众号
 
 会时不时有一些AgentSmith-HIDS的更新介绍和能力详解，有兴趣的可以关注：
 
-<img src="./SecDamageControl.jpg" width="50%" height="50%"/>
+<img src="doc/SecDamageControl.jpg" width="50%" height="50%"/>
 
 
 ## License

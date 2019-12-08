@@ -2,7 +2,7 @@
 
 ### AgentSmith-HIDS Work Flow Chart
 
-![simple_flow_chart](https://github.com/DianrongSecurity/AgentSmith-HIDS/blob/master/simple_flow_chart.png)
+![simple_flow_chart](simple_flow_chart.png)
 
 
 
@@ -20,7 +20,7 @@
 * execute `lsmod | grep smitm`,verify load lkm is success
 * publish the compiled LKM file(smith.ko) to your test server. Please pay attention that the Kernel version needs to be consistent with the server used for compiling
 
-![quick-start-01](/Users/will/Library/Application Support/typora-user-images/image-20191208123455049.png)
+![quick-start-01](quick-start-01.png)
 
 
 
@@ -30,7 +30,7 @@
 * go to directory:`driver/test` and execute `gcc -o test shm_user.c`,you can get 'test'
 * execute `./test`,verify core is work
 
-![quick-start-02](/Users/will/Library/Application Support/typora-user-images/image-20191208123634465.png)
+![quick-start-02](quick-start-02.png)
 
 
 
@@ -51,7 +51,7 @@
 
 * Install the agent: deploy the agent to your test environment and execute it directly
 
-  ![quick-start-03](/Users/will/Library/Application Support/typora-user-images/image-20191208125837158.png)
+![quick-start-03](quick-start-03.png)
 
 
 
@@ -83,5 +83,5 @@
 
 ### 8.Simple Demo
 
-![Demo](https://github.com/DianrongSecurity/AgentSmith-HIDS/blob/master/demo.gif)
+![Demo](demo.gif)
 
