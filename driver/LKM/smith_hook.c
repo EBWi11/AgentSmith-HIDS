@@ -1230,7 +1230,7 @@ struct kretprobe connect_kretprobe = {
     .data_size  = sizeof(struct connect_data),
 	.handler = connect_handler,
     .entry_handler = connect_entry_handler,
-    .maxactive = 300,
+    .maxactive = 40,
 };
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
@@ -1246,7 +1246,7 @@ struct kretprobe execve_kretprobe = {
     .data_size  = sizeof(struct execve_data),
 	.handler = execve_handler,
 	.entry_handler = execve_entry_handler,
-	.maxactive = 300,
+	.maxactive = 40,
 };
 #else
 struct kprobe execve_kprobe = {
@@ -1266,7 +1266,7 @@ struct kretprobe do_sys_open_kretprobe = {
     .data_size = sizeof(struct do_sys_open_data),
 	.handler = do_sys_open_handler,
 	.entry_handler = do_sys_open_entry_handler,
-	.maxactive = 300,
+	.maxactive = 40,
 };
 #endif
 
@@ -1280,7 +1280,7 @@ struct kretprobe recvfrom_kretprobe = {
     .data_size  = sizeof(struct recvfrom_data),
 	.handler = recvfrom_handler,
 	.entry_handler = recvfrom_entry_handler,
-	.maxactive = 300,
+	.maxactive = 40,
 };
 
 struct kprobe load_module_kprobe = {
