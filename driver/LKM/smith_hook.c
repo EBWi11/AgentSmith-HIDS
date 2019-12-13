@@ -530,11 +530,17 @@ void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long f
         char *stdout_fd_buf = "-2";
         char *exe_file_buf = "-2";
         char *pname_buf = "-2";
+        char *tmp_pathname = "";
 
 	    struct user_arg_ptr argv_ptr = {.ptr.native = p_get_arg2(regs)};
 	    sessionid = get_sessionid();
 
-        path = tmp_getname((char *) p_get_arg1(regs));
+        tmp_pathname = (char *) p_get_arg1(regs);
+        if(!tmp_pathname || !*tmp_pathname) {
+            goto out;
+        }
+
+        path = tmp_getname(tmp_pathname);
         if (likely(!IS_ERR(path))) {
             if(likely((char *)path->name)) {
                 error = kern_path((char *)path->name, LOOKUP_FOLLOW, &exe_file);
@@ -673,6 +679,9 @@ void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long f
         if (likely(strcmp(pname_buf, "-2")))
             kfree(pname_buf);
 	}
+
+out:
+    return;
 }
 #else
 
