@@ -96,7 +96,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                         }
                         connect_msg[i].push_str(s);
                         connect_msg[i].push_str(tmp);
-                    },
+                    }
 
                     "59" => {
                         match i {
@@ -104,52 +104,52 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                                 if exe_white_list.contains(s) {
                                     msg_type = "-1";
                                     break;
-                                }else{
+                                } else {
                                     execve_msg[i].push_str(s);
                                 }
-                            },
+                            }
 
                             5 => {
                                 argv_res = s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\t", " ");
                                 execve_msg[i].push_str(argv_res.as_str());
-                            },
+                            }
 
                             6...9 => {
                                 if s == agent_pid {
                                     msg_type = "-1";
                                     break;
-                                }else{
+                                } else {
                                     execve_msg[i].push_str(s);
                                 }
-                            },
+                            }
 
                             _ => {
                                 execve_msg[i].push_str(s);
-                            },
+                            }
                         };
                         execve_msg[i].push_str(tmp);
-                    },
+                    }
 
                     "101" => {
                         match i {
                             6 => {
                                 argv_res = s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\t", " ").replace("\n", " ");
                                 ptrace_msg[i].push_str(argv_res.as_str());
-                            },
+                            }
 
                             7 => {
                                 if exe_white_list.contains(s) {
-                                msg_type = "-1";
-                                break;
+                                    msg_type = "-1";
+                                    break;
                                 }
-                            },
+                            }
 
                             _ => {
                                 ptrace_msg[i].push_str(s);
-                            },
+                            }
                         };
                         ptrace_msg[i].push_str(tmp);
-                    },
+                    }
 
                     "601" => {
                         if i == 8 || i == 9 || i == 10 || i == 11 {
@@ -165,7 +165,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                         }
                         dns_msg[i].push_str(s);
                         dns_msg[i].push_str(tmp);
-                    },
+                    }
 
                     "602" => {
                         if i == 5 || i == 6 || i == 7 || i == 8 {
@@ -181,7 +181,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                         }
                         create_file_msg[i].push_str(s);
                         create_file_msg[i].push_str(tmp);
-                    },
+                    }
 
                     "603" => {
                         if i == 3 {
@@ -190,170 +190,52 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                                 break;
                             }
                         }
-                    load_module_msg[i].push_str(s);
-                    load_module_msg[i].push_str(tmp);
-                    },
+                        load_module_msg[i].push_str(s);
+                        load_module_msg[i].push_str(tmp);
+                    }
 
-                    _ => {},
+                    _ => {}
                 }
-                i=i+1;
+                i = i + 1;
             }
 
             match msg_type {
-                "42" =>{
+                "42" => {
                     send_flag = 1;
                     msg_str = connect_msg.join("");
-                },
+                }
 
                 "59" => {
                     send_flag = 1;
                     msg_str = execve_msg.join("");
-                },
+                }
 
                 "101" => {
                     send_flag = 1;
                     msg_str = ptrace_msg.join("");
-                },
+                }
 
-                "601" =>{
+                "601" => {
                     send_flag = 1;
                     msg_str = dns_msg.join("");
-                },
+                }
 
-                "602" =>{
+                "602" => {
                     send_flag = 1;
                     msg_str = create_file_msg.join("");
-                },
+                }
 
-                "603" =>{
+                "603" => {
                     send_flag = 1;
                     msg_str = load_module_msg.join("");
-                },
+                }
 
-                _ => {},
+                _ => {}
             }
 
             if send_flag == 1 {
                 tx.send(msg_str.as_bytes().to_vec()).expect("SEND_TO_CHANNEL_MSG_ERROR");
             }
-                // if msg_type == "59" {
-                //     if i == 4 {
-                //         if exe_white_list.contains(s) {
-                //             msg_type = "-1";
-                //             break;
-                //         }
-                //     } else if i == 6 || i == 7 || i == 8 || i == 9 {
-                //         if s == agent_pid {
-                //             msg_type = "-1";
-                //             break;
-                //         }
-                //     }
-
-                //     if i == 5 {
-                //         argv_res = s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\t", " ");
-                //         execve_msg[i].push_str(argv_res.as_str());
-                //     } else {
-                //         execve_msg[i].push_str(s);
-                //     }
-                //     execve_msg[i].push_str(tmp);
-
-                // } else if msg_type == "603" {
-                //     if i == 3 {
-                //         if exe_white_list.contains(s) {
-                //             msg_type = "-1";
-                //             break;
-                //         }
-                //     }
-
-                //     load_module_msg[i].push_str(s);
-                //     load_module_msg[i].push_str(tmp);
-                // } else if msg_type == "42" {
-                //     if i == 8 || i == 9 || i == 10 || i == 11 {
-                //         if s == agent_pid {
-                //             msg_type = "-1";
-                //             break;
-                //         }
-                //     } else if i == 7 {
-                //         if exe_white_list.contains(s) {
-                //             msg_type = "-1";
-                //             break;
-                //         }
-                //     }
-
-                //     connect_msg[i].push_str(s);
-                //     connect_msg[i].push_str(tmp);
-                // } else if msg_type == "101" {
-                    // if i == 7 {
-                    //     if exe_white_list.contains(s) {
-                    //         msg_type = "-1";
-                    //         break;
-                    //     }
-                    // }
-
-                    // if i == 6 {
-                    //     argv_res = s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\t", " ").replace("\n", " ");
-                    //     ptrace_msg[i].push_str(argv_res.as_str());
-                    // } else {
-                    //     ptrace_msg[i].push_str(s);
-                    // }
-                    // ptrace_msg[i].push_str(tmp);
-            //     } else if msg_type == "601" {
-            //         if i == 8 || i == 9 || i == 10 || i == 11 {
-            //             if s == agent_pid {
-            //                 msg_type = "-1";
-            //                 break;
-            //             }
-            //         } else if i == 7 {
-            //             if exe_white_list.contains(s) {
-            //                 msg_type = "-1";
-            //                 break;
-            //             }
-            //         }
-
-            //         dns_msg[i].push_str(s);
-            //         dns_msg[i].push_str(tmp);
-            //     } else if msg_type == "602" {
-            //         if i == 5 || i == 6 || i == 7 || i == 8 {
-            //             if s == agent_pid {
-            //                 msg_type = "-1";
-            //                 break;
-            //             }
-            //         } else if i == 3 {
-            //             if exe_white_list.contains(s) {
-            //                 msg_type = "-1";
-            //                 break;
-            //             }
-            //         }
-
-            //         create_file_msg[i].push_str(s);
-            //         create_file_msg[i].push_str(tmp);
-            //     }
-            //     i = i + 1;
-            // }
-
-            // if msg_type == "59" {
-            //     send_flag = 1;
-            //     msg_str = execve_msg.join("");
-            // } else if msg_type == "603" {
-            //     send_flag = 1;
-            //     msg_str = load_module_msg.join("");
-            // } else if msg_type == "42" {
-            //     send_flag = 1;
-            //     msg_str = connect_msg.join("");
-            // } else if msg_type == "101" {
-            //     send_flag = 1;
-            //     msg_str = ptrace_msg.join("");
-            // } else if msg_type == "601" {
-            //     send_flag = 1;
-            //     msg_str = dns_msg.join("");
-            // } else if msg_type == "602" {
-            //     send_flag = 1;
-            //     msg_str = create_file_msg.join("");
-            // }
-
-            // if send_flag == 1 {
-            //     tx.send(msg_str.as_bytes().to_vec()).expect("SEND_TO_CHANNEL_MSG_ERROR");
-            // }
         }
     }
 }
