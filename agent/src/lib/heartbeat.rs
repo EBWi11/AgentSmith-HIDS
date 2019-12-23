@@ -1,7 +1,6 @@
 use lib::detection_module::Detective;
 use std::io::prelude::*;
 use std::net::{Shutdown, TcpStream};
-use std::sync::{Arc, Mutex};
 use std::sync::mpsc::Sender;
 use std::thread;
 use std::time;

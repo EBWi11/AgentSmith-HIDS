@@ -77,7 +77,6 @@ fn get_machine_ip() -> String {
 }
 
 pub fn check_listening_sockets() -> String {
-    let mut tmp_res = String::new();
     let mut index = 0;
     let mut socket_list = Vec::new();
 
@@ -86,10 +85,10 @@ pub fn check_listening_sockets() -> String {
         .output()
         .expect("DETECTION check_listening_sockets() ERROR");
 
-    tmp_res = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let tmp_res = String::from_utf8_lossy(&output.stdout).trim().to_string();
     let res_split: Vec<&str> = tmp_res.split("\n").collect();
     for i in res_split {
-        if (index == 0) {
+        if index == 0 {
             index = index + 1;
             continue;
         } else {
@@ -123,8 +122,6 @@ pub fn check_listening_sockets() -> String {
 }
 
 pub fn get_rpm_list() -> String {
-    let mut tmp_res = String::new();
-
     let output = Command::new("rpm")
         .arg("-qa")
         .output()
@@ -132,7 +129,7 @@ pub fn get_rpm_list() -> String {
 
     let mut rpm_list = Vec::new();
 
-    tmp_res = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let tmp_res = String::from_utf8_lossy(&output.stdout).trim().to_string();
     let tmp_res_split: Vec<&str> = tmp_res.split("\n").collect();
 
     for i in tmp_res_split {
@@ -153,8 +150,6 @@ pub fn get_rpm_list() -> String {
 }
 
 pub fn get_system_user() -> String {
-    let mut tmp_res = String::new();
-
     let output = Command::new("cat")
         .arg("/etc/passwd")
         .output()
@@ -162,7 +157,7 @@ pub fn get_system_user() -> String {
 
     let mut user_list = Vec::new();
 
-    tmp_res = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let tmp_res = String::from_utf8_lossy(&output.stdout).trim().to_string();
     let tmp_res_split: Vec<&str> = tmp_res.split("\n").collect();
 
     for i in tmp_res_split {
@@ -194,7 +189,7 @@ pub fn get_crontab_list() -> String {
 
     for i in &res_split {
         let tmp_user_split: Vec<&str> = i.split(":").collect();
-        if (tmp_user_split.len() > 2) {
+        if tmp_user_split.len() > 2 {
             let user = tmp_user_split[0];
 
             let user_crontab_output = Command::new("crontab")
@@ -204,10 +199,10 @@ pub fn get_crontab_list() -> String {
                 .output()
                 .expect("DETECTION get_crontab_list() ERROR");
 
-            let mut user_contab_res = String::from_utf8_lossy(&user_crontab_output.stdout).to_string().trim().to_string();
+            let user_contab_res = String::from_utf8_lossy(&user_crontab_output.stdout).to_string().trim().to_string();
             let tmp_res_split: Vec<&str> = user_contab_res.split("\n").collect();
             for i2 in tmp_res_split {
-                if(i2!="") {
+                if i2 != "" {
                     cron_list.push(format!("{}:{}", user, i2));
                 }
             }
@@ -227,7 +222,7 @@ pub fn get_crontab_list() -> String {
 
     let res = serde_json::to_string(&res_ori).unwrap();
 
-    if (cron_list_len == 0) {
+    if cron_list_len == 0 {
         return String::new();
     } else {
         return res;
@@ -261,7 +256,7 @@ impl Detective {
                 _ => {},
             }
 
-            if (res != "") {
+            if res != "" {
                 res_list.push(res);
             }
         }

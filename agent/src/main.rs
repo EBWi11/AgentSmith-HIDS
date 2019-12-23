@@ -3,6 +3,7 @@ extern crate daemonize;
 extern crate kafka;
 extern crate libc;
 extern crate serde;
+extern crate crypto;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
@@ -22,6 +23,8 @@ use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{channel, Sender};
 use std::thread;
 use std::time;
+use crypto::md5::Md5;
+use crypto::digest::Digest;
 
 mod lib;
 mod conf;
@@ -70,7 +73,6 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
             let mut msg_str = String::new();
             let msg_split: Vec<&str> = msg.split("\n").collect();
             let mut msg_type = msg_split[1];
-            let mut argv_res = String::with_capacity(4096);
 
             let mut execve_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"run_path\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"argv\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"stdin\":\"".to_string(), ",\"stdout\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
             let mut load_module_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"lkm_file\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
@@ -80,7 +82,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
             let mut dns_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"sa_family\":\"".to_string(), ",\"fd\":\"".to_string(), ",\"sport\":\"".to_string(), ",\"sip\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"dip\":\"".to_string(), ",\"dport\":\"".to_string(), ",\"qr\":\"".to_string(), ",\"opcode\":\"".to_string(), ",\"rcode\":\"".to_string(), ",\"query\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
             let mut create_file_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"file_path\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
 
-            for mut s in msg_split {
+            for s in msg_split {
                 match msg_type {
                     "42" => {
                         if i == 8 || i == 9 || i == 10 || i == 11 {
@@ -110,11 +112,11 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                             }
 
                             5 => {
-                                argv_res = s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\t", " ");
+                                let argv_res = s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\t", " ");
                                 execve_msg[i].push_str(argv_res.as_str());
                             }
 
-                            6...9 => {
+                            6..=9 => {
                                 if s == agent_pid {
                                     msg_type = "-1";
                                     break;
@@ -133,7 +135,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                     "101" => {
                         match i {
                             6 => {
-                                argv_res = s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\t", " ").replace("\n", " ");
+                                let argv_res = s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\t", " ").replace("\n", " ");
                                 ptrace_msg[i].push_str(argv_res.as_str());
                             }
 
@@ -258,6 +260,15 @@ fn get_machine_ip() -> String {
         .output()
         .expect("GET_MACHINE_IP_ERROR");
     String::from_utf8_lossy(&output.stdout).to_string().trim().to_string()
+}
+
+fn get_md5(path: String) -> String {
+    let mut f = File::open(path).unwrap();
+    let mut buffer = Vec::new();
+    let mut hasher = Md5::new();
+    f.read_to_end(&mut buffer).unwrap();
+    hasher.input(&buffer);
+    return hasher.result_str();
 }
 
 fn check_lkm() -> bool {
