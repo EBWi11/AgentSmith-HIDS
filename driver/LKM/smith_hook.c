@@ -536,8 +536,8 @@ void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long f
 
         path = tmp_getname((char *) p_get_arg1(regs));
         if (likely(!IS_ERR(path))) {
-            if(likely((char *)path->name)) {
-                error = kern_path((char *)path->name, LOOKUP_FOLLOW, &exe_file);
+            if(likely(path->name)) {
+                error = kern_path(path->name, LOOKUP_FOLLOW, &exe_file);
                 if (unlikely(error)) {
                     abs_path = "-1";
                 } else {
