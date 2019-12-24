@@ -24,7 +24,7 @@
 #define EXIT_PROTECT 0
 
 #define CONNECT_HOOK 1
-#define EXECVE_HOOK 0
+#define EXECVE_HOOK 1
 #define FSNOTIFY_HOOK 1
 #define PTRACE_HOOK 1
 #define DNS_HOOK 1
