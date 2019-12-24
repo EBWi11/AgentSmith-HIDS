@@ -534,29 +534,20 @@ void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long f
 	    struct user_arg_ptr argv_ptr = {.ptr.native = p_get_arg2(regs)};
 	    sessionid = get_sessionid();
 
-        path = tmp_getname((char *) p_get_arg1(regs));
-        if (likely(!IS_ERR(path))) {
-            if(likely(path->name)) {
-                error = kern_path(path->name, LOOKUP_FOLLOW, &exe_file);
-                if (unlikely(error != 0x0)) {
-                    abs_path = "-1";
-                } else {
-                    exe_file_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
-                    if (unlikely(!exe_file_buf)) {
-                        abs_path = "-2";
-                    } else {
-                        abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
-                        if (unlikely(IS_ERR(abs_path)))
-                            abs_path = "-1";
-                    }
-                    path_put(&exe_file);
-                }
-            } else {
-                abs_path = "-1";
-            }
-        } else {
+        error = user_path_at(AT_FDCWD, (char *) p_get_arg1(regs), LOOKUP_FOLLOW, &exe_file);
+        if (unlikely(error)) {
             abs_path = "-1";
-        }
+        } else {
+            exe_file_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
+            if (unlikely(!exe_file_buf)) {
+                abs_path = "-2";
+            } else {
+                abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
+                if (unlikely(IS_ERR(abs_path)))
+                    abs_path = "-1";
+            }
+            path_put(&exe_file);
+         }
 
         files = files_fdtable(current->files);
         if(likely(files->fd[0] != NULL)) {
