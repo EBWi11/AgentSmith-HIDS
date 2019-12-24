@@ -24,7 +24,7 @@
 #define EXIT_PROTECT 0
 
 #define CONNECT_HOOK 1
-#define EXECVE_HOOK 1
+#define EXECVE_HOOK 0
 #define FSNOTIFY_HOOK 1
 #define PTRACE_HOOK 1
 #define DNS_HOOK 1
@@ -538,7 +538,7 @@ void execve_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long f
         if (likely(!IS_ERR(path))) {
             if(likely(path->name)) {
                 error = kern_path(path->name, LOOKUP_FOLLOW, &exe_file);
-                if (unlikely(error)) {
+                if (unlikely(error != 0x0)) {
                     abs_path = "-1";
                 } else {
                     exe_file_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
