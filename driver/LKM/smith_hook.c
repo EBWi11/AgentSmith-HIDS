@@ -564,7 +564,7 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         else
             argv_res_tmp = "";
 
-        error = user_path_at(AT_FDCWD, (const char *)p_get_arg1(regs), LOOKUP_FOLLOW, &exe_file);
+        error = user_path_at(AT_FDCWD, (const char __user *)p_get_arg1(regs), LOOKUP_FOLLOW, &exe_file);
         if (unlikely(error)) {
             abs_path = "-1";
         } else {
