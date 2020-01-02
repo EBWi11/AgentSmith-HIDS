@@ -41,7 +41,7 @@ char recvfrom_kprobe_state = 0x0;
 char load_module_kprobe_state = 0x0;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
-char execveat_kprobe_state = 0x0;
+char execveat_kretprobe_state = 0x0;
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0)
@@ -510,6 +510,84 @@ struct execve_data {
     char *abs_path;
     char *argv;
 };
+
+int execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
+{
+    int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, flag = 0, error = 0;
+    char *exe_file_buf = "-2";
+    char *argv_res = NULL;
+    char *abs_path = NULL;
+    char *argv_res_tmp = NULL;
+    struct execve_data *data;
+    struct path exe_file;
+    const char __user *native;
+    if (share_mem_flag != -1) {
+    	struct user_arg_ptr argv_ptr = {.ptr.native = p_get_arg3(regs)};
+        data = (struct execve_data *)ri->data;
+
+        argv_len = count(argv_ptr, MAX_ARG_STRINGS);
+        if(likely(argv_len > 0))
+            argv_res = kzalloc(128 * argv_len + 1, GFP_ATOMIC);
+
+        if (likely(argv_len > 0)) {
+            for (i = 0; i < argv_len; i++) {
+                native = get_user_arg_ptr(argv_ptr, i);
+                if (unlikely(IS_ERR(native))) {
+                    flag = -1;
+                    break;
+                }
+
+                len = strnlen_user(native, MAX_ARG_STRLEN);
+                if (!len) {
+                    flag = -2;
+                    break;
+                }
+
+                if (offset + len > argv_res_len + 128 * argv_len) {
+                    flag = -3;
+                    break;
+                }
+
+                if (copy_from_user(argv_res + offset, native, len)) {
+                    flag = -4;
+                    break;
+                }
+
+                offset += len - 1;
+                *(argv_res + offset) = ' ';
+                offset += 1;
+            }
+        }
+
+        if (argv_len > 0 && flag == 0)
+            argv_res_tmp = str_replace(argv_res, "\n", " ");
+        else
+            argv_res_tmp = "";
+
+        error = user_path_at(AT_FDCWD, (const char __user *)p_get_arg2(regs), LOOKUP_FOLLOW, &exe_file);
+        if (unlikely(error)) {
+            abs_path = "-1";
+        } else {
+            exe_file_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
+            if (unlikely(!exe_file_buf)) {
+                abs_path = "-2";
+            } else {
+                abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
+                if (unlikely(IS_ERR(abs_path)))
+                    abs_path = "-1";
+            }
+            path_put(&exe_file);
+         }
+
+        data->argv = argv_res_tmp;
+        data->abs_path = abs_path;
+
+        if(argv_len > 0)
+            kfree(argv_res);
+    }
+    return 0;
+}
+
 
 int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
@@ -1244,9 +1322,12 @@ struct kretprobe connect_kretprobe = {
 };
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
-struct kprobe execveat_kprobe = {
+struct kprobe execveat_kretprobe = {
     .symbol_name = P_GET_SYSCALL_NAME(execveat),
-	.post_handler = execve_post_handler,
+    .data_size  = sizeof(struct execve_data),
+	.handler = execve_handler,
+	.entry_handler = execveat_entry_handler,
+	.maxactive = 40,
 };
 #endif
 
@@ -1321,9 +1402,9 @@ int execve_register_kprobe(void)
 int execveat_register_kprobe(void)
 {
 	int ret;
-	ret = register_kretprobe(&execve_kretprobe);
+	ret = register_kretprobe(&execveat_kretprobe);
 	if (ret == 0)
-        execve_kprobe_state = 0x1;
+        execveat_kretprobe_state = 0x1;
 
 	return ret;
 }
@@ -1412,7 +1493,7 @@ void unregister_kprobe_load_module(void)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
 void unregister_kprobe_execveat(void)
 {
-	unregister_kprobe(&execveat_kprobe);
+	unregister_kprobe(&execveat_kretprobe);
 }
 #endif
 
@@ -1437,7 +1518,7 @@ void uninstall_kprobe(void)
 	    unregister_kprobe_load_module();
 
     #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
-    if (execveat_kprobe_state == 0x1)
+    if (execveat_kretprobe_state == 0x1)
         unregister_kprobe_execveat();
     #endif
 
