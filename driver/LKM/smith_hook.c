@@ -1323,7 +1323,7 @@ struct kretprobe connect_kretprobe = {
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
 struct kretprobe execveat_kretprobe = {
-    .symbol_name = P_GET_SYSCALL_NAME(execveat),
+    .kp.symbol_name = P_GET_SYSCALL_NAME(execveat),
     .data_size  = sizeof(struct execve_data),
 	.handler = execve_handler,
 	.entry_handler = execveat_entry_handler,
