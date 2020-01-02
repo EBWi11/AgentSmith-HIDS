@@ -4,6 +4,7 @@ extern crate kafka;
 extern crate libc;
 extern crate serde;
 extern crate crypto;
+extern crate lru_time_cache;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
@@ -25,6 +26,7 @@ use std::thread;
 use std::time;
 use crypto::md5::Md5;
 use crypto::digest::Digest;
+use lru_time_cache::LruCache;
 
 mod lib;
 mod conf;
@@ -50,6 +52,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
     let kafka_test_data = "0".as_bytes();
     let mut exe_white_list = HashSet::new();
     let agent_pid = process::id().to_string();
+    let cache_time = ::std::time::Duration::from_secs(1200);
 
     for i in whitelist::EXE.iter() {
         exe_white_list.insert(i.to_string());
@@ -65,22 +68,24 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
 
     unsafe { shm_init(); };
 
+    let mut cache = LruCache::<String, String>::with_expiry_duration_and_capacity(cache_time, 1024);
+
     loop {
         let msg = unsafe { CStr::from_ptr(shm_run_no_callback()) }.to_string_lossy().clone();
         if msg.len() > 16 {
+            let mut md5_str;
             let mut send_flag = 0;
             let mut i = 1;
             let mut msg_str = String::new();
             let msg_split: Vec<&str> = msg.split("\n").collect();
             let mut msg_type = msg_split[1];
 
-            let mut execve_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"run_path\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"argv\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"stdin\":\"".to_string(), ",\"stdout\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
-            let mut load_module_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"lkm_file\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
-            let mut connect_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"sa_family\":\"".to_string(), ",\"fd\":\"".to_string(), ",\"dport\":\"".to_string(), ",\"dip\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"sip\":\"".to_string(), ",\"sport\":\"".to_string(), ",\"res\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
-
-            let mut ptrace_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"ptrace_request\":\"".to_string(), ",\"target_pid\":\"".to_string(), ",\"addr\":\"".to_string(), ",\"data\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
-            let mut dns_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"sa_family\":\"".to_string(), ",\"fd\":\"".to_string(), ",\"sport\":\"".to_string(), ",\"sip\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"dip\":\"".to_string(), ",\"dport\":\"".to_string(), ",\"qr\":\"".to_string(), ",\"opcode\":\"".to_string(), ",\"rcode\":\"".to_string(), ",\"query\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
-            let mut create_file_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"file_path\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
+            let mut execve_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"run_path\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"argv\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"stdin\":\"".to_string(), ",\"stdout\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), ",\"exe_md5\":\"".to_string(), "}".to_string()];
+            let mut load_module_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"lkm_file\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), ",\"exe_md5\":\"".to_string(), ",\"load_file_md5\":\"".to_string(),  "}".to_string()];
+            let mut connect_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"sa_family\":\"".to_string(), ",\"fd\":\"".to_string(), ",\"dport\":\"".to_string(), ",\"dip\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"sip\":\"".to_string(), ",\"sport\":\"".to_string(), ",\"res\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), ",\"exe_md5\":\"".to_string(), "}".to_string()];
+            let mut ptrace_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"ptrace_request\":\"".to_string(), ",\"target_pid\":\"".to_string(), ",\"addr\":\"".to_string(), ",\"data\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), ",\"exe_md5\":\"".to_string(), "}".to_string()];
+            let mut dns_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"sa_family\":\"".to_string(), ",\"fd\":\"".to_string(), ",\"sport\":\"".to_string(), ",\"sip\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"dip\":\"".to_string(), ",\"dport\":\"".to_string(), ",\"qr\":\"".to_string(), ",\"opcode\":\"".to_string(), ",\"rcode\":\"".to_string(), ",\"query\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), ",\"exe_md5\":\"".to_string(), "}".to_string()];
+            let mut create_file_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"file_path\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), ",\"exe_md5\":\"".to_string(), ",\"create_file_md5\":\"".to_string(), "}".to_string()];
 
             for s in msg_split {
                 match msg_type {
@@ -95,6 +100,19 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                                 msg_type = "-1";
                                 break;
                             }
+
+                            if s != "-1" {
+                                if !cache.contains_key(s) {
+                                    md5_str = get_md5(s.to_string());
+                                    cache.insert(s.to_string(), md5_str.clone());
+                                } else {
+                                    md5_str = cache.get(&s.to_string()).unwrap().to_string();
+                                }
+                            } else {
+                                md5_str = "-1".to_string();
+                            }
+                            connect_msg[22].push_str(&md5_str);
+                            connect_msg[22].push_str(tmp);
                         }
                         connect_msg[i].push_str(s);
                         connect_msg[i].push_str(tmp);
@@ -107,6 +125,18 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                                     msg_type = "-1";
                                     break;
                                 } else {
+                                    if s != "-1" {
+                                        if !cache.contains_key(s) {
+                                            md5_str = get_md5(s.to_string());
+                                            cache.insert(s.to_string(), md5_str.clone());
+                                        } else {
+                                            md5_str = cache.get(&s.to_string()).unwrap().to_string();
+                                        }
+                                    } else {
+                                        md5_str = "-1".to_string();
+                                    }
+                                    execve_msg[19].push_str(&md5_str);
+                                    execve_msg[19].push_str(tmp);
                                     execve_msg[i].push_str(s);
                                 }
                             }
@@ -144,6 +174,20 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                                     msg_type = "-1";
                                     break;
                                 }
+
+                                if s != "-1" {
+                                    if !cache.contains_key(s) {
+                                        md5_str = get_md5(s.to_string());
+                                        cache.insert(s.to_string(), md5_str.clone());
+                                    } else {
+                                        md5_str = cache.get(&s.to_string()).unwrap().to_string();
+                                    }
+                                } else {
+                                    md5_str = "-1".to_string();
+                                }
+                                ptrace_msg[19].push_str(&md5_str);
+                                ptrace_msg[19].push_str(tmp);
+                                ptrace_msg[i].push_str(s);
                             }
 
                             _ => {
@@ -164,6 +208,18 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                                 msg_type = "-1";
                                 break;
                             }
+                            if s != "-1" {
+                                if !cache.contains_key(s) {
+                                    md5_str = get_md5(s.to_string());
+                                    cache.insert(s.to_string(), md5_str.clone());
+                                } else {
+                                    md5_str = cache.get(&s.to_string()).unwrap().to_string();
+                                }
+                            } else {
+                                md5_str = "-1".to_string();
+                            }
+                            dns_msg[25].push_str(&md5_str);
+                            dns_msg[25].push_str(tmp);
                         }
                         dns_msg[i].push_str(s);
                         dns_msg[i].push_str(tmp);
@@ -180,6 +236,31 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                                 msg_type = "-1";
                                 break;
                             }
+                            if s != "-1" {
+                                if !cache.contains_key(s) {
+                                    md5_str = get_md5(s.to_string());
+                                    cache.insert(s.to_string(), md5_str.clone());
+                                } else {
+                                    md5_str = cache.get(&s.to_string()).unwrap().to_string();
+                                }
+                            } else {
+                                md5_str = "-1".to_string();
+                            }
+                            create_file_msg[16].push_str(&md5_str);
+                            create_file_msg[16].push_str(tmp);
+                        } else if i == 4 {
+                            if s != "-1" {
+                                if !cache.contains_key(s) {
+                                    md5_str = get_md5(s.to_string());
+                                    cache.insert(s.to_string(), md5_str.clone());
+                                } else {
+                                    md5_str = cache.get(&s.to_string()).unwrap().to_string();
+                                }
+                            } else {
+                                md5_str = "-1".to_string();
+                            }
+                            create_file_msg[17].push_str(&md5_str);
+                            create_file_msg[17].push_str(tmp);
                         }
                         create_file_msg[i].push_str(s);
                         create_file_msg[i].push_str(tmp);
@@ -191,6 +272,31 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                                 msg_type = "-1";
                                 break;
                             }
+                            if s != "-1" {
+                                if !cache.contains_key(s) {
+                                    md5_str = get_md5(s.to_string());
+                                    cache.insert(s.to_string(), md5_str.clone());
+                                } else {
+                                    md5_str = cache.get(&s.to_string()).unwrap().to_string();
+                                }
+                            } else {
+                                md5_str = "-1".to_string();
+                            }
+                            load_module_msg[16].push_str(&md5_str);
+                            load_module_msg[16].push_str(tmp);
+                        } else if i == 4 {
+                            if s != "-1" {
+                                if !cache.contains_key(s) {
+                                    md5_str = get_md5(s.to_string());
+                                    cache.insert(s.to_string(), md5_str.clone());
+                                } else {
+                                    md5_str = cache.get(&s.to_string()).unwrap().to_string();
+                                }
+                            } else {
+                                md5_str = "-1".to_string();
+                            }
+                            load_module_msg[17].push_str(&md5_str);
+                            load_module_msg[17].push_str(tmp);
                         }
                         load_module_msg[i].push_str(s);
                         load_module_msg[i].push_str(tmp);
@@ -263,10 +369,16 @@ fn get_machine_ip() -> String {
 }
 
 fn get_md5(path: String) -> String {
-    let mut f = File::open(path).unwrap();
+    let mut file = match File::open(path) {
+        Ok(file) => file,
+        Err(_err) => return "-1".to_string(),
+    };
     let mut buffer = Vec::new();
     let mut hasher = Md5::new();
-    f.read_to_end(&mut buffer).unwrap();
+    match file.read_to_end(&mut buffer) {
+        Ok(buffer) => buffer,
+        Err(_err) => return "-1".to_string(),
+    };
     hasher.input(&buffer);
     return hasher.result_str();
 }

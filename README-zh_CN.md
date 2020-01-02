@@ -79,7 +79,8 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
     "user":"root",
     "time":"1575721900051",
     "local_ip":"192.168.165.153",
-    "hostname":"test"
+    "hostname":"test",
+    "exe_md5":"a0c32dd6d3bc4d364380e2e65fe9ac64"
 }
 ```
 
@@ -111,7 +112,8 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
     "user":"root",
     "time":"1575721921240",
     "local_ip":"192.168.165.153",
-    "hostname":"test"
+    "hostname":"test",
+    "exe_md5":"735ae70b4ceb8707acc40bc5a3d06e04"
 }
 ```
 
@@ -146,7 +148,8 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
     "user":"root",
     "time":"1575721921240",
     "local_ip":"192.168.165.153",
-    "hostname":"test"
+    "hostname":"test",
+    "exe_md5":"39c45487a85e26ce5755a893f7e88293"
 }
 ```
 
@@ -172,7 +175,9 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
     "user":"root",
     "time":"1575721984257",
     "local_ip":"192.168.165.153",
-    "hostname":"test"
+    "hostname":"test",
+    "exe_md5":"215be70a38c3a2e14e09d637c85d5311",
+    "create_file_md5":"d41d8cd98f00b204e9800998ecf8427e"
 }
 ```
 
@@ -201,7 +206,35 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
     "user":"root",
     "time":"1575722717065",
     "local_ip":"192.168.165.153",
-    "hostname":"test"
+    "hostname":"test",
+    "exe_md5":"863293f9fcf1af7afe5797a4b6b7aa0a"
+}
+```
+
+
+### Load LKM File Hook
+
+通过Hook **load_module**实现，数据样例：
+
+```json
+{
+    "uid":"0",
+    "data_type":"603",
+    "exe":"/usr/bin/kmod",
+    "lkm_file":"/root/ptrace/ptrace",
+    "pid":"29461",
+    "ppid":"9766",
+    "pgid":"29461",
+    "tgid":"29461",
+    "comm":"insmod",
+    "nodename":"test",
+    "sessionid":"13",
+    "user":"root",
+    "time":"1577212873791",
+    "local_ip":"192.168.165.152",
+    "hostname":"test",
+    "exe_md5":"0010433ab9105d666b044779f36d6d1e",
+    "load_file_md5":"863293f9fcf1af7afe5797a4b6b7aa0a"
 }
 ```
 
