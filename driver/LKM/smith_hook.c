@@ -1493,7 +1493,7 @@ void unregister_kprobe_load_module(void)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
 void unregister_kprobe_execveat(void)
 {
-	unregister_kprobe(&execveat_kretprobe);
+	unregister_kretprobe(&execveat_kretprobe);
 }
 #endif
 
