@@ -977,7 +977,7 @@ int do_sys_open_entry_handler(struct kretprobe_instance *ri, struct pt_regs *reg
             if (likely(tmp_path)) {
                 tmp = tmp_getname(tmp_path);
                 if (likely(!IS_ERR(tmp))) {
-                    data->filename = tmp_path;
+                    data->filename = tmp->filename;
                     data->check_res = user_path_at(AT_FDCWD, data->filename, LOOKUP_FOLLOW, &path);
                     if (!data->check_res)
                         path_put(&path);
