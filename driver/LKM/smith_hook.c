@@ -967,17 +967,19 @@ int do_sys_open_entry_handler(struct kretprobe_instance *ri, struct pt_regs *reg
 {
     struct do_sys_open_data *data;
     struct path path;
+    const char __user *tmp_path;
     struct filename *tmp;
     if (share_mem_flag != -1) {
         data = (struct do_sys_open_data *)ri->data;
         data->check_res = 1;
         if((int) p_regs_get_arg3(regs) & O_CREAT) {
-            if (likely(data->filename)) {
-                tmp = tmp_getname(data->filename);
+            tmp_path = (const char __user *) p_regs_get_arg2(regs);
+            if (likely(tmp_path)) {
+                tmp = tmp_getname(tmp_path);
                 if (likely(!IS_ERR(tmp))) {
-                    data->filename = tmp->name;
-                    data->check_res = user_path_at(AT_FDCWD, tmp->name, LOOKUP_FOLLOW, &path);
-                    if (likely(!data->check_res))
+                    data->filename = tmp_path;
+                    data->check_res = user_path_at(AT_FDCWD, data->filename, LOOKUP_FOLLOW, &path);
+                    if (!data->check_res)
                         path_put(&path);
                 }
             }
