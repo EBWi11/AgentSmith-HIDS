@@ -25,7 +25,7 @@
 
 #define CONNECT_HOOK 1
 #define EXECVE_HOOK 1
-#define FSNOTIFY_HOOK 1
+#define FSNOTIFY_HOOK 0
 #define PTRACE_HOOK 1
 #define DNS_HOOK 1
 #define LOAD_MODULE_HOOK 1
@@ -960,21 +960,30 @@ void fsnotify_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long
 
 struct do_sys_open_data {
     int check_res;
-    const char __user *filename;
+    char *filename;
 };
 
 int do_sys_open_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-    struct do_sys_open_data *data;
-    struct path path;
+    char *tmp_path;
+    int copy_res;
     if (share_mem_flag != -1) {
-        data = (struct do_sys_open_data *)ri->data;
-        data->check_res = 1;
         if((int) p_regs_get_arg3(regs) & O_CREAT) {
-            data->filename = (const char __user *) p_regs_get_arg2(regs);
-            data->check_res = user_path_at(AT_FDCWD, data->filename, LOOKUP_FOLLOW, &path);
-            if (!data->check_res)
-                path_put(&path);
+            if ((const char __user *) p_regs_get_arg2(regs)) {
+                struct do_sys_open_data *data;
+                struct path path;
+                data = (struct do_sys_open_data *)ri->data;
+                tmp_path = kzalloc(PATH_MAX, GFP_ATOMIC);
+                copy_res = copy_from_user(tmp_path, (const char __user *) p_regs_get_arg2(regs), PATH_MAX);
+                data->check_res = kern_path(tmp_path, LOOKUP_FOLLOW, &path);
+                if (!data->check_res) {
+                    path_put(&path);
+                    kfree(tmp_path);
+                } else if (data->check_res == -2)
+                    data->filename = tmp_path;
+                else
+                    kfree(tmp_path);
+            }
         }
     }
     return 0;
@@ -988,20 +997,22 @@ int do_sys_open_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     int retval;
     int check_res;
     char *comm = NULL;
-    struct do_sys_open_data *data;
 
     if (share_mem_flag != -1) {
         retval = regs_return_value(regs);
         if (likely(retval > 0)) {
+            struct do_sys_open_data *data;
             data = (struct do_sys_open_data *)ri->data;
             check_res = data -> check_res;
-            if (check_res == -2) {
+            if (unlikely(check_res == -2)) {
                 char *buffer = NULL;
                 char *pathstr = NULL;
                 char *abs_path = NULL;
                 struct path path;
-                check_res = user_path_at(AT_FDCWD, data->filename, LOOKUP_FOLLOW, &path);
-                if (!check_res) {
+
+                data->check_res = 0;
+                check_res = kern_path(data->filename, LOOKUP_FOLLOW, &path);
+                if (likely(!check_res)) {
                     char pname_buf[PATH_MAX];
                     memset(pname_buf, 0, PATH_MAX);
                     pathstr = d_path(&path, pname_buf, PATH_MAX);
@@ -1034,6 +1045,7 @@ int do_sys_open_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                             "\n", comm, current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
                     send_msg_to_user(result_str, 1);
                 }
+                kfree(data->filename);
             }
         }
     }
