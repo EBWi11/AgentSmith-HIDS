@@ -385,11 +385,6 @@ int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     int sa_family;
     int result_str_len;
     unsigned int sessionid;
-    struct socket *socket;
-    struct sock *sk;
-    struct sockaddr tmp_dirp;
-    struct connect_data *data;
-    struct inet_sock *inet;
     char dip[64];
     char sip[64];
     char dport[16] = "-1";
@@ -400,6 +395,12 @@ int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     char *buffer = NULL;
 
 	if (share_mem_flag != -1) {
+	    struct socket *socket;
+        struct sock *sk;
+        struct sockaddr tmp_dirp;
+        struct connect_data *data;
+        struct inet_sock *inet;
+
 	    sessionid = get_sessionid();
 	    retval = regs_return_value(regs);
 
@@ -518,11 +519,11 @@ int execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     char *argv_res = NULL;
     char *abs_path = NULL;
     char *argv_res_tmp = NULL;
-    struct execve_data *data;
-    struct path exe_file;
     const char __user *native;
     if (share_mem_flag != -1) {
-    	struct user_arg_ptr argv_ptr = {.ptr.native = p_get_arg3(regs)};
+        struct execve_data *data;
+        struct path exe_file;
+    	struct user_arg_ptr argv_ptr = {.ptr.native = (const char * const*) p_get_arg3(regs)};
         data = (struct execve_data *)ri->data;
 
         argv_len = count(argv_ptr, MAX_ARG_STRINGS);
@@ -596,11 +597,11 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     char *argv_res = NULL;
     char *abs_path = NULL;
     char *argv_res_tmp = NULL;
-    struct execve_data *data;
-    struct path exe_file;
     const char __user *native;
     if (share_mem_flag != -1) {
-    	struct user_arg_ptr argv_ptr = {.ptr.native = p_get_arg2(regs)};
+        struct execve_data *data;
+        struct path exe_file;
+    	struct user_arg_ptr argv_ptr = {.ptr.native = (const char * const*) p_get_arg2(regs)};
         data = (struct execve_data *)ri->data;
 
         argv_len = count(argv_ptr, MAX_ARG_STRINGS);
@@ -677,13 +678,13 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     char *tmp_stdout = NULL;
     char *argv = NULL;
     char *comm = NULL;
-    struct execve_data *data;
-    struct fdtable *files;
 
 	if (share_mem_flag != -1) {
         char *stdin_fd_buf = "-2";
         char *stdout_fd_buf = "-2";
         char *pname_buf = "-2";
+        struct execve_data *data;
+        struct fdtable *files;
 
         data = (struct execve_data *)ri->data;
         argv = data -> argv;
@@ -773,9 +774,9 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, flag = 0;
     char *argv_res = NULL;
     char *argv_res_tmp = NULL;
-    struct execve_data *data;
     const char __user *native;
     if (share_mem_flag != -1) {
+        struct execve_data *data;
         char **argv = (char **) p_get_arg2(regs);
         data = (struct execve_data *)ri->data;
 
@@ -835,14 +836,14 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     char *tmp_stdout = NULL;
     char *comm = NULL;
     char *buffer = NULL;
-    struct fdtable *files;
-    struct execve_data *data;
 
 	if (share_mem_flag != -1) {
 	    char *argv = NULL;
 	    char *abs_path = NULL;
 	    char tmp_stdin_fd[PATH_MAX];
         char tmp_stdout_fd[PATH_MAX];
+        struct fdtable *files;
+        struct execve_data *data;
 
         memset(tmp_stdin_fd, 0, PATH_MAX);
         memset(tmp_stdout_fd, 0, PATH_MAX);
@@ -960,29 +961,31 @@ void fsnotify_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long
 
 struct do_sys_open_data {
     int check_res;
-    char *filename;
+    const char *filename;
 };
 
 int do_sys_open_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-    char *tmp_path;
-    int copy_res;
     if (share_mem_flag != -1) {
+        struct do_sys_open_data *data;
+        data = (struct do_sys_open_data *)ri->data;
+        data->check_res = 0;
         if((int) p_regs_get_arg3(regs) & O_CREAT) {
-            if ((const char __user *) p_regs_get_arg2(regs)) {
-                struct do_sys_open_data *data;
+            if (likely((const char __user *) p_regs_get_arg2(regs))) {
                 struct path path;
-                data = (struct do_sys_open_data *)ri->data;
-                tmp_path = kzalloc(PATH_MAX, GFP_ATOMIC);
-                copy_res = copy_from_user(tmp_path, (const char __user *) p_regs_get_arg2(regs), PATH_MAX);
-                data->check_res = kern_path(tmp_path, LOOKUP_FOLLOW, &path);
-                if (!data->check_res) {
-                    path_put(&path);
-                    kfree(tmp_path);
-                } else if (data->check_res == -2)
-                    data->filename = tmp_path;
-                else
-                    kfree(tmp_path);
+                struct filename *file;
+                file = tmp_getname((const char __user *) p_regs_get_arg2(regs));
+                if (likely(!IS_ERR(file))) {
+                    int check_res;
+                    check_res = kern_path(file->name, LOOKUP_FOLLOW, &path);
+                    if (!check_res) {
+                        path_put(&path);
+                    } else if (check_res == -2) {
+                        data->filename = file->name;
+                        data->check_res = -2;
+                    }
+                    tmp_putname(file);
+                }
             }
         }
     }
@@ -1045,7 +1048,6 @@ int do_sys_open_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                             "\n", comm, current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
                     send_msg_to_user(result_str, 1);
                 }
-                kfree(data->filename);
             }
         }
     }
@@ -1137,15 +1139,15 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     char *abs_path = NULL;
     char *result_str = NULL;
     char *buffer = NULL;
-    struct recvfrom_data *data;
-    struct sockaddr tmp_dirp;
-    struct sockaddr_in *sin;
-    struct sockaddr_in6 *sin6;
-    struct socket *sock;
-    struct sockaddr_in source_addr;
-    struct sockaddr_in6 source_addr6 = {};
 
 	if (share_mem_flag != -1) {
+	    struct recvfrom_data *data;
+        struct sockaddr tmp_dirp;
+        struct sockaddr_in *sin;
+        struct sockaddr_in6 *sin6;
+        struct socket *sock;
+        struct sockaddr_in source_addr;
+        struct sockaddr_in6 source_addr6 = {};
 	    data = (struct recvfrom_data *)ri->data;
         addrlen = data->addr_len;
 
@@ -1274,11 +1276,11 @@ void load_module_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned l
     char *result_str = NULL;
     char *comm = NULL;
     char *buffer = NULL;
-    struct path files_path;
-    struct files_struct *current_files;
-    struct fdtable *files_table;
 
 	if (share_mem_flag != -1) {
+	    struct path files_path;
+        struct files_struct *current_files;
+        struct fdtable *files_table;
 	    char *abs_path = NULL;
 	    char init_module_buf[PATH_MAX];
 	    memset(init_module_buf, 0, PATH_MAX);
