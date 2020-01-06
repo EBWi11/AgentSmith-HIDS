@@ -45,9 +45,6 @@ char execveat_kretprobe_state = 0x0;
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0)
-struct filename *(*tmp_getname)(const char __user *filename);
-void (*tmp_putname)(struct filename *name);
-
 struct user_arg_ptr
 {
     #ifdef CONFIG_COMPAT
@@ -1443,21 +1440,6 @@ int __init smith_init(void)
 {
 	int ret;
 	checkCPUendianRes = checkCPUendian();
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0)
-    tmp_getname = (void *)kallsyms_lookup_name("getname");
-
-    if(!tmp_getname) {
-            printk(KERN_INFO "[SMITH] UNKNOW_SYMBOL: getname()\n");
-            return -1;
-    }
-    tmp_putname = (void *)kallsyms_lookup_name("putname");
-
-    if(!tmp_putname) {
-            printk(KERN_INFO "[SMITH] UNKNOW_SYMBOL: putname()\n");
-            return -1;
-    }
-#endif
 
     ret = init_share_mem();
 
