@@ -431,7 +431,7 @@ fn start_hreatbread(tx: Sender<Vec<u8>>) {
 }
 
 fn install_lkm() {
-    Command::new("curl").arg("-o").arg(settings::LKM_TMP_PATH).arg(format!("{}lkm/release/{}/syshook.ko", settings::LKM_SERVER, get_kernel_version())).status().unwrap();
+    Command::new("curl").arg("-o").arg(settings::LKM_TMP_PATH).arg(format!("{}lkm/release/{}/smith.ko", settings::LKM_SERVER, get_kernel_version())).status().unwrap();
     Command::new("insmod").arg(settings::LKM_TMP_PATH).status().unwrap();
     Command::new("rm").arg("-rf").arg(settings::LKM_TMP_PATH).status().unwrap();
     thread::sleep(time::Duration::from_secs(1));

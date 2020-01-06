@@ -171,7 +171,7 @@ static int send_msg_to_user_memshare(char *msg, int kfree_flag)
             }
         }
 
-        if(unlikely((curr_write_index + raw_data_len) >= MAX_SIZE - 1)) {
+        if(unlikely((curr_write_index + raw_data_len) >= BOUNDARY)) {
             now_read_index = get_read_index();
             if (now_read_index <= CHECK_READ_INDEX_THRESHOLD) {
 #if (KERNEL_PRINT == 1)

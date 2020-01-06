@@ -118,7 +118,7 @@ static char *shm_msg_factory_no_callback(char *msg)
 
     if (msg)
     {
-        if(strlen(msg) < 3840){
+        if(strlen(msg) < 4024){
             strcat(shm_res, msg);
             free(msg);
             strcat(shm_res, "\n");
@@ -133,6 +133,8 @@ static char *shm_msg_factory_no_callback(char *msg)
                 strcat(shm_res, time_buffer);
                 return shm_res;
             }
+        } else {
+            free(msg);
         }
     }
     return "";
@@ -173,10 +175,8 @@ char *shm_run_no_callback(void)
     while (1)
     {
         slot = get_slot();
-        if ((slot->next) == -1 || (slot->next) == 1)
-        {
-            if ((slot->len) > 0)
-            {
+        if ((slot->next) == -1 || (slot->next) == 1) {
+            if ((slot->len) > 0) {
                 printf("read_index:%d next:%d\n",shm_read_index,slot->next);
                 res = shm_msg_factory_no_callback(get_msg(slot));
                 clear_sh_mem();
@@ -186,26 +186,11 @@ char *shm_run_no_callback(void)
                 if (slot->next == 1)
                     shm_read_index = 8;
                 else
-                {
                     shm_read_index = shm_read_index + 9 + slot->len;
-                    if (shm_read_index + 8 > MAX_SIZE || shm_read_index < 8)
-                    {
-                        shm_close();
-                        shm_init();
-                        continue;
-                    }
-                }
+
                 return res;
             }
-        }
-        else if((slot->next) != 0)
-        {
-            shm_close();
-            shm_init();
-            continue;
-        }
-        else
-        {
+        } else {
             nanosleep((const struct timespec[]){{0, 50000}}, NULL);
         }
     }

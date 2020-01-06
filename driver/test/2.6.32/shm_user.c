@@ -83,13 +83,10 @@ static void clear_sh_mem(void)
     int i;
     if (shm_read_index > 0 && pre_read_index > 0)
     {
-        if (shm_read_index > pre_read_index)
-        {
+        if (shm_read_index > pre_read_index) {
             for (i = 0; i < (shm_read_index - pre_read_index); i++)
                 sh_mem[pre_read_index + i] = 0;
-        }
-        else
-        {
+        } else {
             for (i = 0; i < (MAX_SIZE - pre_read_index); i++)
                 sh_mem[pre_read_index + i] = 0;
         }
@@ -100,8 +97,7 @@ static char *get_msg(struct msg_slot *slot)
 {
     char *tmp_data;
     tmp_data = malloc(slot->len + 4);
-    if (tmp_data)
-    {
+    if (tmp_data) {
         memset(tmp_data, '\0', slot->len + 4);
         snprintf(tmp_data, slot->len + 1, "%s", &sh_mem[shm_read_index + 8]);
     }
@@ -121,14 +117,13 @@ static char *shm_msg_factory_no_callback(char *msg)
 
     if (msg)
     {
-        if(strlen(msg) < 3840){
+        if(strlen(msg) < 4024) {
             strcat(shm_res, msg);
             free(msg);
             strcat(shm_res, "\n");
             shm_res_len = strlen(shm_res);
 
-            if (shm_res_len > 16)
-            {
+            if (shm_res_len > 16) {
                 user_id = get_user_id(shm_res);
                 username = get_user(atoi(user_id));
                 strcat(shm_res, username);
@@ -136,6 +131,8 @@ static char *shm_msg_factory_no_callback(char *msg)
                 strcat(shm_res, time_buffer);
                 return shm_res;
             }
+        } else {
+            free(msg);
         }
     }
     return "";
@@ -148,8 +145,7 @@ void init(void)
 
 void shm_init(void)
 {
-    if (shm_fd == -1)
-    {
+    if (shm_fd == -1) {
         shm_read_index = 8;
         pre_read_index = 0;
         shm_fd = open(DEVICE_FILENAME, O_RDWR | O_SYNC);
@@ -161,8 +157,7 @@ void shm_init(void)
 
 void shm_close(void)
 {
-    if (shm_fd != -1)
-    {
+    if (shm_fd != -1) {
         close(shm_fd);
         munmap(sh_mem, MAX_SIZE);
         munmap(list_head, 8);
@@ -173,13 +168,10 @@ void shm_close(void)
 char *shm_run_no_callback(void)
 {
     char *res = NULL;
-    while (1)
-    {
+    while (1) {
         slot = get_slot();
-        if ((slot->next) == -1 || (slot->next) == 1)
-        {
-            if ((slot->len) > 0)
-            {
+        if ((slot->next) == -1 || (slot->next) == 1) {
+            if ((slot->len) > 0) {
                 res = shm_msg_factory_no_callback(get_msg(slot));
                 clear_sh_mem();
                 list_head->read_index = shm_read_index;
@@ -188,26 +180,11 @@ char *shm_run_no_callback(void)
                 if (slot->next == 1)
                     shm_read_index = 8;
                 else
-                {
                     shm_read_index = shm_read_index + 9 + slot->len;
-                    if (shm_read_index + 8 > MAX_SIZE || shm_read_index < 8)
-                    {
-                        shm_close();
-                        shm_init();
-                        continue;
-                    }
-                }
+
                 return res;
             }
-        }
-        else if((slot->next) != 0)
-        {
-            shm_close();
-            shm_init();
-            continue;
-        }
-        else
-        {
+        } else {
             nanosleep((const struct timespec[]){{0, 50000}}, NULL);
         }
     }
