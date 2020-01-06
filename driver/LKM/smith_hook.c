@@ -966,7 +966,7 @@ int security_inode_create_handler(struct kretprobe_instance *ri, struct pt_regs 
                 get_current_uid(), "\n", CREATE_FILE, "\n", abs_path, "\n", pathstr,
                 "\n", current->pid, "\n",current->real_parent->pid, "\n",
                 pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                "\n", comm, current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
+                "\n", comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
         send_msg_to_user(result_str, 1);
         kfree(data->pname_buf);
         kfree(buffer);
