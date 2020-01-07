@@ -38,6 +38,7 @@
 #define DNS_TYPE "601"
 #define CREATE_FILE "602"
 #define LOAD_MODULE_TYPE "603"
+#define UPDATE_CRED_TYPE "604"
 
 typedef unsigned short int uint16;
 typedef unsigned long int uint32;
