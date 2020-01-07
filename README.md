@@ -241,7 +241,7 @@ Achieved by hooking **load_module**, example:
 ```
 
 
-### PROC FILE_HOOK Alert
+### PROC FILE HOOK Alert
 ```json
 {
     "uid":"-1",

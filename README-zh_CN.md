@@ -241,7 +241,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 ```
 
 
-### PROC FILE_HOOK Alert
+### PROC FILE HOOK Alert
 ```json
 {
     "uid":"-1",
