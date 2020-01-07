@@ -18,10 +18,12 @@
 * see <https://www.gnu.org/licenses/>.
 *******************************************************************/
 #include "share_mem.h"
+#include "anti_rootkit.h"
 #include "smith_hook.h"
 #include "struct_wrap.h"
 
 #define EXIT_PROTECT 0
+#define ROOTKIT_CHECK 1
 
 #define CONNECT_HOOK 1
 #define EXECVE_HOOK 1
@@ -1510,23 +1512,36 @@ int __init smith_init(void)
 	    ret = load_module_register_kprobe();
 	    if (ret < 0) {
 		    uninstall_kprobe();
+		    uninstall_share_mem();
 		    printk(KERN_INFO "[SMITH] load_module register_kprobe failed, returned %d\n", ret);
 		    return -1;
 	    }
 	}
 
 #if (EXIT_PROTECT == 1)
-    exit_protect_action()
+    exit_protect_action();
 #endif
 
-	printk(KERN_INFO "[SMITH] register_kprobe success: connect_hook: %d,load_module_hook: %d,execve_hook: %d,create_file_hook: %d,ptrace_hook: %d,DNS_HOOK: %d\n",
-	       CONNECT_HOOK, LOAD_MODULE_HOOK, EXECVE_HOOK, CREATE_FILE_HOOK, PTRACE_HOOK, DNS_HOOK);
+#if (ROOTKIT_CHECK == 1)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+    anti_rootkit_init();
+#endif
+#endif
+
+	printk(KERN_INFO "[SMITH] register_kprobe success: connect_hook: %d,load_module_hook: %d,execve_hook: %d,create_file_hook: %d,ptrace_hook: %d,DNS_HOOK: %d,EXIT_PROTECT: %d,ROOTKIT_CHECK: %d\n",
+	       CONNECT_HOOK, LOAD_MODULE_HOOK, EXECVE_HOOK, CREATE_FILE_HOOK, PTRACE_HOOK, DNS_HOOK, EXIT_PROTECT, ROOTKIT_CHECK);
 
 	return 0;
 }
 
 void __exit smith_exit(void)
 {
+#if (ROOTKIT_CHECK == 1)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+    anti_root_kit_exit();
+#endif
+#endif
+
 	uninstall_kprobe();
 	uninstall_share_mem();
 	printk(KERN_INFO "[SMITH] uninstall_kprobe success\n");
