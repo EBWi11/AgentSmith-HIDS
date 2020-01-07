@@ -15,7 +15,6 @@ Technically, AgentSmith-HIDS is not a Host-based Intrusion Detection System (HID
 The comprehensiveness of information which can be collected by this agent was one of the most important metrics during developing this project, hence it was built to function in the kernel stack and achieve huge advantage comparing to those function in user stack, such as:
 
 * **Better performance**, Information needed are collected in kernel stack to avoid additional supplement actions such as traversal of '/proc'; and to enhance the performance of data transportation, data collected is transferred via shared ram instead of netlink.
-* **AntiRootkit**，From: [Tyton](https://github.com/nbulischeck/tyton) ,for now add **PROC_FILE_HOOK**，**SYSCALL_HOOK**，**LKM_HIDDEN**，**INTERRUPTS_HOOK** feature，but only wark on Kernel > 3.10.
 * **Hard to be bypassed**, Information collection was powered by specifically designed kernel drive, makes it almost impossible to bypass the detection for malicious software like rootkit, which can deliberately hide themselves.
 * **Easy to be integrated**，The AgentSmith-HIDS was built to integrate with other applications and can be used not only as security tool but also a good monitoring tool, or even a good detector of your assets. The agent is capable of collecting the users, files, processes and internet connections for you, so let's imagine when you integrate it with CMDB, you could get a comprehensive map consists of your network, host, container and business (even dependencies). What if you also have a Database audit tool at hand? The map can be extended to contain the relationship between your DB, DB User, tables, fields, applications, network, host and containers etc. Thinking of the possibility of integration with network intrusion detection system and/or threat intelligence etc., higher traceability could also be achieved. It just never gets old.
 * **Kernel stack + User stack**，AgentSmith-HIDS also provide user stack module, to further extend the functionality when working with kernel stack module.
@@ -26,7 +25,8 @@ The comprehensiveness of information which can be collected by this agent was on
 
 * Kernel stack module hooks **execve, connect, process inject, create file, DNS query, load LKM** behaviors via Kprobe，and is also capable of monitoring containers by being compatible with Linux namespace.
 * User stack module utilize built in detection functions including queries of **User List**，**Listening ports list**，**System RPM list**，**Schedule jobs**
-
+* **AntiRootkit**，From: [Tyton](https://github.com/nbulischeck/tyton) ,for now add **PROC_FILE_HOOK**，**SYSCALL_HOOK**，**LKM_HIDDEN**，**INTERRUPTS_HOOK** feature，but only wark on Kernel > 3.10.
+* Cred Change monitoring (sudo/su/sshd except)
 
 
 
@@ -237,6 +237,32 @@ Achieved by hooking **load_module**, example:
     "hostname":"test",
     "exe_md5":"0010433ab9105d666b044779f36d6d1e",
     "load_file_md5":"863293f9fcf1af7afe5797a4b6b7aa0a"
+}
+```
+
+
+### Cred Change Hook
+
+Achieved by Hook **commit_creds**，example：
+
+```json
+{
+    "uid":"0",
+    "data_type":"604",
+    "exe":"/tmp/tt",
+    "pid":"27737",
+    "ppid":"26865",
+    "pgid":"27737",
+    "tgid":"27737",
+    "comm":"tt",
+    "old_uid":"1000",
+    "nodename":"test",
+    "sessionid":"42",
+    "user":"root",
+    "time":"1578396197131",
+    "local_ip":"192.168.165.152",
+    "hostname":"test",
+    "exe_md5":"d99a695d2dc4b5099383f30964689c55"
 }
 ```
 

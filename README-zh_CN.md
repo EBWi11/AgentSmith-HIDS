@@ -17,7 +17,6 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 由于AgentSmit-HIDS的特点(**从内核态获取尽可能全的数据**)，对比用户态的HIDS拥有巨大的优势：
 
 * **性能更优**，通过内核态驱动来获取信息，无需诸如遍历/proc这样的行为进行数据补全；传输方案使用共享内存，而不是netlink，相对来说也有更好的性能表现。
-* **部分Rootkit检测能力**，From: [Tyton](https://github.com/nbulischeck/tyton) ，目前已经移植了**PROC_FILE_HOOK**，**SYSCALL_HOOK**，**LKM_HIDDEN**，**INTERRUPTS_HOOK**，目前仅支持Kernel > 3.10。
 * **难以绕过**，由于我们的信息获取是来自于内核态驱动，因此面对很多刻意隐藏自己的行为如rootkit难以绕过我们的监控。
 * **为联动而生**，我们不仅可以作为安全工具，也可以作为监控，或者梳理内部资产。我们通过内核模块对进程/用户/文件/网络连接进行梳理，如果有CMDB的信息，那么联动后你将会得到一张从网络到主机/容器/业务信息的调用/依赖关系图；如果你们还有DB Audit Tool，那么联动后你可以得到DB User/库表字段/应用/网络/主机容器的关系；等等，还可以和NIDS/威胁情报联动，达到溯源的目的。
 * **用户态+内核态**，AgentSmith-HIDS同时拥有内核态和用户态的模块，可以形成互补。
@@ -28,8 +27,8 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 * 内核模块通过kprobeHook了**execve,connect,process inject,create file,DNS query,load LKM**的行为，并且通过对Linux namespace兼容的方式实现了对容器行为的信息收集
 * 用户态支持自定义检测模块，目前已内置：**系统用户列表查询**，**系统端口监听列表查询**，**系统RPM LIST查询**，**系统定时任务查询**
-
-
+* **部分Rootkit检测能力**，From: [Tyton](https://github.com/nbulischeck/tyton) ，目前已经移植了**PROC_FILE_HOOK**，**SYSCALL_HOOK**，**LKM_HIDDEN**，**INTERRUPTS_HOOK**，目前仅支持Kernel > 3.10。
+* cred 变化检测 （sudo/su/sshd除外）
 
 
 ### 关于内核版本兼容性
@@ -237,6 +236,32 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
     "hostname":"test",
     "exe_md5":"0010433ab9105d666b044779f36d6d1e",
     "load_file_md5":"863293f9fcf1af7afe5797a4b6b7aa0a"
+}
+```
+
+
+### Cred Change Hook
+
+通过Hook **commit_creds**实现，数据样例：
+
+```json
+{
+    "uid":"0",
+    "data_type":"604",
+    "exe":"/tmp/tt",
+    "pid":"27737",
+    "ppid":"26865",
+    "pgid":"27737",
+    "tgid":"27737",
+    "comm":"tt",
+    "old_uid":"1000",
+    "nodename":"test",
+    "sessionid":"42",
+    "user":"root",
+    "time":"1578396197131",
+    "local_ip":"192.168.165.152",
+    "hostname":"test",
+    "exe_md5":"d99a695d2dc4b5099383f30964689c55"
 }
 ```
 
