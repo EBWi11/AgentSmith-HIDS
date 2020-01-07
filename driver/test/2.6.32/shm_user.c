@@ -66,7 +66,7 @@ static char *get_user(uid_t uid)
     if (pws)
         return pws->pw_name;
     else
-        return "ERROR";
+        return "UNKNOW";
 }
 
 struct msg_slot *get_slot(void)

@@ -62,7 +62,7 @@ static char *get_user(uid_t uid)
     if (pws)
         return pws->pw_name;
     else
-        return "ERROR";
+        return "UNKNOW";
 }
 
 struct msg_slot *get_slot(void)
@@ -119,9 +119,11 @@ static char *shm_msg_factory_no_callback(char *msg)
 
             if (shm_res_len > 16) {
                 user_id = get_user_id(shm_res);
-                username = get_user(atoi(user_id));
-                strcat(shm_res, username);
-                strcat(shm_res, "\n");
+                if (strcmp(user_id, "-1") != 0) {
+                    username = get_user(atoi(user_id));
+                    strcat(shm_res, username);
+                    strcat(shm_res, "\n");
+                }
                 strcat(shm_res, time_buffer);
                 return shm_res;
             }

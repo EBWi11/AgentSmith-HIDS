@@ -1503,6 +1503,7 @@ int __init smith_init(void)
 	ret = recvfrom_register_kprobe();
 	    if (ret < 0) {
 		    uninstall_kprobe();
+		    uninstall_share_mem();
 		    printk(KERN_INFO "[SMITH] recvfrom register_kprobe failed, returned %d\n", ret);
 		    return -1;
 	    }

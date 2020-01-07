@@ -86,6 +86,10 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
             let mut ptrace_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"ptrace_request\":\"".to_string(), ",\"target_pid\":\"".to_string(), ",\"addr\":\"".to_string(), ",\"data\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), ",\"exe_md5\":\"".to_string(), "}".to_string()];
             let mut dns_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"sa_family\":\"".to_string(), ",\"fd\":\"".to_string(), ",\"sport\":\"".to_string(), ",\"sip\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"dip\":\"".to_string(), ",\"dport\":\"".to_string(), ",\"qr\":\"".to_string(), ",\"opcode\":\"".to_string(), ",\"rcode\":\"".to_string(), ",\"query\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), ",\"exe_md5\":\"".to_string(), "}".to_string()];
             let mut create_file_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"file_path\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), ",\"exe_md5\":\"".to_string(), ",\"create_file_md5\":\"".to_string(), "}".to_string()];
+            let mut proc_file_hook_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"module_name\":\"".to_string(), ",\"hidden\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
+            let mut module_hidden_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"module_name\":\"".to_string(), ",\"hidden\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
+            let mut interrupt_hook_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"module_name\":\"".to_string(), ",\"hidden\":\"".to_string(), ",\"interrupt_number\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
+            let mut syscall_hook_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"module_name\":\"".to_string(), ",\"hidden\":\"".to_string(), ",\"syscall_number\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
 
             for s in msg_split {
                 match msg_type {
@@ -302,6 +306,26 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                         load_module_msg[i].push_str(tmp);
                     }
 
+                    "700" => {
+                        proc_file_hook_msg[i].push_str(s);
+                        proc_file_hook_msg[i].push_str(tmp);
+                    }
+
+                    "701" => {
+                        syscall_hook_msg[i].push_str(s);
+                        syscall_hook_msg[i].push_str(tmp);
+                    }
+
+                    "702" => {
+                        module_hidden_msg[i].push_str(s);
+                        module_hidden_msg[i].push_str(tmp);
+                    }
+
+                    "703" => {
+                        interrupt_hook_msg[i].push_str(s);
+                        interrupt_hook_msg[i].push_str(tmp);
+                    }
+
                     _ => {}
                 }
                 i = i + 1;
@@ -336,6 +360,26 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                 "603" => {
                     send_flag = 1;
                     msg_str = load_module_msg.join("");
+                }
+
+                "700" => {
+                    send_flag = 1;
+                    msg_str = proc_file_hook_msg.join("");
+                }
+
+                "701" => {
+                    send_flag = 1;
+                    msg_str = syscall_hook_msg.join("");
+                }
+
+                "702" => {
+                    send_flag = 1;
+                    msg_str = module_hidden_msg.join("");
+                }
+
+                "703" => {
+                    send_flag = 1;
+                    msg_str = interrupt_hook_msg.join("");
                 }
 
                 _ => {}
