@@ -241,7 +241,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 ```
 
 
-### PROC FILE HOOK Alert
+### PROC File Hook Alert
 ```json
 {
     "uid":"-1",
@@ -255,7 +255,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 ```
 
 
-### SYSCALL HOOK Alert
+### Syscall Hook Alert
 ```json
 {
     "uid":"-1",
@@ -270,7 +270,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 ```
 
 
-### LKM HIDDEN Alert
+### LKM Hidden Alert
 ```json
 {
     "uid":"-1",
@@ -284,14 +284,14 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 ```
 
 
-### INTERRUPTS HOOK Alert
+### Interrupts Hook Alert
 ```json
 {
     "uid":"-1",
     "data_type":"703",
     "module_name":"syshook",
     "hidden":"1",
-    "syscall_number":"2",
+    "interrupt_number":"2",
     "time":"1578384927606",
     "local_ip":"192.168.165.152",
     "hostname":"test"
