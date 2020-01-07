@@ -31,6 +31,7 @@
 #define PTRACE_HOOK 1
 #define DNS_HOOK 1
 #define LOAD_MODULE_HOOK 1
+#define UPDATE_CRED_HOOK 1
 
 int share_mem_flag = -1;
 int checkCPUendianRes = 0;
@@ -41,6 +42,7 @@ char create_file_kprobe_state = 0x0;
 char ptrace_kprobe_state = 0x0;
 char recvfrom_kprobe_state = 0x0;
 char load_module_kprobe_state = 0x0;
+char update_cred_kprobe_state = 0x0;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
 char execveat_kretprobe_state = 0x0;
@@ -1242,6 +1244,78 @@ void load_module_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned l
 	}
 }
 
+struct update_cred_data {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0)
+    uid_t old_uid;
+#else
+    int old_uid;
+#endif
+};
+
+int update_cred_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
+{
+    if (share_mem_flag != -1) {
+        struct update_cred_data *data;
+        data = (struct update_cred_data *)ri->data;
+    #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0)
+        data->old_uid = current->real_cred->uid.val;
+    #else
+        data->old_uid = current->real_cred->uid;
+    #endif
+    }
+    return 0;
+}
+
+int update_cred_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
+{
+    if (share_mem_flag != -1) {
+        int now_uid;
+        now_uid = get_current_uid();
+
+        if(now_uid == 0) {
+	        struct update_cred_data *data;
+	        char *comm = NULL;
+	        char *buffer = NULL;
+            data = (struct update_cred_data *)ri->data;
+
+            if(data->old_uid != 0) {
+                if(strlen(current->comm) > 0)
+                    comm = str_replace(current->comm, "\n", " ");
+                else
+                    comm = "";
+
+                if (strcmp(comm, "sudo") != 0 && strcmp(comm, "su") != 0 && strcmp(comm, "sshd") != 0) {
+                    int result_str_len;
+                    unsigned int sessionid;
+                    char *result_str = NULL;
+                    char *abs_path;
+
+                    buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
+                    abs_path = get_exe_file(current, buffer, PATH_MAX);
+
+                    sessionid = get_sessionid();
+
+                    result_str_len = strlen(current->nsproxy->uts_ns->name.nodename)
+                                     + strlen(comm) + strlen(abs_path) + 192;
+
+                    result_str = kzalloc(result_str_len, GFP_ATOMIC);
+
+                    snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%d%s%s%s%u",
+                             get_current_uid(), "\n", UPDATE_CRED_TYPE, "\n",abs_path,
+                             "\n", current->pid, "\n", current->real_parent->pid, "\n",
+                             pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                             comm, "\n", data->old_uid, "\n", current->nsproxy->uts_ns->name.nodename,
+                             "\n", sessionid);
+
+                    send_msg_to_user(result_str, 1);
+                    kfree(buffer);
+                }
+            }
+        }
+    }
+    return 0;
+}
+
 struct kretprobe connect_kretprobe = {
     .kp.symbol_name = P_GET_SYSCALL_NAME(connect),
     .data_size  = sizeof(struct connect_data),
@@ -1292,6 +1366,14 @@ struct kretprobe recvfrom_kretprobe = {
 struct kprobe load_module_kprobe = {
     .symbol_name = "load_module",
 	.post_handler = load_module_post_handler,
+};
+
+struct kretprobe update_cred_kretprobe = {
+    .kp.symbol_name = "commit_creds",
+    .data_size  = sizeof(struct update_cred_data),
+	.handler = update_cred_handler,
+	.entry_handler = update_cred_entry_handler,
+	.maxactive = 40,
 };
 
 int connect_register_kprobe(void)
@@ -1411,6 +1493,21 @@ void unregister_kprobe_execveat(void)
 }
 #endif
 
+int update_cred_register_kprobe(void)
+{
+	int ret;
+	ret = register_kretprobe(&update_cred_kretprobe);
+	if (ret == 0)
+        update_cred_kprobe_state = 0x1;
+
+	return ret;
+}
+
+void unregister_kprobe_update_cred(void)
+{
+	unregister_kretprobe(&update_cred_kretprobe);
+}
+
 void uninstall_kprobe(void)
 {
     if (connect_kprobe_state == 0x1)
@@ -1430,6 +1527,9 @@ void uninstall_kprobe(void)
 
     if (load_module_kprobe_state == 0x1)
 	    unregister_kprobe_load_module();
+
+	if (update_cred_kprobe_state == 0x1)
+	    unregister_kprobe_update_cred();
 
     #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
     if (execveat_kretprobe_state == 0x1)
@@ -1519,6 +1619,16 @@ int __init smith_init(void)
 	    }
 	}
 
+	if (UPDATE_CRED_HOOK == 1) {
+	    ret = update_cred_register_kprobe();
+    	if (ret < 0) {
+    	    uninstall_kprobe();
+    	    uninstall_share_mem();
+    	    printk(KERN_INFO "[SMITH] update_cred register_kprobe failed, returned %d\n", ret);
+    	    return -1;
+    	}
+	}
+
 #if (EXIT_PROTECT == 1)
     exit_protect_action();
 #endif
@@ -1529,8 +1639,11 @@ int __init smith_init(void)
 #endif
 #endif
 
-	printk(KERN_INFO "[SMITH] register_kprobe success: connect_hook: %d,load_module_hook: %d,execve_hook: %d,create_file_hook: %d,ptrace_hook: %d,DNS_HOOK: %d,EXIT_PROTECT: %d,ROOTKIT_CHECK: %d\n",
-	       CONNECT_HOOK, LOAD_MODULE_HOOK, EXECVE_HOOK, CREATE_FILE_HOOK, PTRACE_HOOK, DNS_HOOK, EXIT_PROTECT, ROOTKIT_CHECK);
+	printk(KERN_INFO "[SMITH] register_kprobe success: connect_hook: %d,load_module_hook:"
+	                 " %d,execve_hook: %d,create_file_hook: %d,ptrace_hook: %d, update_cred_hook:"
+	                 " %d, DNS_HOOK: %d,EXIT_PROTECT: %d,ROOTKIT_CHECK: %d\n",
+	                 CONNECT_HOOK, LOAD_MODULE_HOOK, EXECVE_HOOK, CREATE_FILE_HOOK,
+	                 PTRACE_HOOK, UPDATE_CRED_HOOK, DNS_HOOK, EXIT_PROTECT, ROOTKIT_CHECK);
 
 	return 0;
 }

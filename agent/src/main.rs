@@ -58,8 +58,8 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
         exe_white_list.insert(i.to_string());
     }
 
-    let local_ip = get_machine_ip();
-    let hostname = get_hostname();
+    let local_ip = get_machine_ip().replace("\\", "\\\\").replace("\"", "\\\"").replace("\t", " ").replace("\n", " ");
+    let hostname = get_hostname().replace("\\", "\\\\").replace("\"", "\\\"").replace("\t", " ").replace("\n", " ");
     let local_ip_str = format!(",\"local_ip\":\"{}\"", local_ip);
     let hostname_str = format!(",\"hostname\":\"{}\"", hostname);
 
@@ -90,6 +90,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
             let mut module_hidden_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"module_name\":\"".to_string(), ",\"hidden\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
             let mut interrupt_hook_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"module_name\":\"".to_string(), ",\"hidden\":\"".to_string(), ",\"interrupt_number\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
             let mut syscall_hook_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"module_name\":\"".to_string(), ",\"hidden\":\"".to_string(), ",\"syscall_number\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
+            let mut update_cred_hook_msg = ["{".to_string(), "\"uid\":\"".to_string(), ",\"data_type\":\"".to_string(), ",\"exe\":\"".to_string(), ",\"pid\":\"".to_string(), ",\"ppid\":\"".to_string(), ",\"pgid\":\"".to_string(), ",\"tgid\":\"".to_string(), ",\"comm\":\"".to_string(), ",\"old_uid\":\"".to_string(), ",\"nodename\":\"".to_string(), ",\"sessionid\":\"".to_string(), ",\"user\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), ",\"exe_md5\":\"".to_string(), "}".to_string()];
 
             for s in msg_split {
                 match msg_type {
@@ -306,6 +307,30 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                         load_module_msg[i].push_str(tmp);
                     }
 
+                    "604" => {
+                        if i == 3 {
+                            if exe_white_list.contains(s) {
+                                msg_type = "-1";
+                                break;
+                            }
+
+                            if s != "-1" {
+                                if !cache.contains_key(s) {
+                                    md5_str = get_md5(s.to_string());
+                                    cache.insert(s.to_string(), md5_str.clone());
+                                } else {
+                                    md5_str = cache.get(&s.to_string()).unwrap().to_string();
+                                }
+                            } else {
+                                md5_str = "-1".to_string();
+                            }
+                            update_cred_hook_msg[16].push_str(&md5_str);
+                            update_cred_hook_msg[16].push_str(tmp);
+                        }
+                        update_cred_hook_msg[i].push_str(s);
+                        update_cred_hook_msg[i].push_str(tmp);
+                    }
+
                     "700" => {
                         proc_file_hook_msg[i].push_str(s);
                         proc_file_hook_msg[i].push_str(tmp);
@@ -360,6 +385,11 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                 "603" => {
                     send_flag = 1;
                     msg_str = load_module_msg.join("");
+                }
+
+                "604" => {
+                    send_flag = 1;
+                    msg_str = update_cred_hook_msg.join("");
                 }
 
                 "700" => {
