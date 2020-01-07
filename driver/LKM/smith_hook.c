@@ -1244,14 +1244,75 @@ void load_module_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned l
 	}
 }
 
+struct update_cred_data {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0)
+    uid_t old_uid;
+#else
+    int old_uid;
+#endif
+};
+
 int update_cred_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-    struct cred *old_cred;
+    if (share_mem_flag != -1) {
+        struct update_cred_data *data;
+        data = (struct update_cred_data *)ri->data;
+    #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0)
+        data->old_uid = current->real_cred->uid.val;
+    #else
+        data->old_uid = current->real_cred->uid;
+    #endif
+    }
     return 0;
 }
 
 int update_cred_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
+    if (share_mem_flag != -1) {
+        int now_uid;
+        now_uid = get_current_uid();
+
+        if(now_uid == 0) {
+	        struct update_cred_data *data;
+	        char *comm = NULL;
+	        char *buffer = NULL;
+            data = (struct update_cred_data *)ri->data;
+
+            if(data->old_uid != 0) {
+                if(strlen(current->comm) > 0)
+                    comm = str_replace(current->comm, "\n", " ");
+                else
+                    comm = "";
+
+                if (strcmp(comm, "sudo") != 0 && strcmp(comm, "su") != 0 && strcmp(comm, "sshd") != 0) {
+                    int result_str_len;
+                    unsigned int sessionid;
+                    char *result_str = NULL;
+                    char *abs_path;
+
+                    buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
+                    abs_path = get_exe_file(current, buffer, PATH_MAX);
+
+                    sessionid = get_sessionid();
+
+                    result_str_len = strlen(current->nsproxy->uts_ns->name.nodename)
+                                     + strlen(comm) + strlen(abs_path) + 192;
+
+                    result_str = kzalloc(result_str_len, GFP_ATOMIC);
+
+                    snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%d%s%s%s%u",
+                             get_current_uid(), "\n", UPDATE_CRED_TYPE, "\n",abs_path,
+                             "\n", current->pid, "\n", current->real_parent->pid, "\n",
+                             pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                             comm, "\n", data->old_uid, "\n", current->nsproxy->uts_ns->name.nodename,
+                             "\n", sessionid);
+
+                    send_msg_to_user(result_str, 1);
+                    kfree(buffer);
+                }
+            }
+        }
+    }
     return 0;
 }
 
@@ -1309,6 +1370,7 @@ struct kprobe load_module_kprobe = {
 
 struct kretprobe update_cred_kretprobe = {
     .kp.symbol_name = "commit_creds",
+    .data_size  = sizeof(struct update_cred_data),
 	.handler = update_cred_handler,
 	.entry_handler = update_cred_entry_handler,
 	.maxactive = 40,
