@@ -59,7 +59,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ### Execve Hook
 
-通过Hook **sys_execve/sys_execveat**实现，数据样例：
+通过Hook **sys_execve()/sys_execveat()** 实现，数据样例：
 
 ```json
 {
@@ -89,7 +89,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ### Connect Hook
 
-通过Hook **sys_connect**实现，数据样例：
+通过Hook **sys_connect()** 实现，数据样例：
 
 ```json
 {
@@ -122,7 +122,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ### DNS Query Hook
 
-通过Hook sys_recvfrom实现，数据样例：
+通过Hook **sys_recvfrom()** 实现，数据样例：
 
 ```json
 {
@@ -158,7 +158,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ### Create File Hook
 
-通过Hook **fsnotify(kernel < 4.18.0)/do_sys_open(kernel >= 4.18.0)** 实现，数据样例：
+通过Hook **security_inode_create()** 实现，数据样例：
 
 ```json
 {
@@ -186,7 +186,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ### Process Inject Hook
 
-通过Hook **sys_ptrace**实现，数据样例：
+通过Hook **sys_ptrace()** 实现，数据样例：
 
 ```json
 {
@@ -215,7 +215,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ### Load LKM File Hook
 
-通过Hook **load_module**实现，数据样例：
+通过Hook **load_module()** 实现，数据样例：
 
 ```json
 {
@@ -242,7 +242,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ### Cred Change Hook
 
-通过Hook **commit_creds**实现，数据样例：
+通过Hook **commit_creds()** 实现，数据样例：
 
 ```json
 {

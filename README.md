@@ -60,7 +60,7 @@ The comprehensiveness of information which can be collected by this agent was on
 
 ### Execve Hook
 
-Achieved by hooking **sys_execve/sys_execveat**, example:
+Achieved by hooking **sys_execve()/sys_execveat()**, example:
 
 ```json
 {
@@ -90,7 +90,7 @@ Achieved by hooking **sys_execve/sys_execveat**, example:
 
 ### Connect Hook
 
-Achieved by hooking **sys_connect**, example:
+Achieved by hooking **sys_connect()**, example:
 
 ```json
 {
@@ -123,7 +123,7 @@ Achieved by hooking **sys_connect**, example:
 
 ### DNS Query Hook
 
-Achieved by hooking sys_recvfrom, example:
+Achieved by hooking **sys_recvfrom()**, example:
 
 ```json
 {
@@ -159,7 +159,7 @@ Achieved by hooking sys_recvfrom, example:
 
 ### Create File Hook
 
-Achieved by hooking **fsnotify(kernel < 4.18.0)/do_sys_open(kernel >= 4.18.0)**, example:
+Achieved by hooking **security_inode_create()**, example:
 
 ```json
 {
@@ -187,7 +187,7 @@ Achieved by hooking **fsnotify(kernel < 4.18.0)/do_sys_open(kernel >= 4.18.0)**,
 
 ### Process Inject Hook
 
-Achieved by hooking **sys_ptrace**, example:
+Achieved by hooking **sys_ptrace()**, example:
 
 ```json
 {
@@ -216,7 +216,7 @@ Achieved by hooking **sys_ptrace**, example:
 
 ### Load LKM File Hook
 
-Achieved by hooking **load_module**, example:
+Achieved by hooking **load_module()**, example:
 
 ```json
 {
@@ -243,7 +243,7 @@ Achieved by hooking **load_module**, example:
 
 ### Cred Change Hook
 
-Achieved by Hook **commit_creds**，example：
+Achieved by Hook **commit_creds()**，example：
 
 ```json
 {
