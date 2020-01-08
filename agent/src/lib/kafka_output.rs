@@ -3,7 +3,6 @@ use kafka::producer::{Compression, Producer, Record, RequiredAcks};
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::Receiver;
 use std::thread;
-use std::time::Duration;
 use std::time;
 
 pub struct KafkaOutput {
