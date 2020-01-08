@@ -26,14 +26,13 @@ impl<'a> KafkaWorker<'a> {
                 "none" => Compression::NONE,
                 "gzip" => Compression::GZIP,
                 "snappy" => Compression::SNAPPY,
-                _ => panic!("Unsupported compression method"),
+                _ => panic!("Unsupported compression method. Only support: 'none','gzip','snappy'"),
             };
 
         let producer = Producer::from_hosts(settings::BROKER.to_owned()
             .split(',')
             .map(|s| s.trim().to_owned())
             .collect())
-            .with_ack_timeout(Duration::from_secs(1))
             .with_required_acks(RequiredAcks::One)
             .with_compression(compression)
             .create()
