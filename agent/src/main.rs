@@ -52,7 +52,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
     let kafka_test_data = "0".as_bytes();
     let mut exe_white_list = HashSet::new();
     let agent_pid = process::id().to_string();
-    let cache_time = ::std::time::Duration::from_secs(1000);
+    let cache_time = ::std::time::Duration::from_secs(2700);
 
     for i in whitelist::EXE.iter() {
         exe_white_list.insert(i.to_string());
@@ -68,7 +68,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
 
     unsafe { shm_init(); };
 
-    let mut cache = LruCache::<String, String>::with_expiry_duration_and_capacity(cache_time, 128);
+    let mut cache = LruCache::<String, String>::with_expiry_duration_and_capacity(cache_time, 200);
 
     loop {
         let msg = unsafe { CStr::from_ptr(shm_run_no_callback()) }.to_string_lossy().clone();
