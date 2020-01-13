@@ -27,6 +27,8 @@ use std::time;
 use crypto::md5::Md5;
 use crypto::digest::Digest;
 use lru_time_cache::LruCache;
+use lib::logwatcher::LogWatcher;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 mod lib;
 mod conf;
@@ -45,6 +47,87 @@ fn get_output_kafka(threads: u32) -> KafkaOutput {
 
 fn get_heartbeat(msg: String) -> HeartBeat {
     HeartBeat::new(settings::HEARTBEAT_SERVER.to_string(), msg)
+}
+
+fn parser_secure_log(data: String, local_ip_str: String, hostname_str: String) -> (String, bool) {
+    let msg_split: Vec<&str> = data.split("]:").collect();
+    let mut _msg_str = String::new();
+    if msg_split.len() >= 2 {
+        let tmp = "\"";
+        let mut login_alert = ["{\"data_type\":\"1001\"".to_string(), ",\"status\":\"".to_string(), ",\"type\":\"".to_string(), ",\"user_exsit\":\"".to_string(), ",\"user\":\"".to_string(), ",\"from_ip\":\"".to_string(), ",\"port\":\"".to_string(), ",\"processor\":\"".to_string(), ",\"time\":\"".to_string(), local_ip_str.to_string(), hostname_str.to_string(), "}".to_string()];
+        let data_split: Vec<&str> = msg_split[1].clone().trim().split(" ").collect();
+        if data_split[0] == "Accepted" || data_split[0] == "Failed" {
+            login_alert[1].push_str(&data_split[0]);
+            login_alert[1].push_str(tmp);
+
+            login_alert[2].push_str(&data_split[1]);
+            login_alert[2].push_str(tmp);
+
+            if data_split[3] == "invalid" && data_split[4] == "user" {
+                login_alert[3].push_str("false");
+                login_alert[3].push_str(tmp);
+
+                login_alert[4].push_str(&data_split[5]);
+                login_alert[4].push_str(tmp);
+
+                login_alert[5].push_str(&data_split[7]);
+                login_alert[5].push_str(tmp);
+
+                login_alert[6].push_str(&data_split[9]);
+                login_alert[6].push_str(tmp);
+
+                login_alert[7].push_str(&data_split[10]);
+                login_alert[7].push_str(tmp);
+
+            } else {
+                login_alert[3].push_str("true");
+                login_alert[3].push_str(tmp);
+
+                login_alert[4].push_str(&data_split[3]);
+                login_alert[4].push_str(tmp);
+
+                login_alert[5].push_str(&data_split[5]);
+                login_alert[5].push_str(tmp);
+
+                login_alert[6].push_str(&data_split[7]);
+                login_alert[6].push_str(tmp);
+
+                login_alert[7].push_str(&data_split[8]);
+                login_alert[7].push_str(tmp);
+            }
+
+            let start = SystemTime::now();
+            let since_the_epoch = start.duration_since(UNIX_EPOCH)
+                .expect("Time went backwards");
+
+            let in_ms = since_the_epoch.as_secs() * 1000 +
+                since_the_epoch.subsec_nanos() as u64 / 1_000_000;
+
+            let time = format!("{}", in_ms);
+
+            login_alert[8].push_str(&time);
+            login_alert[8].push_str(tmp);
+
+            _msg_str = login_alert.join("");
+            return (_msg_str, true)
+        }
+    }
+    return (_msg_str, false)
+}
+
+fn get_secure_log(tx: Sender<Vec<u8>>) {
+    let kafka_test_data = "0".as_bytes();
+
+    let local_ip = get_machine_ip().replace("\\", "\\\\").replace("\"", "\\\"").replace("\t", " ").replace("\n", " ");
+    let hostname = get_hostname().replace("\\", "\\\\").replace("\"", "\\\"").replace("\t", " ").replace("\n", " ");
+    let local_ip_str = format!(",\"local_ip\":\"{}\"", local_ip);
+    let hostname_str = format!(",\"hostname\":\"{}\"", hostname);
+
+    thread::sleep(time::Duration::from_secs(1));
+    tx.send(kafka_test_data.to_vec()).expect("KAFKA_INIT_ERROR");
+
+    let mut log_watcher = LogWatcher::register("/var/log/secure".to_string(), local_ip_str.clone(), hostname_str.clone(), tx).unwrap();
+    log_watcher.watch(&parser_secure_log);
 }
 
 fn get_data_no_callback(tx: Sender<Vec<u8>>) {
@@ -468,7 +551,10 @@ fn check_lkm() -> bool {
 fn run(tx: Sender<Vec<u8>>) {
     if check_lkm() {
         println!("SMITH_START");
-        get_data_no_callback(tx);
+        let tx1 = tx.clone();
+        thread::spawn(move || { get_secure_log(tx1); });
+        let tx2 = tx.clone();
+        get_data_no_callback(tx2);
     } else {
         println!("NEED_INSTALL_LKM");
         if settings::AUTO_INSTALL_LKM {

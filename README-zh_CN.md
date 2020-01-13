@@ -29,6 +29,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 * 用户态支持自定义检测模块，目前已内置：**系统用户列表查询**，**系统端口监听列表查询**，**系统RPM LIST查询**，**系统定时任务查询**
 * **部分Rootkit检测能力**，From: [Tyton](https://github.com/nbulischeck/tyton) ，目前已经移植了**PROC_FILE_HOOK**，**SYSCALL_HOOK**，**LKM_HIDDEN**，**INTERRUPTS_HOOK**，目前仅支持Kernel > 3.10。
 * cred 变化检测 （sudo/su/sshd除外）
+* 用户登陆监控
 
 
 ### 关于内核版本兼容性
@@ -262,6 +263,24 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
     "local_ip":"192.168.165.152",
     "hostname":"test",
     "exe_md5":"d99a695d2dc4b5099383f30964689c55"
+}
+```
+
+
+### User Login Alert
+```json
+{
+    "data_type":"1001",
+    "status":"Failed",
+    "type":"password",
+    "user_exsit":"false",
+    "user":"sad",
+    "from_ip":"192.168.165.1",
+    "port":"63089",
+    "processor":"ssh2",
+    "time":"1578405483119",
+    "local_ip":"192.168.165.128",
+    "hostname":"localhost.localdomain"
 }
 ```
 

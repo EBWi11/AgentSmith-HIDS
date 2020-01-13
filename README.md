@@ -27,7 +27,7 @@ The comprehensiveness of information which can be collected by this agent was on
 * User stack module utilize built in detection functions including queries of **User List**，**Listening ports list**，**System RPM list**，**Schedule jobs**
 * **AntiRootkit**，From: [Tyton](https://github.com/nbulischeck/tyton) ,for now add **PROC_FILE_HOOK**，**SYSCALL_HOOK**，**LKM_HIDDEN**，**INTERRUPTS_HOOK** feature，but only wark on Kernel > 3.10.
 * Cred Change monitoring (sudo/su/sshd except)
-
+* User Login monitoring
 
 
 ### About the compatibility with Kernel version
@@ -263,6 +263,24 @@ Achieved by Hook **commit_creds()**，example：
     "local_ip":"192.168.165.152",
     "hostname":"test",
     "exe_md5":"d99a695d2dc4b5099383f30964689c55"
+}
+```
+
+
+### User Login Alert
+```json
+{
+    "data_type":"1001",
+    "status":"Failed",
+    "type":"password",
+    "user_exsit":"false",
+    "user":"sad",
+    "from_ip":"192.168.165.1",
+    "port":"63089",
+    "processor":"ssh2",
+    "time":"1578405483119",
+    "local_ip":"192.168.165.128",
+    "hostname":"localhost.localdomain"
 }
 ```
 
