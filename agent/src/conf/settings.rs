@@ -12,7 +12,7 @@ pub const LKM_TMP_PATH: &str = "/tmp/YWdlbnRzbWl0aGJ5ZWJ3aWxs";
 
 pub const DEFAULT_KAFKA_THREADS: u32 = 2;
 //pub const BROKER: &str = "127.0.0.1:9092";
-pub const BROKER: &str = "10.22.73.24:9092";
+pub const BROKER: &str = "secmq1.uuzu.com:9092,secmq2.uuzu.com:9092,secmq3.uuzu.com:9092,secmq4.uuzu.com:9092";
 pub const TOPIC: &str = "hids";
 pub const COALESCE: usize = 3;
 pub const COMPRESSION: &'static str = "none";
