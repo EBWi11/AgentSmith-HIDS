@@ -5,6 +5,8 @@ extern crate libc;
 extern crate serde;
 extern crate crypto;
 extern crate lru_time_cache;
+extern crate iprange;
+extern crate ipnet;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
@@ -29,6 +31,9 @@ use crypto::digest::Digest;
 use lru_time_cache::LruCache;
 use lib::logwatcher::LogWatcher;
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::net::Ipv4Addr;
+use iprange::IpRange;
+use ipnet::Ipv4Net;
 
 mod lib;
 mod conf;
@@ -137,7 +142,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
     let agent_pid = process::id().to_string();
     let cache_time = ::std::time::Duration::from_secs(900);
 
-    for i in whitelist::EXE.iter() {
+    for i in filter::EXE_WHITELIST.iter() {
         exe_white_list.insert(i.to_string());
     }
 
@@ -145,6 +150,10 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
     let hostname = get_hostname().replace("\\", "\\\\").replace("\"", "\\\"").replace("\t", " ").replace("\n", " ");
     let local_ip_str = format!(",\"local_ip\":\"{}\"", local_ip);
     let hostname_str = format!(",\"hostname\":\"{}\"", hostname);
+
+    let ip_range: IpRange<Ipv4Net> = filter::CONNECT_DIP_WHITELIST.iter()
+                                    .map(|s| s.parse().expect("CONNECT_DIP_WHITELIST_ERROR"))
+                                    .collect();
 
     thread::sleep(time::Duration::from_secs(1));
     tx.send(kafka_test_data.to_vec()).expect("KAFKA_INIT_ERROR");
@@ -156,6 +165,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
     loop {
         let msg = unsafe { CStr::from_ptr(shm_run_no_callback()) }.to_string_lossy().clone();
         if msg.len() > 16 {
+            let mut tmp_sa_family = "4";
             let mut md5_str;
             let mut send_flag = 0;
             let mut i = 1;
@@ -201,6 +211,15 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                             }
                             connect_msg[22].push_str(&md5_str);
                             connect_msg[22].push_str(tmp);
+                        } else if i == 3 {
+                            tmp_sa_family = s.clone();
+                        } else if i == 6 {
+                            if tmp_sa_family == "4" {
+                                if ip_range.contains(&s.parse::<Ipv4Addr>().unwrap()) {
+                                    msg_type = "-1";
+                                    break;
+                                }
+                            }
                         }
                         connect_msg[i].push_str(s);
                         connect_msg[i].push_str(tmp);
@@ -337,6 +356,31 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                             create_file_msg[16].push_str(&md5_str);
                             create_file_msg[16].push_str(tmp);
                         } else if i == 4 {
+                            let mut filter_check_flag = false;
+
+                            for i in filter::CREATE_FILE_ALERT_PATH.iter() {
+                                if s.starts_with(i) {
+                                    filter_check_flag = true;
+                                    break;
+                                }
+                            }
+
+                            if !filter_check_flag {
+                                let tmp_splits: Vec<&str> = s.split("\\").collect();
+                                let filename = tmp_splits[tmp_splits.len()-1];
+                                for i in filter::CREATE_FILE_ALERT_CONTAINS.iter() {
+                                    if filename.contains(i) {
+                                        filter_check_flag = true;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if !filter_check_flag {
+                                msg_type = "-1";
+                                break;
+                            }
+
                             if s != "-1" {
                                 if !cache.contains_key(s) {
                                     md5_str = get_md5(s.to_string());

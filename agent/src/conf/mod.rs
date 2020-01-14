@@ -1,2 +1,2 @@
 pub mod settings;
-pub mod whitelist;
+pub mod filter;

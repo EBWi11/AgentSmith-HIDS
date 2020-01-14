@@ -1,1 +1,0 @@
-pub const EXE: &'static [&'static str] = &["/usr/libexec/pk-command-not-found","/usr/bin/chronyc","/usr/lib64/sa/sa1","/usr/bin/date","/usr/lib64/sa","/usr/bin/test","/usr/sbin/chronyd","/usr/sbin/rsyslogd","/usr/bin/ls","/usr/bin/clear"];
