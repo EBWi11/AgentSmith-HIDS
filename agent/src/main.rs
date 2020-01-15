@@ -365,6 +365,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                             create_file_msg[16].push_str(&md5_str);
                             create_file_msg[16].push_str(tmp);
                         } else if i == 4 {
+                            let mut filename = "";
                             let mut filter_check_flag = false;
 
                             for i in filter::CREATE_FILE_ALERT_PATH.iter() {
@@ -376,7 +377,16 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
 
                             if !filter_check_flag {
                                 let tmp_splits: Vec<&str> = s.split("\\").collect();
-                                let filename = tmp_splits[tmp_splits.len()-1];
+                                filename = tmp_splits[tmp_splits.len()-1];
+                                for i in filter::CREATE_FILE_ALERT_SUFFIX.iter() {
+                                    if filename.ends_with(i) {
+                                        filter_check_flag = true;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if !filter_check_flag {
                                 for i in filter::CREATE_FILE_ALERT_CONTAINS.iter() {
                                     if filename.contains(i) {
                                         filter_check_flag = true;

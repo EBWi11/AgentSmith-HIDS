@@ -3,4 +3,5 @@ pub const CONNECT_DIP_WHITELIST_IPV4: &'static [&'static str] = &["10.0.0.0/8", 
 pub const CONNECT_DIP_WHITELIST_IPV6: &'static [&'static str] = &["::1/128"];
 
 pub const CREATE_FILE_ALERT_PATH: &'static [&'static str] = &["/etc/","/usr/etc/","/usr/local/etc/","/usr/bin/","/usr/sbin/","/usr/local/bin/","/usr/local/sbin/","/usr/lib/","/usr/lib64/","/usr/local/lib/","/usr/local/lib64/","/sys/","/boot/","/var/lib/","/app/bin/","/app/sbin/","/root/bin/"];
-pub const CREATE_FILE_ALERT_CONTAINS: &'static [&'static str] = &[".sh",".php",".jsp",".asp",".aspx",".bash",".zsh",".csh",".service",".ini",".conf",".ko",".so",".d",".a",".htaccess","backdoor"];
+pub const CREATE_FILE_ALERT_SUFFIX: &'static [&'static str] = &[".sh",".php",".jsp",".asp",".aspx",".bash",".zsh",".csh",".service",".ini",".conf",".ko",".so",".d",".a",".htaccess"];
+pub const CREATE_FILE_ALERT_CONTAINS: &'static [&'static str] = &["backdoor"];
