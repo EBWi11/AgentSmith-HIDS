@@ -31,9 +31,9 @@ use crypto::digest::Digest;
 use lru_time_cache::LruCache;
 use lib::logwatcher::LogWatcher;
 use std::time::{SystemTime, UNIX_EPOCH};
-use std::net::Ipv4Addr;
 use iprange::IpRange;
-use ipnet::Ipv4Net;
+use std::net::{Ipv4Addr, Ipv6Addr};
+use ipnet::{Ipv4Net, Ipv6Net};
 
 mod lib;
 mod conf;
@@ -151,9 +151,13 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
     let local_ip_str = format!(",\"local_ip\":\"{}\"", local_ip);
     let hostname_str = format!(",\"hostname\":\"{}\"", hostname);
 
-    let ip_range: IpRange<Ipv4Net> = filter::CONNECT_DIP_WHITELIST.iter()
-                                    .map(|s| s.parse().expect("CONNECT_DIP_WHITELIST_ERROR"))
-                                    .collect();
+    let ipv4_whitelist_range: IpRange<Ipv4Net> = filter::CONNECT_DIP_WHITELIST_IPV4.iter()
+        .map(|s| s.parse().expect("CONNECT_DIP_WHITELIST_IPV4_ERROR"))
+        .collect();
+
+    let ipv6_whitelist_range: IpRange<Ipv6Net> = filter::CONNECT_DIP_WHITELIST_IPV6.iter()
+        .map(|s| s.parse().expect("CONNECT_DIP_WHITELIST_IPV6_ERROR"))
+        .collect();
 
     thread::sleep(time::Duration::from_secs(1));
     tx.send(kafka_test_data.to_vec()).expect("KAFKA_INIT_ERROR");
@@ -215,7 +219,12 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                             tmp_sa_family = s.clone();
                         } else if i == 6 {
                             if tmp_sa_family == "4" {
-                                if ip_range.contains(&s.parse::<Ipv4Addr>().unwrap()) {
+                                if ipv4_whitelist_range.contains(&s.parse::<Ipv4Addr>().unwrap()) {
+                                    msg_type = "-1";
+                                    break;
+                                }
+                            } else if tmp_sa_family == "6" {
+                                if ipv6_whitelist_range.contains(&s.parse::<Ipv6Addr>().unwrap()) {
                                     msg_type = "-1";
                                     break;
                                 }
