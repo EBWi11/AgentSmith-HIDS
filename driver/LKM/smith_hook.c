@@ -762,8 +762,9 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
         for (i = 0; files->fd[i] != NULL; i++) {
             d_name = d_path(&(files->fd[i]->f_path), fd_buff, 24);
-            if (unlikely(IS_ERR(d_name))) {
+            if (IS_ERR(d_name)) {
                 d_name = "-1";
+                continue;
             }
 
             if(strncmp("socket:[", d_name, 8) == 0) {
@@ -974,8 +975,9 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
         for (i = 0; files->fd[i] != NULL; i++) {
             d_name = d_path(&(files->fd[i]->f_path), fd_buff, 24);
-            if (unlikely(IS_ERR(d_name))) {
+            if (IS_ERR(d_name)) {
                 d_name = "-1";
+                continue;
             }
 
             if(strncmp("socket:[", d_name, 8) == 0) {
