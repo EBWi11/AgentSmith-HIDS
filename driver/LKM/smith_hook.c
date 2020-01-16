@@ -731,8 +731,6 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 	    const char *d_name = "-1";
 	    int sa_family = -1;
         char *pid_tree = "-1";
-        char *stdin_fd_buf = "-2";
-        char *stdout_fd_buf = "-2";
         char *pname_buf = "-2";
         struct execve_data *data;
         struct fdtable *files;
@@ -744,8 +742,13 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         struct sock *sk;
         struct inet_sock *inet;
 	    char fd_buff[24];
+        char stdin_fd_buf[PATH_MAX];
+        char stdout_fd_buf[PATH_MAX];
 
         memset(fd_buff, 0, 24);
+        memset(stdin_fd_buf, 0, PATH_MAX);
+        memset(stdout_fd_buf, 0, PATH_MAX);
+
         data = (struct execve_data *)ri->data;
         argv = data -> argv;
         abs_path = data -> abs_path;
@@ -796,28 +799,18 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         }
 
         if(likely(files->fd[0] != NULL)) {
-            stdin_fd_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
-            if (unlikely(!stdin_fd_buf)) {
-                tmp_stdin = "-2";
-            } else {
-                tmp_stdin = d_path(&(files->fd[0]->f_path), stdin_fd_buf, PATH_MAX);
-                if (unlikely(IS_ERR(tmp_stdin))) {
-                    tmp_stdin = "-1";
-                }
+            tmp_stdin = d_path(&(files->fd[0]->f_path), stdin_fd_buf, PATH_MAX);
+            if (unlikely(IS_ERR(tmp_stdin))) {
+                tmp_stdin = "-1";
             }
         } else {
             tmp_stdin = "";
         }
 
         if(likely(files->fd[1] != NULL)) {
-            stdout_fd_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
-            if (unlikely(!stdout_fd_buf)) {
-                tmp_stdout = "-2";
-            } else {
-                tmp_stdout = d_path(&(files->fd[1]->f_path), stdout_fd_buf, PATH_MAX);
-                if (unlikely(IS_ERR(tmp_stdout))) {
-                    tmp_stdout = "-1";
-                }
+            tmp_stdout = d_path(&(files->fd[1]->f_path), stdout_fd_buf, PATH_MAX);
+            if (unlikely(IS_ERR(tmp_stdout))) {
+                tmp_stdout = "-1";
             }
         } else {
             tmp_stdout = "";
@@ -848,12 +841,6 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                  "\n", sessionid, "\n", dip, "\n", dport,"\n", sip,"\n", sport,"\n", sa_family, "\n", pid_tree);
 
         send_msg_to_user(result_str, 1);
-
-        if (likely(strcmp(stdin_fd_buf, "-2")))
-            kfree(stdin_fd_buf);
-
-        if (likely(strcmp(stdout_fd_buf, "-2")))
-            kfree(stdout_fd_buf);
 
         if (likely(strcmp(pname_buf, "-2")))
             kfree(pname_buf);
