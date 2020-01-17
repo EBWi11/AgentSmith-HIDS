@@ -487,7 +487,7 @@ int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                         flag = 1;
                     }
 #endif
-                    sa_family = 4;
+                    sa_family = AF_INET;
                     break;
 #if IS_ENABLED(CONFIG_IPV6)
                 case AF_INET6:
@@ -510,7 +510,7 @@ int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                         flag = 1;
                     }
 #endif
-                    sa_family = 6;
+                    sa_family = AF_INET6;
                     break;
 #endif
                 default:
@@ -744,6 +744,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 	    char fd_buff[24];
         char stdin_fd_buf[PATH_MAX];
         char stdout_fd_buf[PATH_MAX];
+        int socket_exist = 0;
 
         memset(fd_buff, 0, 24);
         memset(stdin_fd_buf, 0, PATH_MAX);
@@ -771,17 +772,18 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             }
 
             if(strncmp("socket:[", d_name, 8) == 0) {
+                socket_exist = 1;
                 socket = (struct socket *)files->fd[i]->private_data;
                 if(likely(socket)) {
                     sk = socket->sk;
                     inet = (struct inet_sock*)sk;
+                    sa_family = sk->sk_family;
                     switch (sk->sk_family) {
                         case AF_INET:
                             snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_daddr));
                             snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_saddr));
                             snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
                             snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
-                            sa_family = 4;
                             break;
                     #if IS_ENABLED(CONFIG_IPV6)
                         case AF_INET6:
@@ -789,7 +791,6 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                             snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sk->sk_v6_rcv_saddr));
                             snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
                             snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
-                            sa_family = 6;
                             break;
                     #endif
                     }
@@ -832,13 +833,13 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
         snprintf(result_str, result_str_len,
-                 "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%u%s%s%s%s%s%s%s%s%s%d%s%s",
+                 "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%u%s%s%s%s%s%s%s%s%s%d%s%d%s%s",
                  get_current_uid(), "\n", EXECVE_TYPE, "\n", pname, "\n",
                  abs_path, "\n", argv, "\n", current->pid, "\n",
                  current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
                  "\n", current->tgid, "\n", comm, "\n",
                  current->nsproxy->uts_ns->name.nodename,"\n",tmp_stdin,"\n",tmp_stdout,
-                 "\n", sessionid, "\n", dip, "\n", dport,"\n", sip,"\n", sport,"\n", sa_family, "\n", pid_tree);
+                 "\n", sessionid, "\n", dip, "\n", dport,"\n", sip,"\n", sport,"\n", sa_family,"\n", socket_exist ,"\n", pid_tree);
 
         send_msg_to_user(result_str, 1);
 
@@ -942,6 +943,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         char sport[16] = "-1";
         struct sock *sk;
         struct inet_sock *inet;
+        int socket_exist = 0;
 
         memset(fd_buff, 0, 24);
         memset(tmp_stdin_fd, 0, PATH_MAX);
@@ -968,10 +970,12 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             }
 
             if(strncmp("socket:[", d_name, 8) == 0) {
+                socket_exist = 1;
                 socket = (struct socket *)files->fd[i]->private_data;
                 if(likely(socket)) {
                     sk = socket->sk;
                     inet = (struct inet_sock*)sk;
+                    sa_family = sk->sk_family;
                     switch (sk->sk_family) {
                         case AF_INET:
                         #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
@@ -985,7 +989,6 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                             snprintf(sport, 16, "%d", Ntohs(inet->sport));
                             snprintf(dport, 16, "%d", Ntohs(inet->dport));
                         #endif
-                            sa_family = 4;
                             break;
                     #if IS_ENABLED(CONFIG_IPV6)
                         case AF_INET6:
@@ -1000,7 +1003,6 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                             snprintf(sport, 16, "%d", Ntohs(inet->sport));
                             snprintf(dport, 16, "%d", Ntohs(inet->dport));
                         #endif
-                            sa_family = 6;
                             break;
                     #endif
                     }
@@ -1039,13 +1041,13 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
         snprintf(result_str, result_str_len,
-                 "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%u%s%s%s%s%s%s%s%s%s%d%s%s",
+                 "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%u%s%s%s%s%s%s%s%s%s%d%s%d%s%s",
                  get_current_uid(), "\n", EXECVE_TYPE, "\n", pname, "\n",
                  abs_path, "\n", argv, "\n", current->pid, "\n",
                  current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
                  "\n", current->tgid, "\n", comm, "\n",
                  current->nsproxy->uts_ns->name.nodename,"\n",tmp_stdin,"\n",tmp_stdout,
-                 "\n", sessionid, "\n", dip, "\n", dport,"\n", sip,"\n", sport,"\n", sa_family, "\n", pid_tree);
+                 "\n", sessionid, "\n", dip, "\n", dport,"\n", sip,"\n", sport,"\n", sa_family,"\n", socket_exist ,"\n", pid_tree);
 
         send_msg_to_user(result_str, 1);
         kfree(buffer);
@@ -1230,7 +1232,7 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         sessionid = get_sessionid();
 
         if (tmp_dirp.sa_family == AF_INET) {
-            sa_family = 4;
+            sa_family = AF_INET;
             sock = sockfd_lookup(data->fd, &err);
 
             if (unlikely(IS_ERR(sock)))
@@ -1267,7 +1269,7 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     	        }
             }
         } else if (tmp_dirp.sa_family == AF_INET6) {
-            sa_family = 6;
+            sa_family = AF_INET6;
             sock = sockfd_lookup(data->fd, &err);
 
             if (unlikely(IS_ERR(sock)))

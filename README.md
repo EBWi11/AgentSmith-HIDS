@@ -82,7 +82,8 @@ Achieved by hooking **sys_execve()/sys_execveat()**, example:
     "dport":"6666",
     "sip":"10.21.33.180",
     "sport":"17422",
-    "sa_family":"4",
+    "sa_family":"2",
+    "socket_exist":"1",
     "pid_tree":"1(systemd)->899(sshd)->11769(sshd)->11772(bash)->13959(aaab)->14012(ls)",
     "user":"root",
     "time":"1579170711135",
@@ -102,7 +103,7 @@ Achieved by hooking **sys_connect()**, example:
 {
     "uid":"0",
     "data_type":"42",
-    "sa_family":"4",
+    "sa_family":"2",
     "fd":"4",
     "dport":"1025",
     "dip":"180.101.49.11",
@@ -135,7 +136,7 @@ Achieved by hooking **sys_recvfrom()**, example:
 {
     "uid":"0",
     "data_type":"601",
-    "sa_family":"4",
+    "sa_family":"2",
     "fd":"4",
     "dport":"53",
     "dip":"192.168.165.2",
