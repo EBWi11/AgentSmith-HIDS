@@ -728,6 +728,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
 	if (share_mem_flag != -1) {
 	    int i;
+	    int tty_name_len = 0;
 	    const char *d_name = "-1";
 	    int sa_family = -1;
         char *pid_tree = "-1";
@@ -741,9 +742,11 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         char sport[16] = "-1";
         struct sock *sk;
         struct inet_sock *inet;
+        struct tty_struct *tty;
 	    char fd_buff[24];
         char stdin_fd_buf[PATH_MAX];
         char stdout_fd_buf[PATH_MAX];
+        char *tty_name = "-1";
         int socket_exist = 0;
 
         memset(fd_buff, 0, 24);
@@ -763,6 +766,17 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
         pid_tree = get_pid_tree();
         files = files_fdtable(current->files);
+        tty = get_current_tty();
+
+        if(tty) {
+            tty_name_len = strlen(tty_name);
+            if(tty_name_len == 0) {
+                tty_name = "-1";
+            } else {
+                tty_name = tty->name;
+            }
+        } else
+            tty_name = "-1";
 
         for (i = 0; files->fd[i] != NULL; i++) {
             d_name = d_path(&(files->fd[i]->f_path), fd_buff, 24);
@@ -827,19 +841,20 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             }
         }
 
-        result_str_len = strlen(argv) + strlen(pname) + strlen(abs_path) + strlen(pid_tree) +
+        result_str_len = strlen(argv) + strlen(pname) + strlen(abs_path) + strlen(pid_tree) + tty_name_len +
                          strlen(comm) + strlen(current->nsproxy->uts_ns->name.nodename) + 256;
 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
         snprintf(result_str, result_str_len,
-                 "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%u%s%s%s%s%s%s%s%s%s%d%s%d%s%s",
+                 "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%u%s%s%s%s%s%s%s%s%s%d%s%d%s%s%s%s",
                  get_current_uid(), "\n", EXECVE_TYPE, "\n", pname, "\n",
                  abs_path, "\n", argv, "\n", current->pid, "\n",
                  current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
                  "\n", current->tgid, "\n", comm, "\n",
                  current->nsproxy->uts_ns->name.nodename,"\n",tmp_stdin,"\n",tmp_stdout,
-                 "\n", sessionid, "\n", dip, "\n", dport,"\n", sip,"\n", sport,"\n", sa_family,"\n", socket_exist ,"\n", pid_tree);
+                 "\n", sessionid, "\n", dip, "\n", dport,"\n", sip,"\n", sport,"\n", sa_family,
+                 "\n", socket_exist ,"\n", pid_tree, "\n", tty_name);
 
         send_msg_to_user(result_str, 1);
 
@@ -926,6 +941,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
 	if (share_mem_flag != -1) {
 		int i;
+		int tty_name_len = 0;
     	char *pid_tree;
     	const char *d_name = "-1";
     	int sa_family = -1;
@@ -937,10 +953,12 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         struct fdtable *files;
         struct execve_data *data;
         struct socket *socket;
+        struct tty_struct *tty;
         char dip[64] = "-1";
         char sip[64] = "-1";
         char dport[16] = "-1";
         char sport[16] = "-1";
+        char *tty_name = "-1";
         struct sock *sk;
         struct inet_sock *inet;
         int socket_exist = 0;
@@ -958,6 +976,17 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             comm = str_replace(current->comm, "\n", " ");
         else
             comm = "";
+
+        tty = get_current_tty();
+        if(tty) {
+            tty_name_len = strlen(tty->name);
+            if(tty_name_len == 0) {
+                tty_name = "-1";
+            } else {
+                tty_name = tty->name;
+            }
+        } else
+            tty_name = "-1";
 
         pid_tree = get_pid_tree();
 	    files = files_fdtable(current->files);
@@ -1035,19 +1064,20 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         pname = _dentry_path_raw();
 
         result_str_len = strlen(argv) + strlen(pname) +
-                         strlen(abs_path) + strlen(comm) + strlen(pid_tree) +
+                         strlen(abs_path) + strlen(comm) + strlen(pid_tree) + tty_name_len +
                          strlen(current->nsproxy->uts_ns->name.nodename) + 256;
 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
         snprintf(result_str, result_str_len,
-                 "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%u%s%s%s%s%s%s%s%s%s%d%s%d%s%s",
+                 "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%u%s%s%s%s%s%s%s%s%s%d%s%d%s%s%s%s",
                  get_current_uid(), "\n", EXECVE_TYPE, "\n", pname, "\n",
                  abs_path, "\n", argv, "\n", current->pid, "\n",
                  current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
                  "\n", current->tgid, "\n", comm, "\n",
                  current->nsproxy->uts_ns->name.nodename,"\n",tmp_stdin,"\n",tmp_stdout,
-                 "\n", sessionid, "\n", dip, "\n", dport,"\n", sip,"\n", sport,"\n", sa_family,"\n", socket_exist ,"\n", pid_tree);
+                 "\n", sessionid, "\n", dip, "\n", dport,"\n", sip,"\n", sport,"\n",
+                 sa_family,"\n", socket_exist ,"\n", pid_tree, "\n", tty_name);
 
         send_msg_to_user(result_str, 1);
         kfree(buffer);
