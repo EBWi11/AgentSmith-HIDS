@@ -316,7 +316,8 @@ char *str_replace(char *orig, char *rep, char *with)
     return result;
 }
 
-char *get_pid_tree(void) {
+char *get_pid_tree(void)
+{
     int data_len;
     char *tmp_data;
     char *res;
@@ -721,6 +722,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     char *result_str = NULL;
     char *abs_path = NULL;
     char *pname = NULL;
+    char *socket_pname = NULL;
     char *tmp_stdin = NULL;
     char *tmp_stdout = NULL;
     char *argv = NULL;
@@ -728,14 +730,19 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
 	if (share_mem_flag != -1) {
 	    int i;
+	    pid_t socket_pid;
+	    int socket_check = 0;
 	    int tty_name_len = 0;
 	    const char *d_name = "-1";
 	    int sa_family = -1;
         char *pid_tree = "-1";
         char *pname_buf = "-2";
+        char *socket_pname_buf = "-2";
         struct execve_data *data;
         struct fdtable *files;
         struct socket *socket;
+        struct fdtable *task_files;
+        struct task_struct *task;
         char dip[64] = "-1";
         char sip[64] = "-1";
         char dport[16] = "-1";
@@ -747,7 +754,6 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         char stdin_fd_buf[PATH_MAX];
         char stdout_fd_buf[PATH_MAX];
         char *tty_name = "-1";
-        int socket_exist = 0;
 
         memset(fd_buff, 0, 24);
         memset(stdin_fd_buf, 0, PATH_MAX);
@@ -765,7 +771,6 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             comm = "";
 
         pid_tree = get_pid_tree();
-        files = files_fdtable(current->files);
         tty = get_current_tty();
 
         if(tty) {
@@ -778,41 +783,66 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         } else
             tty_name = "-1";
 
-        for (i = 0; files->fd[i] != NULL; i++) {
-            d_name = d_path(&(files->fd[i]->f_path), fd_buff, 24);
-            if (IS_ERR(d_name)) {
-                d_name = "-1";
-                continue;
+        task = current;
+        while(task->pid != 1) {
+            task_files = files_fdtable(task->files);
+
+            for (i = 0; task_files->fd[i] != NULL; i++) {
+                if(i>25)
+                    break;
+
+                d_name = d_path(&(task_files->fd[i]->f_path), fd_buff, 24);
+                if (IS_ERR(d_name)) {
+                    d_name = "-1";
+                    continue;
+                }
+
+                if(strncmp("socket:[", d_name, 8) == 0) {
+                    socket = (struct socket *)task_files->fd[i]->private_data;
+                    if(likely(socket)) {
+                        sk = socket->sk;
+                        inet = (struct inet_sock*)sk;
+                        sa_family = sk->sk_family;
+                        switch (sk->sk_family) {
+                            case AF_INET:
+                                snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_daddr));
+                                snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_saddr));
+                                snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
+                                snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
+                                socket_check = 1;
+                                break;
+                        #if IS_ENABLED(CONFIG_IPV6)
+                            case AF_INET6:
+                                snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sk->sk_v6_daddr));
+                                snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sk->sk_v6_rcv_saddr));
+                                snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
+                                snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
+                                socket_check = 1;
+                                break;
+                        #endif
+                        }
+                    }
+                }
             }
 
-            if(strncmp("socket:[", d_name, 8) == 0) {
-                socket_exist = 1;
-                socket = (struct socket *)files->fd[i]->private_data;
-                if(likely(socket)) {
-                    sk = socket->sk;
-                    inet = (struct inet_sock*)sk;
-                    sa_family = sk->sk_family;
-                    switch (sk->sk_family) {
-                        case AF_INET:
-                            snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_daddr));
-                            snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_saddr));
-                            snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
-                            snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
-                            break;
-                    #if IS_ENABLED(CONFIG_IPV6)
-                        case AF_INET6:
-                            snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sk->sk_v6_daddr));
-                            snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sk->sk_v6_rcv_saddr));
-                            snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
-                            snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
-                            break;
-                    #endif
+            if (socket_check == 1) {
+                socket_pid = task->pid;
+                socket_pname_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
+                if (unlikely(!socket_pname_buf)) {
+                    socket_pname = "-2";
+                } else {
+                    socket_pname = get_exe_file(task, socket_pname_buf, PATH_MAX);
+                    if (unlikely(!socket_pname)) {
+                        socket_pname = "-1";
                     }
-                    break;
                 }
+                break;
+            } else {
+                task = task->parent;
             }
         }
 
+        files = files_fdtable(current->files);
         if(likely(files->fd[0] != NULL)) {
             tmp_stdin = d_path(&(files->fd[0]->f_path), stdin_fd_buf, PATH_MAX);
             if (unlikely(IS_ERR(tmp_stdin))) {
@@ -835,10 +865,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         if (unlikely(!pname_buf)) {
             pname = "-2";
         } else {
-            pname = dentry_path_raw(current->fs->pwd.dentry, pname_buf, PATH_MAX);
-            if (unlikely(!pname)) {
-                pname = "-1";
-            }
+            pname = get_exe_file(current, pname_buf, PATH_MAX);
         }
 
         result_str_len = strlen(argv) + strlen(pname) + strlen(abs_path) + strlen(pid_tree) + tty_name_len +
@@ -847,19 +874,22 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
         snprintf(result_str, result_str_len,
-                 "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%u%s%s%s%s%s%s%s%s%s%d%s%d%s%s%s%s",
+                 "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%u%s%s%s%s%s%s%s%s%s%d%s%s%s%s%s%d%s%s",
                  get_current_uid(), "\n", EXECVE_TYPE, "\n", pname, "\n",
                  abs_path, "\n", argv, "\n", current->pid, "\n",
                  current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
                  "\n", current->tgid, "\n", comm, "\n",
                  current->nsproxy->uts_ns->name.nodename,"\n",tmp_stdin,"\n",tmp_stdout,
                  "\n", sessionid, "\n", dip, "\n", dport,"\n", sip,"\n", sport,"\n", sa_family,
-                 "\n", socket_exist ,"\n", pid_tree, "\n", tty_name);
+                 "\n", pid_tree, "\n", tty_name,"\n", socket_pid, "\n", socket_pname);
 
         send_msg_to_user(result_str, 1);
 
         if (likely(strcmp(pname_buf, "-2")))
             kfree(pname_buf);
+
+        if (likely(strcmp(socket_pname_buf, "-2")))
+            kfree(socket_pname_buf);
 
         kfree(pid_tree);
 	}
@@ -934,15 +964,19 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     unsigned int sessionid;
     char *result_str = NULL;
     char *pname = NULL;
+    char *socket_pname = NULL;
     char *tmp_stdin = NULL;
     char *tmp_stdout = NULL;
     char *comm = NULL;
     char *buffer = NULL;
 
 	if (share_mem_flag != -1) {
+	    pid_t socket_pid;
 		int i;
+		int socket_check = 0;
 		int tty_name_len = 0;
     	char *pid_tree;
+    	char *socket_pname_buf = "-2";
     	const char *d_name = "-1";
     	int sa_family = -1;
 	    char *argv = NULL;
@@ -954,6 +988,8 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         struct execve_data *data;
         struct socket *socket;
         struct tty_struct *tty;
+        struct fdtable *task_files;
+        struct task_struct *task;
         char dip[64] = "-1";
         char sip[64] = "-1";
         char dport[16] = "-1";
@@ -961,7 +997,6 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         char *tty_name = "-1";
         struct sock *sk;
         struct inet_sock *inet;
-        int socket_exist = 0;
 
         memset(fd_buff, 0, 24);
         memset(tmp_stdin_fd, 0, PATH_MAX);
@@ -989,57 +1024,67 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             tty_name = "-1";
 
         pid_tree = get_pid_tree();
-	    files = files_fdtable(current->files);
 
-        for (i = 0; files->fd[i] != NULL; i++) {
-            d_name = d_path(&(files->fd[i]->f_path), fd_buff, 24);
-            if (IS_ERR(d_name)) {
-                d_name = "-1";
-                continue;
+        task = current;
+        while(task->pid != 1) {
+            task_files = files_fdtable(task->files);
+
+            for (i = 0; task_files->fd[i] != NULL; i++) {
+                if(i > 25)
+                    break;
+
+                d_name = d_path(&(task_files->fd[i]->f_path), fd_buff, 24);
+                if (IS_ERR(d_name)) {
+                    d_name = "-1";
+                    continue;
+                }
+
+                if(strncmp("socket:[", d_name, 8) == 0) {
+                    socket = (struct socket *)task_files->fd[i]->private_data;
+                    if(likely(socket)) {
+                        sk = socket->sk;
+                        inet = (struct inet_sock*)sk;
+                        sa_family = sk->sk_family;
+                        switch (sk->sk_family) {
+                            case AF_INET:
+                                snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_daddr));
+                                snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_saddr));
+                                snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
+                                snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
+                                socket_check = 1;
+                                break;
+                        #if IS_ENABLED(CONFIG_IPV6)
+                            case AF_INET6:
+                                snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sk->sk_v6_daddr));
+                                snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sk->sk_v6_rcv_saddr));
+                                snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
+                                snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
+                                socket_check = 1;
+                                break;
+                        #endif
+                        }
+                    }
+                }
             }
 
-            if(strncmp("socket:[", d_name, 8) == 0) {
-                socket_exist = 1;
-                socket = (struct socket *)files->fd[i]->private_data;
-                if(likely(socket)) {
-                    sk = socket->sk;
-                    inet = (struct inet_sock*)sk;
-                    sa_family = sk->sk_family;
-                    switch (sk->sk_family) {
-                        case AF_INET:
-                        #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
-                            snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_daddr));
-                            snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_saddr));
-                            snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
-                            snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
-                        #else
-                            snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->daddr));
-                            snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->saddr));
-                            snprintf(sport, 16, "%d", Ntohs(inet->sport));
-                            snprintf(dport, 16, "%d", Ntohs(inet->dport));
-                        #endif
-                            break;
-                    #if IS_ENABLED(CONFIG_IPV6)
-                        case AF_INET6:
-                        #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
-                            snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sk->sk_v6_daddr));
-                            snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sk->sk_v6_rcv_saddr));
-                            snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
-                            snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
-                        #else
-                            snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(inet->pinet6->daddr));
-                            snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(inet->pinet6->saddr));
-                            snprintf(sport, 16, "%d", Ntohs(inet->sport));
-                            snprintf(dport, 16, "%d", Ntohs(inet->dport));
-                        #endif
-                            break;
-                    #endif
+            if (socket_check == 1) {
+                socket_pid = task->pid;
+                socket_pname_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
+                if (unlikely(!socket_pname_buf)) {
+                    socket_pname = "-2";
+                } else {
+                    socket_pname = get_exe_file(task, socket_pname_buf, PATH_MAX);
+                    if (unlikely(!socket_pname)) {
+                        socket_pname = "-1";
                     }
-                    break;
                 }
+                break;
+            } else {
+                task = task->parent;
             }
         }
 
+        files = files_fdtable(current->files);
         if(likely(files->fd[0] != NULL)) {
             tmp_stdin = d_path(&(files->fd[0]->f_path), tmp_stdin_fd, PATH_MAX);
             if (unlikely(IS_ERR(tmp_stdin))) {
@@ -1059,7 +1104,11 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         }
 
         buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
-        abs_path = get_exe_file(current, buffer, PATH_MAX);
+        if (unlikely(!buffer)) {
+            abs_path = "-2";
+        } else {
+            abs_path = get_exe_file(current, buffer, PATH_MAX);
+        }
 
         pname = _dentry_path_raw();
 
@@ -1070,17 +1119,22 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
         snprintf(result_str, result_str_len,
-                 "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%u%s%s%s%s%s%s%s%s%s%d%s%d%s%s%s%s",
+                 "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%u%s%s%s%s%s%s%s%s%s%d%s%s%s%s%s%d%s%s",
                  get_current_uid(), "\n", EXECVE_TYPE, "\n", pname, "\n",
                  abs_path, "\n", argv, "\n", current->pid, "\n",
                  current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
                  "\n", current->tgid, "\n", comm, "\n",
                  current->nsproxy->uts_ns->name.nodename,"\n",tmp_stdin,"\n",tmp_stdout,
-                 "\n", sessionid, "\n", dip, "\n", dport,"\n", sip,"\n", sport,"\n",
-                 sa_family,"\n", socket_exist ,"\n", pid_tree, "\n", tty_name);
+                 "\n", sessionid, "\n", dip, "\n", dport,"\n", sip,"\n", sport,"\n", sa_family,
+                 "\n", pid_tree, "\n", tty_name,"\n", socket_pid, "\n", socket_pname);
 
         send_msg_to_user(result_str, 1);
-        kfree(buffer);
+
+        if (likely(strcmp(buffer, "-2")))
+            kfree(buffer);
+
+        if (likely(strcmp(socket_pname_buf, "-2")))
+            kfree(socket_pname_buf);
         kfree(pid_tree);
 	}
 
@@ -1845,6 +1899,6 @@ module_init(smith_init)
 module_exit(smith_exit)
 
 MODULE_LICENSE("GPL v2");
-MODULE_VERSION("1.1.3");
+MODULE_VERSION("1.1.4");
 MODULE_AUTHOR("E_Bwill <cy_sniper@yeah.net>");
 MODULE_DESCRIPTION("hook execve,connect,ptrace,load_module,dns,create_file");
