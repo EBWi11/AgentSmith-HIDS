@@ -560,18 +560,23 @@ out:
 struct execve_data {
     char *abs_path;
     char *argv;
+    char *ssh_client;
+    char *ld_preload;
 };
 
 #ifdef CONFIG_COMPAT
 int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-    int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, flag = 0, error = 0;
+    int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, error = 0;
+    int env_len = 0;
     char *exe_file_buf = "-2";
     char *argv_res = NULL;
     char *abs_path = NULL;
     char *argv_res_tmp = NULL;
     const char __user *native;
     if (share_mem_flag != -1) {
+        char *ssh_client = NULL;
+        char *ld_preload = NULL;
         struct execve_data *data;
         struct path exe_file;
 
@@ -580,43 +585,72 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
         	.ptr.compat = (const compat_uptr_t __user *)p_get_arg2(regs),
         };
 
+        struct user_arg_ptr env_ptr = {
+            .is_compat = true,
+        	.ptr.compat = (const compat_uptr_t __user *)p_get_arg3(regs),
+        };
+
         data = (struct execve_data *)ri->data;
 
+        env_len = count(env_ptr, MAX_ARG_STRINGS);
+        argv_res_len = 128 * (argv_len + 2);
         argv_len = count(argv_ptr, MAX_ARG_STRINGS);
-        if(likely(argv_len > 0))
-            argv_res = kzalloc(128 * argv_len + 1, GFP_ATOMIC);
 
-        if (likely(argv_len > 0)) {
+        if(likely(argv_len > 0)) {
+            argv_res = kzalloc(argv_res_len + 1, GFP_ATOMIC);
             for (i = 0; i < argv_len; i++) {
                 native = get_user_arg_ptr(argv_ptr, i);
-                if (unlikely(IS_ERR(native))) {
-                    flag = -1;
+                if (unlikely(IS_ERR(native)))
                     break;
-                }
 
                 len = strnlen_user(native, MAX_ARG_STRLEN);
-                if (!len) {
-                    flag = -2;
+                if (!len)
                     break;
-                }
 
-                if (offset + len > argv_res_len + 128 * argv_len) {
-                    flag = -3;
+                if (offset + len > argv_res_len - 1)
                     break;
-                }
 
-                if (copy_from_user(argv_res + offset, native, len)) {
-                    flag = -4;
+                if (copy_from_user(argv_res + offset, native, len))
                     break;
-                }
 
                 offset += len - 1;
                 *(argv_res + offset) = ' ';
                 offset += 1;
             }
         }
+        
+        ssh_client = kzalloc(255, GFP_ATOMIC);
+        ld_preload = kzalloc(255, GFP_ATOMIC);
 
-        if (argv_len > 0 && flag == 0)
+        if(likely(env_len > 0)) {
+            char buf[256];
+            for (i = 0; i < env_len; i++) {
+                native = get_user_arg_ptr(env_ptr, i);
+                if (unlikely(IS_ERR(native)))
+                    break;
+
+                len = strnlen_user(native, MAX_ARG_STRLEN);
+                if(!len)
+                    break;
+                else if(len > 11) {
+                    memset(buf, 0, 255);
+                    if (copy_from_user(buf, native, 255))
+                        break;
+                    else {
+                        if(strncmp("SSH_CLIENT=", buf, 11) == 0) {
+                            strcpy(ssh_client, buf + 11);
+                        } else if(strncmp("LD_PRELOAD=", buf, 11) == 0) {
+                            strcpy(ld_preload, buf + 11);
+                        }
+                    }
+                }
+            }
+        }
+
+        data->ssh_client = ssh_client;
+        data->ld_preload = ld_preload;
+
+        if (likely(argv_len > 0))
             argv_res_tmp = str_replace(argv_res, "\n", " ");
         else
             argv_res_tmp = "";
@@ -639,7 +673,7 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
         data->argv = argv_res_tmp;
         data->abs_path = abs_path;
 
-        if(argv_len > 0)
+        if(likely(argv_len > 0))
             kfree(argv_res);
     }
     return 0;
@@ -647,13 +681,16 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
 
 int compat_execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-    int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, flag = 0, error = 0;
+    int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, error = 0;
+    int env_len = 0;
     char *exe_file_buf = "-2";
     char *argv_res = NULL;
     char *abs_path = NULL;
     char *argv_res_tmp = NULL;
     const char __user *native;
     if (share_mem_flag != -1) {
+        char *ssh_client = NULL;
+        char *ld_preload = NULL;
         struct execve_data *data;
         struct path exe_file;
 
@@ -662,43 +699,72 @@ int compat_execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs 
         	.ptr.compat = (const compat_uptr_t __user *)p_get_arg3(regs),
         };
 
+        struct user_arg_ptr env_ptr = {
+            .is_compat = true,
+        	.ptr.compat = (const compat_uptr_t __user *)p_get_arg4(regs),
+        };
+
         data = (struct execve_data *)ri->data;
 
+        env_len = count(env_ptr, MAX_ARG_STRINGS);
+        argv_res_len = 128 * (argv_len + 2);
         argv_len = count(argv_ptr, MAX_ARG_STRINGS);
-        if(likely(argv_len > 0))
-            argv_res = kzalloc(128 * argv_len + 1, GFP_ATOMIC);
 
-        if (likely(argv_len > 0)) {
+        if(likely(argv_len > 0)) {
+            argv_res = kzalloc(argv_res_len + 1, GFP_ATOMIC);
             for (i = 0; i < argv_len; i++) {
                 native = get_user_arg_ptr(argv_ptr, i);
-                if (unlikely(IS_ERR(native))) {
-                    flag = -1;
+                if (unlikely(IS_ERR(native)))
                     break;
-                }
 
                 len = strnlen_user(native, MAX_ARG_STRLEN);
-                if (!len) {
-                    flag = -2;
+                if (!len)
                     break;
-                }
 
-                if (offset + len > argv_res_len + 128 * argv_len) {
-                    flag = -3;
+                if (offset + len > argv_res_len + 1)
                     break;
-                }
 
-                if (copy_from_user(argv_res + offset, native, len)) {
-                    flag = -4;
+                if (copy_from_user(argv_res + offset, native, len))
                     break;
-                }
 
                 offset += len - 1;
                 *(argv_res + offset) = ' ';
                 offset += 1;
             }
         }
+        
+        ssh_client = kzalloc(255, GFP_ATOMIC);
+        ld_preload = kzalloc(255, GFP_ATOMIC);
+        
+        if(likely(env_len > 0)) {
+            char buf[256];
+            for (i = 0; i < env_len; i++) {
+                native = get_user_arg_ptr(env_ptr, i);
+                if (unlikely(IS_ERR(native)))
+                    break;
 
-        if (argv_len > 0 && flag == 0)
+                len = strnlen_user(native, MAX_ARG_STRLEN);
+                if(!len)
+                    break;
+                else if(len > 11) {
+                    memset(buf, 0, 255);
+                    if (copy_from_user(buf, native, 255))
+                        break;
+                    else {
+                        if(strncmp("SSH_CLIENT=", buf, 11) == 0) {
+                            strcpy(ssh_client, buf + 11);
+                        } else if(strncmp("LD_PRELOAD=", buf, 11) == 0) {
+                            strcpy(ld_preload, buf + 11);
+                        }
+                    }
+                }
+            }
+        }
+
+        data->ssh_client = ssh_client;
+        data->ld_preload = ld_preload;
+
+        if (likely(argv_len > 0))
             argv_res_tmp = str_replace(argv_res, "\n", " ");
         else
             argv_res_tmp = "";
@@ -721,7 +787,7 @@ int compat_execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs 
         data->argv = argv_res_tmp;
         data->abs_path = abs_path;
 
-        if(argv_len > 0)
+        if(likely(argv_len > 0))
             kfree(argv_res);
     }
     return 0;
@@ -730,45 +796,42 @@ int compat_execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs 
 
 int execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-    int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, flag = 0, error = 0;
+    int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, error = 0;
+    int env_len = 0;
     char *exe_file_buf = "-2";
     char *argv_res = NULL;
     char *abs_path = NULL;
     char *argv_res_tmp = NULL;
     const char __user *native;
     if (share_mem_flag != -1) {
+        char *ssh_client = NULL;
+        char *ld_preload = NULL;
         struct execve_data *data;
         struct path exe_file;
     	struct user_arg_ptr argv_ptr = {.ptr.native = (const char * const*) p_get_arg3(regs)};
+    	struct user_arg_ptr env_ptr = {.ptr.native = (const char * const*) p_get_arg4(regs)};
         data = (struct execve_data *)ri->data;
 
+        env_len = count(env_ptr, MAX_ARG_STRINGS);
         argv_len = count(argv_ptr, MAX_ARG_STRINGS);
-        if(likely(argv_len > 0))
-            argv_res = kzalloc(128 * argv_len + 1, GFP_ATOMIC);
+        argv_res_len = 128 * (argv_len + 2);
 
-        if (likely(argv_len > 0)) {
+        if(likely(argv_len > 0)) {
+            argv_res = kzalloc(argv_res_len + 1, GFP_ATOMIC);
             for (i = 0; i < argv_len; i++) {
                 native = get_user_arg_ptr(argv_ptr, i);
-                if (unlikely(IS_ERR(native))) {
-                    flag = -1;
+                if (unlikely(IS_ERR(native)))
                     break;
-                }
 
                 len = strnlen_user(native, MAX_ARG_STRLEN);
-                if (!len) {
-                    flag = -2;
+                if (!len)
                     break;
-                }
 
-                if (offset + len > argv_res_len + 128 * argv_len) {
-                    flag = -3;
+                if (offset + len > argv_res_len - 1)
                     break;
-                }
 
-                if (copy_from_user(argv_res + offset, native, len)) {
-                    flag = -4;
+                if (copy_from_user(argv_res + offset, native, len))
                     break;
-                }
 
                 offset += len - 1;
                 *(argv_res + offset) = ' ';
@@ -776,7 +839,38 @@ int execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             }
         }
 
-        if (argv_len > 0 && flag == 0)
+        ssh_client = kzalloc(255, GFP_ATOMIC);
+        ld_preload = kzalloc(255, GFP_ATOMIC);
+
+        if(likely(env_len > 0)) {
+            char buf[256];
+            for (i = 0; i < env_len; i++) {
+                native = get_user_arg_ptr(env_ptr, i);
+                if (unlikely(IS_ERR(native)))
+                    break;
+
+                len = strnlen_user(native, MAX_ARG_STRLEN);
+                if(!len)
+                    break;
+                else if(len > 11) {
+                    memset(buf, 0, 255);
+                    if (copy_from_user(buf, native, 255))
+                        break;
+                    else {
+                        if(strncmp("SSH_CLIENT=", buf, 11) == 0) {
+                            strcpy(ssh_client, buf + 11);
+                        } else if(strncmp("LD_PRELOAD=", buf, 11) == 0) {
+                            strcpy(ld_preload, buf + 11);
+                        }
+                    }
+                }
+            }
+        }
+
+        data->ssh_client = ssh_client;
+        data->ld_preload = ld_preload;
+
+        if (likely(argv_len > 0))
             argv_res_tmp = str_replace(argv_res, "\n", " ");
         else
             argv_res_tmp = "";
@@ -799,7 +893,7 @@ int execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         data->argv = argv_res_tmp;
         data->abs_path = abs_path;
 
-        if(argv_len > 0)
+        if(likely(argv_len > 0))
             kfree(argv_res);
     }
     return 0;
@@ -807,45 +901,42 @@ int execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
 int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-    int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, flag = 0, error = 0;
+    int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, error = 0;
+    int env_len = 0;
     char *exe_file_buf = "-2";
     char *argv_res = NULL;
     char *abs_path = NULL;
     char *argv_res_tmp = NULL;
     const char __user *native;
     if (share_mem_flag != -1) {
+        char *ssh_client = NULL;
+        char *ld_preload = NULL;
         struct execve_data *data;
         struct path exe_file;
     	struct user_arg_ptr argv_ptr = {.ptr.native = (const char * const*) p_get_arg2(regs)};
+    	struct user_arg_ptr env_ptr = {.ptr.native = (const char * const*) p_get_arg3(regs)};
         data = (struct execve_data *)ri->data;
 
         argv_len = count(argv_ptr, MAX_ARG_STRINGS);
-        if(likely(argv_len > 0))
-            argv_res = kzalloc(128 * argv_len + 1, GFP_ATOMIC);
+        argv_res_len = 128 * (argv_len + 2);
+        env_len = count(env_ptr, MAX_ARG_STRINGS);
 
-        if (likely(argv_len > 0)) {
+        if(likely(argv_len > 0)) {
+            argv_res = kzalloc(argv_res_len + 1, GFP_ATOMIC);
             for (i = 0; i < argv_len; i++) {
                 native = get_user_arg_ptr(argv_ptr, i);
-                if (unlikely(IS_ERR(native))) {
-                    flag = -1;
+                if (unlikely(IS_ERR(native)))
                     break;
-                }
 
                 len = strnlen_user(native, MAX_ARG_STRLEN);
-                if (!len) {
-                    flag = -2;
+                if (!len)
                     break;
-                }
 
-                if (offset + len > argv_res_len + 128 * argv_len) {
-                    flag = -3;
+                if (offset + len > argv_res_len - 1)
                     break;
-                }
 
-                if (copy_from_user(argv_res + offset, native, len)) {
-                    flag = -4;
+                if (copy_from_user(argv_res + offset, native, len))
                     break;
-                }
 
                 offset += len - 1;
                 *(argv_res + offset) = ' ';
@@ -853,7 +944,41 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             }
         }
 
-        if (argv_len > 0 && flag == 0)
+        ssh_client = kzalloc(255, GFP_ATOMIC);
+        ld_preload = kzalloc(255, GFP_ATOMIC);
+
+        if(likely(env_len > 0)) {
+            char buf[256];
+            for (i = 0; i < env_len; i++) {
+                native = get_user_arg_ptr(env_ptr, i);
+                if (unlikely(IS_ERR(native)))
+                    break;
+
+                len = strnlen_user(native, MAX_ARG_STRLEN);
+                if(!len)
+                    break;
+                else if(len > 11) {
+                    memset(buf, 0, 255);
+                    if (copy_from_user(buf, native, 255))
+                        break;
+                    else {
+                        if(strncmp("SSH_CLIENT=", buf, 11) == 0) {
+                            strcpy(ssh_client, buf + 11);
+                        } else if(strncmp("LD_PRELOAD=", buf, 11) == 0) {
+                            printk("!! %s\n", buf);
+                            strcpy(ld_preload, buf + 11);
+                        }
+                    }
+                }
+            }
+        }
+
+        data->ssh_client = ssh_client;
+        data->ld_preload = ld_preload;
+
+        printk("%s %s\n",data->ssh_client,data->ld_preload);
+
+        if (likely(argv_len > 0))
             argv_res_tmp = str_replace(argv_res, "\n", " ");
         else
             argv_res_tmp = "";
@@ -876,7 +1001,7 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         data->argv = argv_res_tmp;
         data->abs_path = abs_path;
 
-        if(argv_len > 0)
+        if(likely(argv_len > 0))
             kfree(argv_res);
     }
     return 0;
@@ -1036,19 +1161,21 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         }
 
         result_str_len = strlen(argv) + strlen(pname) + strlen(abs_path) + strlen(pid_tree) + tty_name_len +
-                         strlen(comm) + strlen(current->nsproxy->uts_ns->name.nodename) + 256;
+                         strlen(comm) + strlen(current->nsproxy->uts_ns->name.nodename) + strlen(data->ssh_client) +
+                         strlen(data->ld_preload) + 256;
 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
         snprintf(result_str, result_str_len,
-                 "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%u%s%s%s%s%s%s%s%s%s%d%s%s%s%s%s%d%s%s",
+                 "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%u%s%s%s%s%s%s%s%s%s%d%s%s%s%s%s%d%s%s%s%s%s%s",
                  get_current_uid(), "\n", EXECVE_TYPE, "\n", pname, "\n",
                  abs_path, "\n", argv, "\n", current->pid, "\n",
                  current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
                  "\n", current->tgid, "\n", comm, "\n",
                  current->nsproxy->uts_ns->name.nodename,"\n",tmp_stdin,"\n",tmp_stdout,
                  "\n", sessionid, "\n", dip, "\n", dport,"\n", sip,"\n", sport,"\n", sa_family,
-                 "\n", pid_tree, "\n", tty_name,"\n", socket_pid, "\n", socket_pname);
+                 "\n", pid_tree, "\n", tty_name,"\n", socket_pid, "\n", socket_pname, "\n",
+                 data->ssh_client, "\n", data->ld_preload);
 
         send_msg_to_user(result_str, 1);
 
@@ -1058,6 +1185,8 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         if (likely(strcmp(socket_pname_buf, "-2")))
             kfree(socket_pname_buf);
 
+        kfree(data->ld_preload);
+        kfree(data->ssh_client);
         kfree(pid_tree);
 	}
 	return 0;
@@ -1066,45 +1195,44 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
 struct execve_data {
     char *argv;
+    char *ssh_client;
+    char *ld_preload;
 };
 
 int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-    int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, flag = 0;
+    int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0;
+    int env_len = 0;
     char *argv_res = NULL;
     char *argv_res_tmp = NULL;
     const char __user *native;
     if (share_mem_flag != -1) {
+        char *ssh_client = NULL;
+        char *ld_preload = NULL;
         struct execve_data *data;
         char **argv = (char **) p_get_arg2(regs);
+        char **env = (char **) p_get_arg3(regs);
         data = (struct execve_data *)ri->data;
 
+        env_len = count(env, MAX_ARG_STRINGS);
+        argv_res_len = 128 * (argv_len + 2);
         argv_len = count(argv, MAX_ARG_STRINGS);
-        if(argv_len > 0)
-            argv_res = kzalloc(128 * argv_len, GFP_ATOMIC);
 
-        if (argv_len > 0) {
+        if(likely(argv_len > 0)) {
+            argv_res = kzalloc(argv_res_len + 1, GFP_ATOMIC);
             for(i = 0; i < argv_len; i ++) {
-                if(get_user(native, argv + i)) {
-                    flag = -1;
+                if(get_user(native, argv + i))
                     break;
-                }
 
                 len = strnlen_user(native, MAX_ARG_STRLEN);
-                if(!len) {
-                    flag = -2;
+                if(!len)
                     break;
-                }
 
-                if(offset + len > argv_res_len + 128 * argv_len) {
-                    flag = -3;
+                if(offset + len > argv_res_len - 1)
                     break;
-                }
 
-                if (copy_from_user(argv_res + offset, native, len)) {
-                    flag = -4;
+                if (copy_from_user(argv_res + offset, native, len))
                     break;
-                }
 
                 offset += len - 1;
                 *(argv_res + offset) = ' ';
@@ -1112,14 +1240,44 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
             }
         }
 
-        if (argv_len > 0 && flag == 0)
+        ssh_client = kzalloc(255, GFP_ATOMIC);
+        ld_preload = kzalloc(255, GFP_ATOMIC);
+
+        if(likely(env_len > 0)) {
+            char buf[256];
+            for(i = 0; i < argv_len; i ++) {
+                if(get_user(native, env + i))
+                    break;
+
+                len = strnlen_user(native, MAX_ARG_STRLEN);
+                if(!len)
+                    break;
+                else if(len > 11) {
+                    memset(buf, 0, 255);
+                    if (copy_from_user(buf, native, 255))
+                        break;
+                    else {
+                        if(strncmp("SSH_CLIENT=", buf, 11) == 0) {
+                            strcpy(ssh_client, buf + 11);
+                        } else if(strncmp("LD_PRELOAD=", buf, 11) == 0) {
+                            strcpy(ld_preload, buf + 11);
+                        }
+                    }
+                }
+            }
+        }
+
+        data->ssh_client = ssh_client;
+        data->ld_preload = ld_preload;
+
+        if (likely(argv_len > 0))
             argv_res_tmp = str_replace(argv_res, "\n", " ");
         else
             argv_res_tmp = "";
 
         data->argv = argv_res_tmp;
 
-        if(argv_len > 0)
+        if(likely(argv_len > 0))
             kfree(argv_res);
     }
     return 0;
@@ -1127,41 +1285,38 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
 
 int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-    int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, flag = 0;
+    int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0;
     char *argv_res = NULL;
+    int env_len = 0;
     char *argv_res_tmp = NULL;
     const char __user *native;
     if (share_mem_flag != -1) {
+        char *ssh_client = NULL;
+        char *ld_preload = NULL;
         struct execve_data *data;
         char **argv = (char **) p_get_arg2(regs);
+        char **env = (char **) p_get_arg3(regs);
         data = (struct execve_data *)ri->data;
 
+        argv_res_len = 128 * (argv_len + 2);
         argv_len = count(argv, MAX_ARG_STRINGS);
-        if(argv_len > 0)
-            argv_res = kzalloc(128 * argv_len, GFP_ATOMIC);
+        env_len = count(env, MAX_ARG_STRINGS);
 
-        if (argv_len > 0) {
+        if(likely(argv_len > 0)) {
+            argv_res = kzalloc(argv_res_len + 1, GFP_ATOMIC);
             for(i = 0; i < argv_len; i ++) {
-                if(get_user(native, argv + i)) {
-                    flag = -1;
+                if(get_user(native, argv + i))
                     break;
-                }
 
                 len = strnlen_user(native, MAX_ARG_STRLEN);
-                if(!len) {
-                    flag = -2;
+                if(!len)
                     break;
-                }
 
-                if(offset + len > argv_res_len + 128 * argv_len) {
-                    flag = -3;
+                if(offset + len > argv_res_len - 1)
                     break;
-                }
 
-                if (copy_from_user(argv_res + offset, native, len)) {
-                    flag = -4;
+                if (copy_from_user(argv_res + offset, native, len))
                     break;
-                }
 
                 offset += len - 1;
                 *(argv_res + offset) = ' ';
@@ -1169,14 +1324,44 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             }
         }
 
-        if (argv_len > 0 && flag == 0)
+        ssh_client = kzalloc(255, GFP_ATOMIC);
+        ld_preload = kzalloc(255, GFP_ATOMIC);
+
+        if(likely(env_len > 0)) {
+            char buf[256];
+            for(i = 0; i < env_len; i ++) {
+                if(get_user(native, env + i))
+                    break;
+
+                len = strnlen_user(native, MAX_ARG_STRLEN);
+                if(!len)
+                    break;
+                else if(len > 11) {
+                    memset(buf, 0, 255);
+                    if (copy_from_user(buf, native, 255))
+                        break;
+                    else {
+                        if(strncmp("SSH_CLIENT=", buf, 11) == 0) {
+                            strcpy(ssh_client, buf + 11);
+                        } else if(strncmp("LD_PRELOAD=", buf, 11) == 0) {
+                            strcpy(ld_preload, buf + 11);
+                        }
+                    }
+                }
+            }
+        }
+
+        data->ssh_client = ssh_client;
+        data->ld_preload = ld_preload;
+
+        if(likely(argv_len > 0))
             argv_res_tmp = str_replace(argv_res, "\n", " ");
         else
             argv_res_tmp = "";
 
         data->argv = argv_res_tmp;
 
-        if(argv_len > 0)
+        if(likely(argv_len > 0))
             kfree(argv_res);
     }
     return 0;
@@ -1352,19 +1537,21 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
         result_str_len = strlen(argv) + strlen(pname) +
                          strlen(abs_path) + strlen(comm) + strlen(pid_tree) + tty_name_len +
-                         strlen(current->nsproxy->uts_ns->name.nodename) + 256;
+                         strlen(current->nsproxy->uts_ns->name.nodename) + strlen(data->ssh_client) +
+                         strlen(data->ld_preload) + 256;
 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
         snprintf(result_str, result_str_len,
-                 "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%u%s%s%s%s%s%s%s%s%s%d%s%s%s%s%s%d%s%s",
+                 "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%u%s%s%s%s%s%s%s%s%s%d%s%s%s%s%s%d%s%s%s%s%s%s",
                  get_current_uid(), "\n", EXECVE_TYPE, "\n", pname, "\n",
                  abs_path, "\n", argv, "\n", current->pid, "\n",
                  current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
                  "\n", current->tgid, "\n", comm, "\n",
                  current->nsproxy->uts_ns->name.nodename,"\n",tmp_stdin,"\n",tmp_stdout,
                  "\n", sessionid, "\n", dip, "\n", dport,"\n", sip,"\n", sport,"\n", sa_family,
-                 "\n", pid_tree, "\n", tty_name,"\n", socket_pid, "\n", socket_pname);
+                 "\n", pid_tree, "\n", tty_name,"\n", socket_pid, "\n", socket_pname, "\n",
+                 data->ssh_client, "\n", data->ld_preload);
 
         send_msg_to_user(result_str, 1);
 
@@ -1373,6 +1560,9 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
         if (likely(strcmp(socket_pname_buf, "-2")))
             kfree(socket_pname_buf);
+
+        kfree(data->ld_preload);
+        kfree(data->ssh_client);
         kfree(pid_tree);
 	}
 
@@ -2186,6 +2376,6 @@ module_init(smith_init)
 module_exit(smith_exit)
 
 MODULE_LICENSE("GPL v2");
-MODULE_VERSION("1.1.5");
+MODULE_VERSION("1.2.0");
 MODULE_AUTHOR("E_Bwill <cy_sniper@yeah.net>");
 MODULE_DESCRIPTION("hook execve,connect,ptrace,load_module,dns,create_file");
