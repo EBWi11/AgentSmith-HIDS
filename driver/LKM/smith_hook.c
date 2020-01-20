@@ -897,7 +897,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
 	if (share_mem_flag != -1) {
 	    int i;
-	    pid_t socket_pid;
+	    pid_t socket_pid = -1;
 	    int socket_check = 0;
 	    int tty_name_len = 0;
 	    const char *d_name = "-1";
@@ -1195,7 +1195,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     char *buffer = NULL;
 
 	if (share_mem_flag != -1) {
-	    pid_t socket_pid;
+	    pid_t socket_pid = -1;
 		int i;
 		int socket_check = 0;
 		int tty_name_len = 0;
@@ -2102,13 +2102,13 @@ int __init smith_init(void)
 #ifdef CONFIG_COMPAT
 	    ret = compat_execve_register_kprobe();
 	    if (ret < 0) {
-		    printk(KERN_INFO "[SMITH] compat_execve register_kprobe failed, returned %d\n", ret);
+		    printk(KERN_INFO "[SMITH] compat_sys_execve register_kprobe failed, returned %d\n", ret);
 	    }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
 	    ret = compat_execveat_register_kprobe();
        	if (ret < 0) {
-       	    printk(KERN_INFO "[SMITH] compat_execveat register_kprobe failed, returned %d\n", ret);
+       	    printk(KERN_INFO "[SMITH] compat_sys_execveat register_kprobe failed, returned %d\n", ret);
        	}
 #endif
 
@@ -2186,6 +2186,6 @@ module_init(smith_init)
 module_exit(smith_exit)
 
 MODULE_LICENSE("GPL v2");
-MODULE_VERSION("1.1.4");
+MODULE_VERSION("1.1.5");
 MODULE_AUTHOR("E_Bwill <cy_sniper@yeah.net>");
 MODULE_DESCRIPTION("hook execve,connect,ptrace,load_module,dns,create_file");

@@ -67,7 +67,9 @@ typedef unsigned long int uint32;
   #define P_SYSCALL_LAYOUT_4_17
  #ifdef CONFIG_X86_64
   #define P_SYSCALL_PREFIX(x) P_TO_STRING(__x64_sys_ ## x)
-  #define P_COMPAT_SYSCALL_PREFIX(x) P_TO_STRING(compat_sys_ ## x)
+    #define P_GET_IA32_COMPAT_SYSCALL_NAME(x) P_IA32_COMPAT_SYSCALL_PREFIX(x)
+  #define P_IA32_COMPAT_SYSCALL_PREFIX(x) P_TO_STRING(__ia32_compat_sys_ ## x)
+  #define P_COMPAT_SYSCALL_PREFIX(x) P_IA32_COMPAT_SYSCALL_PREFIX(x)
  #else
   #define P_SYSCALL_PREFIX(x) P_TO_STRING(sys_ ## x)
  #endif
