@@ -38,6 +38,7 @@ int checkCPUendianRes = 0;
 
 char connect_kprobe_state = 0x0;
 char execve_kprobe_state = 0x0;
+char compat_execve_kprobe_state = 0x0;
 char create_file_kprobe_state = 0x0;
 char ptrace_kprobe_state = 0x0;
 char recvfrom_kprobe_state = 0x0;
@@ -46,6 +47,7 @@ char update_cred_kprobe_state = 0x0;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
 char execveat_kretprobe_state = 0x0;
+char compat_execveat_kretprobe_state = 0x0;
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0)
@@ -560,6 +562,172 @@ struct execve_data {
     char *argv;
 };
 
+#ifdef CONFIG_COMPAT
+int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
+{
+    int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, flag = 0, error = 0;
+    char *exe_file_buf = "-2";
+    char *argv_res = NULL;
+    char *abs_path = NULL;
+    char *argv_res_tmp = NULL;
+    const char __user *native;
+    if (share_mem_flag != -1) {
+        struct execve_data *data;
+        struct path exe_file;
+
+        struct user_arg_ptr argv_ptr = {
+            .is_compat = true,
+        	.ptr.compat = (const compat_uptr_t __user *)p_get_arg2(regs),
+        };
+
+        data = (struct execve_data *)ri->data;
+
+        argv_len = count(argv_ptr, MAX_ARG_STRINGS);
+        if(likely(argv_len > 0))
+            argv_res = kzalloc(128 * argv_len + 1, GFP_ATOMIC);
+
+        if (likely(argv_len > 0)) {
+            for (i = 0; i < argv_len; i++) {
+                native = get_user_arg_ptr(argv_ptr, i);
+                if (unlikely(IS_ERR(native))) {
+                    flag = -1;
+                    break;
+                }
+
+                len = strnlen_user(native, MAX_ARG_STRLEN);
+                if (!len) {
+                    flag = -2;
+                    break;
+                }
+
+                if (offset + len > argv_res_len + 128 * argv_len) {
+                    flag = -3;
+                    break;
+                }
+
+                if (copy_from_user(argv_res + offset, native, len)) {
+                    flag = -4;
+                    break;
+                }
+
+                offset += len - 1;
+                *(argv_res + offset) = ' ';
+                offset += 1;
+            }
+        }
+
+        if (argv_len > 0 && flag == 0)
+            argv_res_tmp = str_replace(argv_res, "\n", " ");
+        else
+            argv_res_tmp = "";
+
+        error = user_path_at(AT_FDCWD, (const char __user *)p_get_arg1(regs), LOOKUP_FOLLOW, &exe_file);
+        if (unlikely(error)) {
+            abs_path = "-1";
+        } else {
+            exe_file_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
+            if (unlikely(!exe_file_buf)) {
+                abs_path = "-2";
+            } else {
+                abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
+                if (unlikely(IS_ERR(abs_path)))
+                    abs_path = "-1";
+            }
+            path_put(&exe_file);
+         }
+
+        data->argv = argv_res_tmp;
+        data->abs_path = abs_path;
+
+        if(argv_len > 0)
+            kfree(argv_res);
+    }
+    return 0;
+}
+
+int compat_execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
+{
+    int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, flag = 0, error = 0;
+    char *exe_file_buf = "-2";
+    char *argv_res = NULL;
+    char *abs_path = NULL;
+    char *argv_res_tmp = NULL;
+    const char __user *native;
+    if (share_mem_flag != -1) {
+        struct execve_data *data;
+        struct path exe_file;
+
+        struct user_arg_ptr argv_ptr = {
+            .is_compat = true,
+        	.ptr.compat = (const compat_uptr_t __user *)p_get_arg3(regs),
+        };
+
+        data = (struct execve_data *)ri->data;
+
+        argv_len = count(argv_ptr, MAX_ARG_STRINGS);
+        if(likely(argv_len > 0))
+            argv_res = kzalloc(128 * argv_len + 1, GFP_ATOMIC);
+
+        if (likely(argv_len > 0)) {
+            for (i = 0; i < argv_len; i++) {
+                native = get_user_arg_ptr(argv_ptr, i);
+                if (unlikely(IS_ERR(native))) {
+                    flag = -1;
+                    break;
+                }
+
+                len = strnlen_user(native, MAX_ARG_STRLEN);
+                if (!len) {
+                    flag = -2;
+                    break;
+                }
+
+                if (offset + len > argv_res_len + 128 * argv_len) {
+                    flag = -3;
+                    break;
+                }
+
+                if (copy_from_user(argv_res + offset, native, len)) {
+                    flag = -4;
+                    break;
+                }
+
+                offset += len - 1;
+                *(argv_res + offset) = ' ';
+                offset += 1;
+            }
+        }
+
+        if (argv_len > 0 && flag == 0)
+            argv_res_tmp = str_replace(argv_res, "\n", " ");
+        else
+            argv_res_tmp = "";
+
+        error = user_path_at(AT_FDCWD, (const char __user *)p_get_arg2(regs), LOOKUP_FOLLOW, &exe_file);
+        if (unlikely(error)) {
+            abs_path = "-1";
+        } else {
+            exe_file_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
+            if (unlikely(!exe_file_buf)) {
+                abs_path = "-2";
+            } else {
+                abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
+                if (unlikely(IS_ERR(abs_path)))
+                    abs_path = "-1";
+            }
+            path_put(&exe_file);
+         }
+
+        data->argv = argv_res_tmp;
+        data->abs_path = abs_path;
+
+        if(argv_len > 0)
+            kfree(argv_res);
+    }
+    return 0;
+}
+#endif
+
 int execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
     int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, flag = 0, error = 0;
@@ -636,7 +804,6 @@ int execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     }
     return 0;
 }
-
 
 int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
@@ -901,6 +1068,63 @@ struct execve_data {
     char *argv;
 };
 
+int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
+{
+    int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, flag = 0;
+    char *argv_res = NULL;
+    char *argv_res_tmp = NULL;
+    const char __user *native;
+    if (share_mem_flag != -1) {
+        struct execve_data *data;
+        char **argv = (char **) p_get_arg2(regs);
+        data = (struct execve_data *)ri->data;
+
+        argv_len = count(argv, MAX_ARG_STRINGS);
+        if(argv_len > 0)
+            argv_res = kzalloc(128 * argv_len, GFP_ATOMIC);
+
+        if (argv_len > 0) {
+            for(i = 0; i < argv_len; i ++) {
+                if(get_user(native, argv + i)) {
+                    flag = -1;
+                    break;
+                }
+
+                len = strnlen_user(native, MAX_ARG_STRLEN);
+                if(!len) {
+                    flag = -2;
+                    break;
+                }
+
+                if(offset + len > argv_res_len + 128 * argv_len) {
+                    flag = -3;
+                    break;
+                }
+
+                if (copy_from_user(argv_res + offset, native, len)) {
+                    flag = -4;
+                    break;
+                }
+
+                offset += len - 1;
+                *(argv_res + offset) = ' ';
+                offset += 1;
+            }
+        }
+
+        if (argv_len > 0 && flag == 0)
+            argv_res_tmp = str_replace(argv_res, "\n", " ");
+        else
+            argv_res_tmp = "";
+
+        data->argv = argv_res_tmp;
+
+        if(argv_len > 0)
+            kfree(argv_res);
+    }
+    return 0;
+}
+
 int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
     int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, flag = 0;
@@ -1047,18 +1271,32 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                         sa_family = sk->sk_family;
                         switch (sk->sk_family) {
                             case AF_INET:
+                            #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
                                 snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_daddr));
                                 snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_saddr));
                                 snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
                                 snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
+                            #else
+                                snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->daddr));
+                                snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->saddr));
+                                snprintf(sport, 16, "%d", Ntohs(inet->sport));
+                                snprintf(dport, 16, "%d", Ntohs(inet->dport));
+                            #endif
                                 socket_check = 1;
                                 break;
                         #if IS_ENABLED(CONFIG_IPV6)
                             case AF_INET6:
+                            #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
                                 snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sk->sk_v6_daddr));
                                 snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sk->sk_v6_rcv_saddr));
                                 snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
                                 snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
+                            #else
+                                snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(inet->pinet6->daddr));
+                                snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(inet->pinet6->saddr));
+                                snprintf(sport, 16, "%d", Ntohs(inet->sport));
+                                snprintf(dport, 16, "%d", Ntohs(inet->dport));
+                            #endif
                                 socket_check = 1;
                                 break;
                         #endif
@@ -1576,6 +1814,26 @@ struct kretprobe execve_kretprobe = {
 	.maxactive = 40,
 };
 
+#ifdef CONFIG_COMPAT
+struct kretprobe compat_execve_kretprobe = {
+    .kp.symbol_name = P_GET_COMPAT_SYSCALL_NAME(execve),
+    .data_size  = sizeof(struct execve_data),
+	.handler = execve_handler,
+	.entry_handler = compat_execve_entry_handler,
+	.maxactive = 40,
+};
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,19,0)
+struct kretprobe compat_execveat_kretprobe = {
+    .kp.symbol_name = P_GET_SYSCALL_NAME(execveat),
+    .data_size  = sizeof(struct execve_data),
+	.handler = execve_handler,
+	.entry_handler = compat_execveat_entry_handler,
+	.maxactive = 40,
+};
+#endif
+#endif
+
 struct kretprobe security_inode_create_kretprobe = {
     .kp.symbol_name = "security_inode_create",
     .data_size = sizeof(struct security_inode_create_data),
@@ -1648,13 +1906,43 @@ int execveat_register_kprobe(void)
 }
 #endif
 
+#ifdef CONFIG_COMPAT
+int compat_execve_register_kprobe(void)
+{
+	int ret;
+	ret = register_kretprobe(&compat_execve_kretprobe);
+	if (ret == 0)
+        compat_execve_kprobe_state = 0x1;
+
+	return ret;
+}
+
+void unregister_kprobe_compat_execve(void)
+{
+	unregister_kretprobe(&compat_execve_kretprobe);
+}
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
+int compat_execveat_register_kprobe(void)
+{
+	int ret;
+	ret = register_kretprobe(&compat_execveat_kretprobe);
+	if (ret == 0)
+        compat_execveat_kretprobe_state = 0x1;
+
+	return ret;
+}
+
+void unregister_kprobe_compat_execveat(void)
+{
+	unregister_kretprobe(&compat_execveat_kretprobe);
+}
+#endif
+#endif
+
 void unregister_kprobe_execve(void)
 {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
 	unregister_kretprobe(&execve_kretprobe);
-#else
-	unregister_kretprobe(&execve_kretprobe);
-#endif
 }
 
 int create_file_register_kprobe(void)
@@ -1765,10 +2053,17 @@ void uninstall_kprobe(void)
 	if (update_cred_kprobe_state == 0x1)
 	    unregister_kprobe_update_cred();
 
-    #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
     if (execveat_kretprobe_state == 0x1)
         unregister_kprobe_execveat();
-    #endif
+#endif
+
+#ifdef CONFIG_COMPAT
+    unregister_kprobe_compat_execve();
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
+    unregister_kprobe_compat_execveat();
+#endif
+#endif
 
 }
 
@@ -1787,79 +2082,71 @@ int __init smith_init(void)
     if (CONNECT_HOOK == 1) {
 	    ret = connect_register_kprobe();
 	    if (ret < 0) {
-	    	uninstall_share_mem();
 		    printk(KERN_INFO "[SMITH] connect register_kprobe failed, returned %d\n", ret);
-		    return -1;
 	    }
 	}
 
     if (EXECVE_HOOK == 1) {
 	    ret = execve_register_kprobe();
 	    if (ret < 0) {
-		    uninstall_kprobe();
-		    uninstall_share_mem();
 		    printk(KERN_INFO "[SMITH] execve register_kprobe failed, returned %d\n", ret);
-	    	return -1;
 	    }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
 	    ret = execveat_register_kprobe();
        	if (ret < 0) {
-       	    uninstall_kprobe();
-       	    uninstall_share_mem();
-       	    printk(KERN_INFO "[SMITH] execve register_kprobe failed, returned %d\n", ret);
-       	   	return -1;
+       	    printk(KERN_INFO "[SMITH] execveat register_kprobe failed, returned %d\n", ret);
        	}
+#endif
+
+#ifdef CONFIG_COMPAT
+	    ret = compat_execve_register_kprobe();
+	    if (ret < 0) {
+		    printk(KERN_INFO "[SMITH] compat_execve register_kprobe failed, returned %d\n", ret);
+	    }
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
+	    ret = compat_execveat_register_kprobe();
+       	if (ret < 0) {
+       	    printk(KERN_INFO "[SMITH] compat_execveat register_kprobe failed, returned %d\n", ret);
+       	}
+#endif
+
 #endif
 	}
 
     if (CREATE_FILE_HOOK == 1) {
 	    ret = create_file_register_kprobe();
 	    if (ret < 0) {
-		    uninstall_kprobe();
-		    uninstall_share_mem();
 		    printk(KERN_INFO "[SMITH] create_file register_kprobe failed, returned %d\n", ret);
-		    return -1;
 	    }
 	}
 
     if (PTRACE_HOOK == 1) {
 	    ret = ptrace_register_kprobe();
 	    if (ret < 0) {
-		    uninstall_kprobe();
-		    uninstall_share_mem();
 		    printk(KERN_INFO "[SMITH] ptrace register_kprobe failed, returned %d\n", ret);
-		    return -1;
 	    }
 	}
 
     if (DNS_HOOK == 1) {
 	ret = recvfrom_register_kprobe();
 	    if (ret < 0) {
-		    uninstall_kprobe();
-		    uninstall_share_mem();
 		    printk(KERN_INFO "[SMITH] recvfrom register_kprobe failed, returned %d\n", ret);
-		    return -1;
 	    }
 	}
 
     if (LOAD_MODULE_HOOK == 1) {
 	    ret = load_module_register_kprobe();
 	    if (ret < 0) {
-		    uninstall_kprobe();
-		    uninstall_share_mem();
 		    printk(KERN_INFO "[SMITH] load_module register_kprobe failed, returned %d\n", ret);
-		    return -1;
 	    }
 	}
 
 	if (UPDATE_CRED_HOOK == 1) {
 	    ret = update_cred_register_kprobe();
     	if (ret < 0) {
-    	    uninstall_kprobe();
-    	    uninstall_share_mem();
     	    printk(KERN_INFO "[SMITH] update_cred register_kprobe failed, returned %d\n", ret);
-    	    return -1;
     	}
 	}
 
