@@ -1014,7 +1014,6 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     char *result_str = NULL;
     char *abs_path = NULL;
     char *pname = NULL;
-    char *socket_pname = NULL;
     char *tmp_stdin = NULL;
     char *tmp_stdout = NULL;
     char *argv = NULL;
@@ -1029,6 +1028,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 	    int sa_family = -1;
         char *pid_tree = "-1";
         char *pname_buf = "-2";
+        char *socket_pname = "-1";
         char *socket_pname_buf = "-2";
         struct execve_data *data;
         struct fdtable *files;
@@ -1373,7 +1373,6 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     unsigned int sessionid;
     char *result_str = NULL;
     char *pname = NULL;
-    char *socket_pname = NULL;
     char *tmp_stdin = NULL;
     char *tmp_stdout = NULL;
     char *comm = NULL;
@@ -1385,6 +1384,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 		int socket_check = 0;
 		int tty_name_len = 0;
     	char *pid_tree;
+    	char *socket_pname = "-1";
     	char *socket_pname_buf = "-2";
     	const char *d_name = "-1";
     	int sa_family = -1;
