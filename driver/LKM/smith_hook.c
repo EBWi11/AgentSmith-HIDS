@@ -632,7 +632,7 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
                 len = strnlen_user(native, MAX_ARG_STRLEN);
                 if(!len)
                     break;
-                else if(len > 11) {
+                else if(len > 14) {
                     memset(buf, 0, 255);
                     if (copy_from_user(buf, native, 255))
                         break;
@@ -746,7 +746,7 @@ int compat_execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs 
                 len = strnlen_user(native, MAX_ARG_STRLEN);
                 if(!len)
                     break;
-                else if(len > 11) {
+                else if(len > 14) {
                     memset(buf, 0, 255);
                     if (copy_from_user(buf, native, 255))
                         break;
@@ -852,7 +852,7 @@ int execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                 len = strnlen_user(native, MAX_ARG_STRLEN);
                 if(!len)
                     break;
-                else if(len > 11) {
+                else if(len > 14) {
                     memset(buf, 0, 255);
                     if (copy_from_user(buf, native, 255))
                         break;
@@ -957,7 +957,7 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                 len = strnlen_user(native, MAX_ARG_STRLEN);
                 if(!len)
                     break;
-                else if(len > 11) {
+                else if(len > 14) {
                     memset(buf, 0, 255);
                     if (copy_from_user(buf, native, 255))
                         break;
@@ -1080,7 +1080,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             task_files = files_fdtable(task->files);
 
             for (i = 0; task_files->fd[i] != NULL; i++) {
-                if(i>25)
+                if(i>20)
                     break;
 
                 d_name = d_path(&(task_files->fd[i]->f_path), fd_buff, 24);
@@ -1252,7 +1252,7 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
                 len = strnlen_user(native, MAX_ARG_STRLEN);
                 if(!len)
                     break;
-                else if(len > 11) {
+                else if(len > 14) {
                     memset(buf, 0, 255);
                     if (copy_from_user(buf, native, 255))
                         break;
@@ -1336,7 +1336,7 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                 len = strnlen_user(native, MAX_ARG_STRLEN);
                 if(!len)
                     break;
-                else if(len > 11) {
+                else if(len > 14) {
                     memset(buf, 0, 255);
                     if (copy_from_user(buf, native, 255))
                         break;
@@ -1439,7 +1439,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             task_files = files_fdtable(task->files);
 
             for (i = 0; task_files->fd[i] != NULL; i++) {
-                if(i > 25)
+                if(i > 20)
                     break;
 
                 d_name = d_path(&(task_files->fd[i]->f_path), fd_buff, 24);
