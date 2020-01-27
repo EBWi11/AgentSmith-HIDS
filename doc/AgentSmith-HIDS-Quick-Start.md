@@ -84,10 +84,11 @@ Note: Since the Agent obtains the local IP through the command: hostname -i, ple
 | CONNECT_HOOK     | connect() Hook Switch:<br />1. Enable;<br />Default:1        |
 | DNS_HOOK         | DNS Hook Switch:<br />1. Enable;<br />Default:0              |
 | PTRACE_HOOK      | Porcess Injection Detect Hook Switch:<br />1. Enable;<br />Default:1 |
-| FSNOTIFY_HOOK    | Create File Detect Hook Switch:<br />1. Enable;<br />Default:0 |
+| CREATE_FILE_HOOK | Create File Detect Hook Switch:<br />1. Enable;<br />Default:0 |
 | LOAD_MODULE_HOOK | init_module() Hook Switch:<br />1. Enable;<br />Default:1    |
 | EXIT_PROTECT     | Protect the agent itself from being rmmod:<br />1.Enable;<br />Default: 0 |
-
+| ROOTKIT_CHECK    | Regularly detect rootkit behavior. The default is 15 seconds:<br />1.Enable;<br />Default: 1 |
+| UPDATE_CRED_HOOK | Detect abnormal process Cred changes in real time:<br />1.Enable;<br />Default: 1 |
 
 
 
