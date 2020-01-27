@@ -82,9 +82,9 @@ Note: Since the Agent obtains the local IP through the command: hostname -i, ple
 | ---------------- | ------------------------------------------------------------ |
 | EXECVE_HOOK      | execve() Hook Switch:<br />1. Enable;<br />Default:1         |
 | CONNECT_HOOK     | connect() Hook Switch:<br />1. Enable;<br />Default:1        |
-| DNS_HOOK         | DNS Hook Switch:<br />1. Enable;<br />Default:0              |
+| DNS_HOOK         | DNS Hook Switch:<br />1. Enable;<br />Default:1              |
 | PTRACE_HOOK      | Porcess Injection Detect Hook Switch:<br />1. Enable;<br />Default:1 |
-| CREATE_FILE_HOOK | Create File Detect Hook Switch:<br />1. Enable;<br />Default:0 |
+| CREATE_FILE_HOOK | Create File Detect Hook Switch:<br />1. Enable;<br />Default:1 |
 | LOAD_MODULE_HOOK | init_module() Hook Switch:<br />1. Enable;<br />Default:1    |
 | EXIT_PROTECT     | Protect the agent itself from being rmmod:<br />1.Enable;<br />Default: 0 |
 | ROOTKIT_CHECK    | Regularly detect rootkit behavior. The default is 15 seconds:<br />1.Enable;<br />Default: 1 |
