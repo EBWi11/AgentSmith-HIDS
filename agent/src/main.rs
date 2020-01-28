@@ -218,12 +218,12 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                         } else if i == 3 {
                             tmp_sa_family = s.clone();
                         } else if i == 6 {
-                            if tmp_sa_family == "4" {
+                            if tmp_sa_family == "2" {
                                 if ipv4_whitelist_range.contains(&s.parse::<Ipv4Addr>().unwrap()) {
                                     msg_type = "-1";
                                     break;
                                 }
-                            } else if tmp_sa_family == "6" {
+                            } else if tmp_sa_family == "10" {
                                 if ipv6_whitelist_range.contains(&s.parse::<Ipv6Addr>().unwrap()) {
                                     msg_type = "-1";
                                     break;
