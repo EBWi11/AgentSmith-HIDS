@@ -30,6 +30,11 @@ The comprehensiveness of information which can be collected by this agent was on
 * User Login monitoring
 
 
+### Usage scenarios/methods of AgentSmith-HIDS (to be added)
+
+* [How to detect reverse shell by AgentSmith HIDS](doc/How-to-detect-reverse-shell-by-AgentSmith-HIDS/How-to-detect-reverse-shell-by-AgentSmith-HIDS.md)
+
+
 ### About the compatibility with Kernel version
 
 * Kernel > 2.6.25

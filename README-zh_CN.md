@@ -32,6 +32,12 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 * 用户登陆监控
 
 
+### AgentSmith-HIDS的使用场景/方式(待补充)
+
+* [如何利用AgentSmith-HIDS检测反弹shell](doc/How-to-detect-reverse-shell-by-AgentSmith-HIDS/如何利用AgentSmith-HIDS检测反弹shell.md)
+
+
+
 ### 关于内核版本兼容性
 
 * Kernel > 2.6.25
