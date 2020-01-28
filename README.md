@@ -32,7 +32,7 @@ The comprehensiveness of information which can be collected by this agent was on
 
 ### Usage scenarios/methods of AgentSmith-HIDS (to be added)
 
-* [How to detect reverse shell by AgentSmith HIDS](doc/How-to-detect-reverse-shell-by-AgentSmith-HIDS/How-to-detect-reverse-shell-by-AgentSmith-HIDS.md)
+* [How to detect reverse shell by AgentSmith HIDS](doc/How-to-use-AgentSmith-HIDS-to-detect-reverse-shell/How-to-detect-reverse-shell-by-AgentSmith-HIDS.md)
 
 
 ### About the compatibility with Kernel version

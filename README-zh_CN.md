@@ -34,7 +34,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ### AgentSmith-HIDS的使用场景/方式(待补充)
 
-* [如何利用AgentSmith-HIDS检测反弹shell](doc/How-to-detect-reverse-shell-by-AgentSmith-HIDS/如何利用AgentSmith-HIDS检测反弹shell.md)
+* [如何利用AgentSmith-HIDS检测反弹shell](doc/How-to-use-AgentSmith-HIDS-to-detect-reverse-shell/如何利用AgentSmith-HIDS检测反弹shell.md)
 
 
 
