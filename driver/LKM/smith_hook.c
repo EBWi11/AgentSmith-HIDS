@@ -3,7 +3,7 @@
 * Author:	E_BWill
 * Year:		2019
 * File:		smith_hook.c
-* Description:	get execve,connect,ptrace,load_module,dns_query,create_file,cred_change,proc_file_hook,syscall_hook,lkm_hidden,interrupts_hook
+* Description:	get execve,connect,ptrace,load_module,dns_query,create_file,cred_change,proc_file_hook,syscall_hook,lkm_hidden,interrupts_hook info
 
 * AgentSmith-HIDS is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -2375,4 +2375,5 @@ module_exit(smith_exit)
 MODULE_LICENSE("GPL v2");
 MODULE_VERSION("1.2.0");
 MODULE_AUTHOR("E_Bwill <cy_sniper@yeah.net>");
-MODULE_DESCRIPTION("hook execve,connect,ptrace,load_module,dns,create_file");
+MODULE_DESCRIPTION("get execve,connect,ptrace,load_module,dns_query,create_file,cred_change,"
+                   "proc_file_hook,syscall_hook,lkm_hidden,interrupts_hook info");
