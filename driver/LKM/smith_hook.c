@@ -30,7 +30,7 @@
 #define CREATE_FILE_HOOK 1
 #define PTRACE_HOOK 1
 #define DNS_HOOK 1
-#define MPROTECT_HOOK 1
+#define MPROTECT_HOOK 0
 #define LOAD_MODULE_HOOK 1
 #define UPDATE_CRED_HOOK 1
 
