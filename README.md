@@ -23,7 +23,7 @@ The comprehensiveness of information which can be collected by this agent was on
 
 ### Major abilities of AgentSmith-HIDS：
 
-* Kernel stack module hooks **execve, connect, process inject, create file, DNS query, load LKM** behaviors via Kprobe，and is also capable of monitoring containers by being compatible with Linux namespace.
+* Kernel stack module hooks **execve, connect, process inject, mprotect, create file, DNS query, load LKM** behaviors via Kprobe，and is also capable of monitoring containers by being compatible with Linux namespace.
 * User stack module utilize built in detection functions including queries of **User List**，**Listening ports list**，**System RPM list**，**Schedule jobs**
 * **AntiRootkit**，From: [Tyton](https://github.com/nbulischeck/tyton) ,for now add **PROC_FILE_HOOK**，**SYSCALL_HOOK**，**LKM_HIDDEN**，**INTERRUPTS_HOOK** feature，but only wark on Kernel > 3.10.
 * Cred Change monitoring (sudo/su/sshd except)
@@ -230,6 +230,34 @@ Achieved by hooking **sys_ptrace()**, example:
 }
 ```
 
+
+### mprotect Hook
+
+Achieved by hooking **mprotect()**, example:
+
+```json
+{
+    "uid":"0",
+    "data_type":"10",
+    "exe":"/root/dlinject/main",
+    "pid":"9729",
+    "ppid":"2443",
+    "pgid":"9729",
+    "tgid":"9729",
+    "comm":"main",
+    "start":"140377101094912",
+    "len":"16384",
+    "prot":"1",
+    "nodename":"test",
+    "sessionid":"4",
+    "user":"root",
+    "time":"1582823732418",
+    "local_ip":"192.168.165.152",
+    "hostname":"test",
+    "exe_md5":"716d8dc1f34427ed1893dc9958e96b2f"
+}
+
+```
 
 ### Load LKM File Hook
 

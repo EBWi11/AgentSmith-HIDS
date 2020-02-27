@@ -30,9 +30,11 @@
 #include <net/tcp.h>
 #include <linux/namei.h>
 #include <linux/tty.h>
+#include <linux/mman.h>
 
 #define SMITH_NAME_MAX	(PATH_MAX - sizeof(struct filename))
 
+#define MPROTECT_TYPE "10"
 #define EXECVE_TYPE "59"
 #define CONNECT_TYPE "42"
 #define PTRACE_TYPE "101"
