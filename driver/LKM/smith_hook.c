@@ -30,6 +30,7 @@
 #define CREATE_FILE_HOOK 1
 #define PTRACE_HOOK 1
 #define DNS_HOOK 1
+#define MPROTECT_HOOK 1
 #define LOAD_MODULE_HOOK 1
 #define UPDATE_CRED_HOOK 1
 
@@ -44,6 +45,7 @@ char ptrace_kprobe_state = 0x0;
 char recvfrom_kprobe_state = 0x0;
 char load_module_kprobe_state = 0x0;
 char update_cred_kprobe_state = 0x0;
+char mprotect_cred_kprobe_state = 0x0;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
 char execveat_kretprobe_state = 0x0;
