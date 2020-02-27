@@ -1998,11 +1998,44 @@ int mprotect_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 int mprotect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
     if (share_mem_flag != -1) {
+        int retval;
         struct mprotect_data *data;
         data = (struct mprotect_data *)ri->data;
         unsigned long prot = data->prot;
-        if(prot & PROT_READ || prot & PROT_EXEC) {
-            printk("mprotect");
+        retval = regs_return_value(regs);
+        if(retval == 0) {
+            if(prot & PROT_READ || prot & PROT_EXEC) {
+                unsigned int sessionid;
+                int result_str_len;
+                char *buffer = NULL;
+                char *comm = NULL;
+                char *result_str = NULL;
+                char *abs_path;
+
+                if(strlen(current->comm) > 0)
+                    comm = str_replace(current->comm, "\n", " ");
+                else
+                    comm = "";
+
+                sessionid = get_sessionid();
+
+                buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
+                abs_path = get_exe_file(current, buffer, PATH_MAX);
+
+                result_str_len = strlen(current->nsproxy->uts_ns->name.nodename)
+                                 + strlen(comm) + strlen(abs_path) + 192;
+
+                result_str = kzalloc(result_str_len, GFP_ATOMIC);
+                snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%lu%s%u%s%lu%s%s%s%u",
+                         get_current_uid(), "\n", MPROTECT_TYPE, "\n", abs_path,
+                         "\n", current->pid, "\n", current->real_parent->pid, "\n",
+                         pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                         comm, "\n", data->start, "\n", data->len, "\n", data->prot,
+                         "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
+
+                send_msg_to_user(result_str, 1);
+                kfree(buffer);
+            }
         }
     }
     return 0;
