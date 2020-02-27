@@ -45,7 +45,7 @@ char ptrace_kprobe_state = 0x0;
 char recvfrom_kprobe_state = 0x0;
 char load_module_kprobe_state = 0x0;
 char update_cred_kprobe_state = 0x0;
-char mprotect_cred_kprobe_state = 0x0;
+char mprotect_kprobe_state = 0x0;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
 char execveat_kretprobe_state = 0x0;
@@ -1977,6 +1977,37 @@ int update_cred_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     return 0;
 }
 
+struct mprotect_data {
+    unsigned long start;
+    size_t len;
+    unsigned long prot;
+};
+
+int mprotect_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
+{
+    if (share_mem_flag != -1) {
+        struct mprotect_data *data;
+        data = (struct mprotect_data *)ri->data;
+        data->start = (unsigned long)p_get_arg1(regs);
+        data->len = (size_t)p_get_arg2(regs);
+        data->prot = (unsigned long)p_get_arg3(regs);
+    }
+    return 0;
+}
+
+int mprotect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
+{
+    if (share_mem_flag != -1) {
+        struct mprotect_data *data;
+        data = (struct mprotect_data *)ri->data;
+        unsigned long prot = data->prot;
+        if(prot & PROT_READ || prot & PROT_EXEC) {
+            printk("!!");
+        }
+    }
+    return 0;
+}
+
 struct kretprobe connect_kretprobe = {
     .kp.symbol_name = P_GET_SYSCALL_NAME(connect),
     .data_size  = sizeof(struct connect_data),
@@ -2055,6 +2086,14 @@ struct kretprobe update_cred_kretprobe = {
 	.handler = update_cred_handler,
 	.entry_handler = update_cred_entry_handler,
 	.maxactive = 40,
+};
+
+struct kretprobe mprotect_kretprobe = {
+    .kp.symbol_name = P_GET_SYSCALL_NAME(mprotect),
+    .data_size  = sizeof(struct mprotect_data),
+  	.handler = mprotect_handler,
+  	.entry_handler = mprotect_entry_handler,
+  	.maxactive = 40,
 };
 
 int connect_register_kprobe(void)
@@ -2219,6 +2258,22 @@ void unregister_kprobe_update_cred(void)
 	unregister_kretprobe(&update_cred_kretprobe);
 }
 
+int mprotect_register_kprobe(void)
+{
+	int ret;
+	ret = register_kretprobe(&mprotect_kretprobe);
+
+	if (ret == 0)
+        mprotect_kprobe_state = 0x1;
+
+	return ret;
+}
+
+void unregister_kprobe_mprotect(void)
+{
+	unregister_kretprobe(&mprotect_kretprobe);
+}
+
 void uninstall_kprobe(void)
 {
     if (connect_kprobe_state == 0x1)
@@ -2241,6 +2296,9 @@ void uninstall_kprobe(void)
 
 	if (update_cred_kprobe_state == 0x1)
 	    unregister_kprobe_update_cred();
+
+	if (mprotect_kprobe_state == 0x1)
+	    unregister_kprobe_mprotect();
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
     if (execveat_kretprobe_state == 0x1)
@@ -2337,6 +2395,13 @@ int __init smith_init(void)
     	if (ret < 0) {
     	    printk(KERN_INFO "[SMITH] update_cred register_kprobe failed, returned %d\n", ret);
     	}
+	}
+
+	if (MPROTECT_HOOK == 1) {
+	    ret = mprotect_register_kprobe();
+        if (ret < 0) {
+            printk(KERN_INFO "[SMITH] mprotect register_kprobe failed, returned %d\n", ret);
+        }
 	}
 
 #if (EXIT_PROTECT == 1)
