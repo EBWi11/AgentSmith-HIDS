@@ -2002,7 +2002,7 @@ int mprotect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         data = (struct mprotect_data *)ri->data;
         unsigned long prot = data->prot;
         if(prot & PROT_READ || prot & PROT_EXEC) {
-            printk("!!");
+            printk("mprotect");
         }
     }
     return 0;
