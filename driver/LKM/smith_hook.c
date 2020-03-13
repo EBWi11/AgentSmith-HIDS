@@ -109,20 +109,6 @@ int count(struct user_arg_ptr argv, int max)
     return i;
 }
 #else
-char *_dentry_path_raw(void)
-{
-    char *cwd;
-    char *pname_buf = NULL;
-    struct path pwd, root;
-    pwd = current->fs->pwd;
-    path_get(&pwd);
-    root = current->fs->root;
-    path_get(&root);
-    pname_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
-    cwd = d_path(&pwd, pname_buf, PATH_MAX);
-    kfree(pname_buf);
-    return cwd;
-}
 
 int count(char **argv, int max)
 {
@@ -148,6 +134,19 @@ int count(char **argv, int max)
 	return i;
 }
 #endif
+
+char *_dentry_path_raw(void)
+{
+    char *cwd;
+    char *pname_buf = NULL;
+    struct path pwd;
+    pwd = current->fs->pwd;
+    path_get(&pwd);
+    pname_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
+    cwd = d_path(&pwd, pname_buf, PATH_MAX);
+    kfree(pname_buf);
+    return cwd;
+}
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 38)
 char *getfullpath(struct inode *inod,char *buffer,int len)
@@ -1026,7 +1025,6 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 	    const char *d_name = "-1";
 	    int sa_family = -1;
         char *pid_tree = "-1";
-        char *pname_buf = "-2";
         char *socket_pname = "-1";
         char *socket_pname_buf = "-2";
         struct execve_data *data;
@@ -1152,12 +1150,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             tmp_stdout = "";
         }
 
-        pname_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
-        if (unlikely(!pname_buf)) {
-            pname = "-2";
-        } else {
-            pname = get_exe_file(current, pname_buf, PATH_MAX);
-        }
+        pname = _dentry_path_raw();
 
         result_str_len = strlen(argv) + strlen(pname) + strlen(abs_path) + strlen(pid_tree) + tty_name_len +
                          strlen(comm) + strlen(current->nsproxy->uts_ns->name.nodename) + strlen(data->ssh_connection) +
@@ -1178,8 +1171,6 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
         send_msg_to_user(result_str, 1);
 
-        if (likely(strcmp(pname_buf, "-2")))
-            kfree(pname_buf);
 
         if (likely(strcmp(socket_pname_buf, "-2")))
             kfree(socket_pname_buf);
