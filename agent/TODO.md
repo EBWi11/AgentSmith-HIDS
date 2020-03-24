@@ -1,7 +1,0 @@
-- [x] support data send to kafka
-- [ ] support data send to API
-- [x] support heartbeat
-- [x] support get ELF file MD5
-- [x] support whitelist
-- [x] add LRU cache
-- [x] get user login action
