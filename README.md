@@ -71,7 +71,7 @@ Achieved by hooking **sys_execve()/sys_execveat()/compat_sys_execve()/compat_sys
 {
     "uid":"0",
     "data_type":"59",
-    "run_path":"/opt/ltp/testcases/bin/growfiles",
+    "run_path":"/tmp",
     "exe":"/opt/ltp/testcases/bin/growfiles",
     "argv":"growfiles -W gf26 -D 0 -b -i 0 -L 60 -u -B 1000b -e 1 -r 128-32768:128 -R 512-64000 -T 4 -f gfsmallio-35861 -d /tmp/ltp-Ujxl8kKsKY ",
     "pid":"35861",
