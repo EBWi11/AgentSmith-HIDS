@@ -1,4 +1,4 @@
-pub const EXE_WHITELIST: &'static [&'static str] = &["/usr/libexec/pk-command-not-found","/usr/bin/chronyc","/usr/bin/as","/usr/bin/kmod","/usr/bin/ld.bfd","/usr/bin/gcc","/usr/lib64/sa/sa1","/usr/bin/date","/usr/lib64/sa","/usr/bin/test","/usr/sbin/chronyd","/usr/sbin/rsyslogd","/usr/bin/clear"];
+pub const EXE_WHITELIST: &'static [&'static str] = &["/usr/libexec/pk-command-not-found","/usr/bin/chronyc","/usr/bin/as","/usr/bin/ld.bfd","/usr/bin/gcc","/usr/lib64/sa/sa1","/usr/bin/date","/usr/lib64/sa","/usr/bin/test","/usr/sbin/chronyd"];
 pub const CONNECT_DIP_WHITELIST_IPV4: &'static [&'static str] = &["10.0.0.0/8", "172.16.0.0/16", "192.168.1.0/24", "127.0.0.1/32"];
 pub const CONNECT_DIP_WHITELIST_IPV6: &'static [&'static str] = &["::1/128"];
 
