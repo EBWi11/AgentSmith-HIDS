@@ -499,16 +499,16 @@ int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                     inet = (struct inet_sock*)sk;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
                     if (likely(inet->inet_dport)) {
-                        snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sk->sk_v6_daddr));
-                        snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sk->sk_v6_rcv_saddr));
+                        snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_daddr));
+                        snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_rcv_saddr));
                         snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
                         snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
                         flag = 1;
                     }
 #else
                     if (likely(inet->dport)) {
-                        snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(inet->pinet6->daddr));
-                        snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(inet->pinet6->saddr));
+                        snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->daddr));
+                        snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->saddr));
                         snprintf(sport, 16, "%d", Ntohs(inet->sport));
                         snprintf(dport, 16, "%d", Ntohs(inet->dport));
                         flag = 1;
@@ -1102,8 +1102,8 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                                 break;
                         #if IS_ENABLED(CONFIG_IPV6)
                             case AF_INET6:
-                                snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sk->sk_v6_daddr));
-                                snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sk->sk_v6_rcv_saddr));
+                                snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_daddr));
+                                snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_rcv_saddr));
                                 snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
                                 snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
                                 socket_check = 1;
@@ -1462,13 +1462,13 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                         #if IS_ENABLED(CONFIG_IPV6)
                             case AF_INET6:
                             #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
-                                snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sk->sk_v6_daddr));
-                                snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sk->sk_v6_rcv_saddr));
+                                snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_daddr));
+                                snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_rcv_saddr));
                                 snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
                                 snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
                             #else
-                                snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(inet->pinet6->daddr));
-                                snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(inet->pinet6->saddr));
+                                snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->daddr));
+                                snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->saddr));
                                 snprintf(sport, 16, "%d", Ntohs(inet->sport));
                                 snprintf(dport, 16, "%d", Ntohs(inet->dport));
                             #endif
@@ -1790,7 +1790,7 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     	    	        rcode = recv_data[3] & 0x0f;
     	    	        query = kzalloc(strlen(recv_data+12), GFP_ATOMIC);
     	    	        getDNSQuery(recv_data, 12, query);
-    	    	        snprintf(dip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(sin6->sin6_addr));
+    	    	        snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sin6->sin6_addr));
                         snprintf(dport, 16, "%d", Ntohs(sin6->sin6_port));
                         if (sock) {
                         #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0)
@@ -1800,7 +1800,7 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                         #endif
                             if (likely(err == 0)) {
                                 snprintf(sport, 16, "%d", Ntohs(source_addr6.sin6_port));
-                                snprintf(sip, 64, "%d:%d:%d:%d:%d:%d:%d:%d", NIP6(source_addr6.sin6_addr));
+                                snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(source_addr6.sin6_addr));
                                 sockfd_put(sock);
                             }
                         }
