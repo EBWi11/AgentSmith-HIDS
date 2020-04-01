@@ -186,8 +186,8 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
         exe_white_list.insert(i.to_string());
     }
 
-    let mut local_ip = trim_escape_character(get_machine_ip());
-    let mut hostname = trim_escape_character(get_hostname());
+    let local_ip = trim_escape_character(get_machine_ip());
+    let hostname = trim_escape_character(get_hostname());
     let local_ip_str = local_ip.as_str();
     let hostname_str = hostname.as_str();
 
@@ -459,30 +459,26 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                 exe_md5: T,
             };
 
-            let mut tmp_sa_family = "2";
-            let mut md5_str;
+
+            let md5_str;
             let mut send_flag = 0;
             let mut msg_str = String::new();
             let msg_split: Vec<&str> = msg.split("\n").collect();
-            let mut msg_type = msg_split[1];
+            let msg_type = msg_split[1];
+            let tmp_sa_family = msg_split[2];
             let mut white_list_attr: bool = false;
 
             match msg_type {
+                
                 "42" => {
-                    println!("{:#?}",msg_split);
-                    tmp_sa_family = msg_split[2];
-                    println!("{}",msg_split[5]);
-
                     if tmp_sa_family == "2" {
                         if ipv4_whitelist_range.contains(&msg_split[5].parse::<Ipv4Addr>().unwrap())
                         {
-                            msg_type = "-1";
                             white_list_attr = true;
                         }
                     } else if tmp_sa_family == "10" {
                         if ipv6_whitelist_range.contains(&msg_split[5].parse::<Ipv6Addr>().unwrap())
                         {
-                            msg_type = "-1";
                             white_list_attr = true;
                         }
                     };
@@ -605,7 +601,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                         let argv_res = trim_escape_character(msg_split[4].to_string()).clone();
                         execve_msg.argv = argv_res.as_str();
 
-                        let mut md5_tmp;
+                        let md5_tmp;
                         if execve_msg.socket_process_exe != "-1"
                             && execve_msg.socket_process_exe != "-2"
                         {
@@ -632,7 +628,6 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
   
                 "101" => {
                     if exe_white_list.contains(msg_split[6]) {
-                        msg_type = "-1";
                         white_list_attr = true;
                     };
 
@@ -673,9 +668,11 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                         } else {
                             md5_str = "-1".to_string();
                         }
+                        
                         ptrace_msg.exe_md5 = md5_str.as_str();
                         send_flag = 1;
-                        msg_str = serde_json::to_string(&msg_str).unwrap();
+
+                        msg_str = serde_json::to_string(&ptrace_msg).unwrap();
                     };
                 },
 
@@ -685,12 +682,10 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                         || msg_split[9] == agent_pid
                         || msg_split[10] == agent_pid
                     {
-                        msg_type = "-1";
                         white_list_attr = true;
                     }
 
                     if exe_white_list.contains(msg_split[6]) {
-                        msg_type = "-1";
                         white_list_attr = true;
                     }
 
@@ -745,12 +740,10 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                         || msg_split[6] == agent_pid
                         || msg_split[7] == agent_pid
                     {
-                        msg_type = "-1";
                         white_list_attr = true;
                     };
 
                     if exe_white_list.contains(msg_split[2]) {
-                        msg_type = "-1";
                         white_list_attr = true;
                     }
 
@@ -819,10 +812,9 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                         }
 
                         if !filter_check_flag {
-                            msg_type = "-1";
                         }
 
-                        let mut md5_tmp;
+                        let md5_tmp;
                         if create_file_msg.file_path != "-1" {
                             if !cache.contains_key(create_file_msg.file_path) {
                                 md5_tmp = get_md5(create_file_msg.file_path.to_string());
@@ -844,9 +836,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                 },
 
                 "603" => {
-                    println!("{}",msg_type);
                     if exe_white_list.contains(msg_split[2]) {
-                        msg_type = "-1";
                         white_list_attr = true;
                     }
 
@@ -867,8 +857,8 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                             time: msg_split[12],
                             local_ip_str: local_ip_str,
                             hostname_str: hostname_str,
-                            exe_md5: msg_split[15],
-                            load_file_md5: msg_split[16],
+                            exe_md5: "",
+                            load_file_md5: "",
                         };
 
                         if load_module_msg.exe != "-1" {
@@ -885,8 +875,8 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                             md5_str = "-1".to_string();
                         }
                         load_module_msg.exe_md5 = md5_str.as_str();
-
-                        let mut md5_tmp;
+                        
+                        let md5_tmp;
                         if load_module_msg.lkm_file != "-1" {
                             if !cache.contains_key(load_module_msg.lkm_file) {
                                 md5_tmp = get_md5(load_module_msg.lkm_file.to_string());
@@ -900,16 +890,16 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                         } else {
                             md5_tmp = "-1".to_string();
                         }
+                        
                         load_module_msg.load_file_md5 = md5_tmp.as_str();
                         send_flag = 1;
+                    
                         msg_str = serde_json::to_string(&load_module_msg).unwrap();
                     }
                 },
 
                 "604" => {
-                    println!("{}",msg_type);
                     if exe_white_list.contains(msg_split[2]) {
-                        msg_type = "-1";
                         white_list_attr = true;
                     }
 
@@ -953,9 +943,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                 },
 
                 "10" => {
-                    println!("{}",msg_type);
                     if exe_white_list.contains(msg_split[2]) {
-                        msg_type = "-1";
                         white_list_attr = true;
                     }
 
@@ -1001,7 +989,6 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                 },
 
                 "700" => {
-                    println!("{}",msg_type);
                     let proc_file_hook_msg = ProcFileHookMsgStruct {
                         uid: msg_split[0],
                         data_type: msg_split[1],
@@ -1016,7 +1003,6 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                 },
 
                 "701" => {
-                    println!("{}",msg_type);
                     let syscall_hook_msg = SyscallHookMsgStruct {
                         uid: msg_split[0],
                         data_type: msg_split[1],
@@ -1033,7 +1019,6 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                 },
 
                 "702" => {
-                    println!("{}",msg_type);
                     let module_hidden_msg = ModuleHiddenMsgStruct {
                         uid: msg_split[0],
                         data_type: msg_split[1],
@@ -1048,7 +1033,6 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                 },
 
                 "703" => {
-                    println!("{}",msg_type);
                     let interrupt_hook_msg = InterruptHookMsgStruct {
                         uid: msg_split[0],
                         data_type: msg_split[1],
@@ -1201,8 +1185,8 @@ fn action_wapper() {
         };
         let handle = thread::spawn(move || action());
         match handle.join() {
-            Err(err) => {
-                println!("{:#?}",err);
+            Err(_) => {
+                println!("MAIN_ERROR");
                 thread::sleep(time::Duration::from_secs(3));
             }
             Ok(_) => {}
