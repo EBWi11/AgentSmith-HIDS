@@ -1,8 +1,11 @@
 extern crate pipers;
+extern crate serde;
+extern crate serde_json;
 
 use chrono::prelude::*;
 use std::collections::HashMap;
 use std::process::Command;
+use serde::{Serialize, Deserialize};
 
 pub struct Detective {}
 
