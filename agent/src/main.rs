@@ -1147,7 +1147,7 @@ fn start_hreatbread(tx: Sender<Vec<u8>>) {
         });
         match handle.join() {
             Err(e) => {
-                println!("HREATBREAD_ERROR: {}", e);
+                println!("HREATBREAD_ERROR: {:?}", e);
                 thread::sleep(time::Duration::from_secs(3));
             }
             Ok(_) => {}
@@ -1186,7 +1186,7 @@ fn action_wapper() {
         let handle = thread::spawn(move || action());
         match handle.join() {
             Err(e) => {
-                println!("MAIN_ERROR: {}", e);
+                println!("MAIN_ERROR: {:?}", e);
                 thread::sleep(time::Duration::from_secs(3));
             }
             Ok(_) => {}
