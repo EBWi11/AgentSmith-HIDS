@@ -322,9 +322,11 @@ char *str_replace(char *orig, char *rep, char *with)
 char *get_pid_tree(void)
 {
     int data_len;
-    char *tmp_data;
-    char *res;
-    char *comm;
+    int limit = 7;
+    int limit_index = 0;
+    char *tmp_data = NULL;
+    char *res = NULL;
+    char *comm = NULL;
     char pid[sizeof(size_t)];
     struct task_struct *task;
 
@@ -343,6 +345,10 @@ char *get_pid_tree(void)
     strcat(tmp_data,")");
 
     while(task->pid != 1){
+        limit_index = limit_index + 1;
+        if(limit_index > limit)
+            break;
+
         task = task->parent;
         data_len = strlen(task->comm) + sizeof(size_t) + 8;
 
@@ -1076,6 +1082,8 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
 	if (share_mem_flag != -1) {
 	    int i;
+	    int limit = 5;
+        int limit_index = 0;
 	    int free_abs_path;
 	    pid_t socket_pid = -1;
 	    int socket_check = 0;
@@ -1133,6 +1141,10 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
         task = current;
         while(task->pid != 1) {
+            limit_index = limit_index + 1;
+            if(limit_index > limit)
+                break;
+
             task_files = files_fdtable(task->files);
 
             for (i = 0; task_files->fd[i] != NULL; i++) {
@@ -1489,6 +1501,10 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
         task = current;
         while(task->pid != 1) {
+            limit_index = limit_index + 1;
+            if(limit_index > limit)
+                break;
+
             task_files = files_fdtable(task->files);
 
             for (i = 0; task_files->fd[i] != NULL; i++) {
