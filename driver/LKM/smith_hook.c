@@ -667,6 +667,7 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
                 abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
                 if (unlikely(IS_ERR(abs_path)))
                     abs_path = "-1";
+                kfree(exe_file_buf);
             }
             path_put(&exe_file);
          }
@@ -781,6 +782,7 @@ int compat_execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs 
                 abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
                 if (unlikely(IS_ERR(abs_path)))
                     abs_path = "-1";
+                kfree(exe_file_buf);
             }
             path_put(&exe_file);
          }
@@ -887,6 +889,7 @@ int execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                 abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
                 if (unlikely(IS_ERR(abs_path)))
                     abs_path = "-1";
+                kfree(exe_file_buf);
             }
             path_put(&exe_file);
          }
@@ -992,6 +995,7 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                 abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
                 if (unlikely(IS_ERR(abs_path)))
                     abs_path = "-1";
+                kfree(exe_file_buf);
             }
             path_put(&exe_file);
          }
