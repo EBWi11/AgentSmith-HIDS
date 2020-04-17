@@ -563,6 +563,7 @@ struct execve_data {
     char *argv;
     char *ssh_connection;
     char *ld_preload;
+    int *free_abs_path;
 };
 
 #ifdef CONFIG_COMPAT
@@ -570,6 +571,8 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
 {
     int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, error = 0;
     int env_len = 0;
+    int free_abs_path = 0;
+    char *tmp_buf = "0";
     char *exe_file_buf = "-2";
     char *argv_res = NULL;
     char *abs_path = NULL;
@@ -656,24 +659,35 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
         else
             argv_res_tmp = "";
 
-        error = user_path_at(AT_FDCWD, (const char __user *)p_get_arg1(regs), LOOKUP_FOLLOW, &exe_file);
-        if (unlikely(error)) {
+        tmp_buf = kzalloc(256, GFP_ATOMIC);
+        if(copy_from_user(tmp_buf, (const char __user *)p_get_arg1(regs), 256))
             abs_path = "-1";
-        } else {
-            exe_file_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
-            if (unlikely(!exe_file_buf)) {
-                abs_path = "-2";
+        else {
+            if(unlikely(strcmp(tmp_buf, "/") != 0 && strcmp(tmp_buf, ".") != 0)) {
+                abs_path = tmp_buf;
+                free_abs_path = 1;
             } else {
-                abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
-                if (unlikely(IS_ERR(abs_path)))
+                error = user_path_at(AT_FDCWD, (const char __user *)p_get_arg1(regs), LOOKUP_FOLLOW, &exe_file);
+                if (unlikely(error)) {
                     abs_path = "-1";
-                kfree(exe_file_buf);
+                } else {
+                    exe_file_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
+                    if (unlikely(!exe_file_buf)) {
+                        abs_path = "-2";
+                    } else {
+                        abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
+                        if (unlikely(IS_ERR(abs_path)))
+                            abs_path = "-1";
+                        kfree(exe_file_buf);
+                    }
+                    path_put(&exe_file);
+                }
             }
-            path_put(&exe_file);
-         }
+        }
 
         data->argv = argv_res_tmp;
         data->abs_path = abs_path;
+        data->free_abs_path = free_abs_path;
 
         if(likely(argv_len > 0))
             kfree(argv_res);
@@ -685,6 +699,8 @@ int compat_execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs 
 {
     int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, error = 0;
     int env_len = 0;
+    int free_abs_path = 0;
+    char *tmp_buf = "0";
     char *exe_file_buf = "-2";
     char *argv_res = NULL;
     char *abs_path = NULL;
@@ -771,24 +787,35 @@ int compat_execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs 
         else
             argv_res_tmp = "";
 
-        error = user_path_at(AT_FDCWD, (const char __user *)p_get_arg2(regs), LOOKUP_FOLLOW, &exe_file);
-        if (unlikely(error)) {
+        tmp_buf = kzalloc(256, GFP_ATOMIC);
+        if(copy_from_user(tmp_buf, (const char __user *)p_get_arg1(regs), 256))
             abs_path = "-1";
-        } else {
-            exe_file_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
-            if (unlikely(!exe_file_buf)) {
-                abs_path = "-2";
+        else {
+            if(unlikely(strcmp(tmp_buf, "/") != 0 && strcmp(tmp_buf, ".") != 0)) {
+                abs_path = tmp_buf;
+                free_abs_path = 1;
             } else {
-                abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
-                if (unlikely(IS_ERR(abs_path)))
+                error = user_path_at(AT_FDCWD, (const char __user *)p_get_arg1(regs), LOOKUP_FOLLOW, &exe_file);
+                if (unlikely(error)) {
                     abs_path = "-1";
-                kfree(exe_file_buf);
+                } else {
+                    exe_file_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
+                    if (unlikely(!exe_file_buf)) {
+                        abs_path = "-2";
+                    } else {
+                        abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
+                        if (unlikely(IS_ERR(abs_path)))
+                            abs_path = "-1";
+                        kfree(exe_file_buf);
+                    }
+                    path_put(&exe_file);
+                }
             }
-            path_put(&exe_file);
-         }
+        }
 
         data->argv = argv_res_tmp;
         data->abs_path = abs_path;
+        data->free_abs_path = free_abs_path;
 
         if(likely(argv_len > 0))
             kfree(argv_res);
@@ -801,6 +828,8 @@ int execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
     int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, error = 0;
     int env_len = 0;
+    int free_abs_path = 0;
+    char *tmp_buf = "0";
     char *exe_file_buf = "-2";
     char *argv_res = NULL;
     char *abs_path = NULL;
@@ -878,24 +907,35 @@ int execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         else
             argv_res_tmp = "";
 
-        error = user_path_at(AT_FDCWD, (const char __user *)p_get_arg2(regs), LOOKUP_FOLLOW, &exe_file);
-        if (unlikely(error)) {
+        tmp_buf = kzalloc(256, GFP_ATOMIC);
+        if(copy_from_user(tmp_buf, (const char __user *)p_get_arg1(regs), 256))
             abs_path = "-1";
-        } else {
-            exe_file_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
-            if (unlikely(!exe_file_buf)) {
-                abs_path = "-2";
+        else {
+            if(unlikely(strcmp(tmp_buf, "/") != 0 && strcmp(tmp_buf, ".") != 0)) {
+                abs_path = tmp_buf;
+                free_abs_path = 1;
             } else {
-                abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
-                if (unlikely(IS_ERR(abs_path)))
+                error = user_path_at(AT_FDCWD, (const char __user *)p_get_arg1(regs), LOOKUP_FOLLOW, &exe_file);
+                if (unlikely(error)) {
                     abs_path = "-1";
-                kfree(exe_file_buf);
+                } else {
+                    exe_file_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
+                    if (unlikely(!exe_file_buf)) {
+                        abs_path = "-2";
+                    } else {
+                        abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
+                        if (unlikely(IS_ERR(abs_path)))
+                            abs_path = "-1";
+                        kfree(exe_file_buf);
+                    }
+                    path_put(&exe_file);
+                }
             }
-            path_put(&exe_file);
-         }
+        }
 
         data->argv = argv_res_tmp;
         data->abs_path = abs_path;
+        data->free_abs_path = free_abs_path;
 
         if(likely(argv_len > 0))
             kfree(argv_res);
@@ -907,6 +947,8 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
     int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, error = 0;
     int env_len = 0;
+    int free_abs_path = 0;
+    char *tmp_buf = "0";
     char *exe_file_buf = "-2";
     char *argv_res = NULL;
     char *abs_path = NULL;
@@ -984,24 +1026,35 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         else
             argv_res_tmp = "";
 
-        error = user_path_at(AT_FDCWD, (const char __user *)p_get_arg1(regs), LOOKUP_FOLLOW, &exe_file);
-        if (unlikely(error)) {
+        tmp_buf = kzalloc(256, GFP_ATOMIC);
+        if(copy_from_user(tmp_buf, (const char __user *)p_get_arg1(regs), 256))
             abs_path = "-1";
-        } else {
-            exe_file_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
-            if (unlikely(!exe_file_buf)) {
-                abs_path = "-2";
+        else {
+            if(unlikely(strcmp(tmp_buf, "/") != 0 && strcmp(tmp_buf, ".") != 0)) {
+                abs_path = tmp_buf;
+                free_abs_path = 1;
             } else {
-                abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
-                if (unlikely(IS_ERR(abs_path)))
+                error = user_path_at(AT_FDCWD, (const char __user *)p_get_arg1(regs), LOOKUP_FOLLOW, &exe_file);
+                if (unlikely(error)) {
                     abs_path = "-1";
-                kfree(exe_file_buf);
+                } else {
+                    exe_file_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
+                    if (unlikely(!exe_file_buf)) {
+                        abs_path = "-2";
+                    } else {
+                        abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
+                        if (unlikely(IS_ERR(abs_path)))
+                            abs_path = "-1";
+                        kfree(exe_file_buf);
+                    }
+                    path_put(&exe_file);
+                }
             }
-            path_put(&exe_file);
-         }
+        }
 
         data->argv = argv_res_tmp;
         data->abs_path = abs_path;
+        data->free_abs_path = free_abs_path;
 
         if(likely(argv_len > 0))
             kfree(argv_res);
@@ -1023,6 +1076,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
 	if (share_mem_flag != -1) {
 	    int i;
+	    int free_abs_path;
 	    pid_t socket_pid = -1;
 	    int socket_check = 0;
 	    int tty_name_len = 0;
@@ -1055,6 +1109,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         data = (struct execve_data *)ri->data;
         argv = data -> argv;
         abs_path = data -> abs_path;
+        free_abs_path = data -> free_abs_path;
 
 	    sessionid = get_sessionid();
 
@@ -1175,9 +1230,11 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
         send_msg_to_user(result_str, 1);
 
-
         if (likely(strcmp(socket_pname_buf, "-2")))
             kfree(socket_pname_buf);
+
+        if (free_abs_path == 1)
+            kfree(data->abs_path);
 
         kfree(data->ld_preload);
         kfree(data->ssh_connection);
@@ -1375,6 +1432,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 	if (share_mem_flag != -1) {
 	    pid_t socket_pid = -1;
 		int i;
+		int free_abs_path;
 		int socket_check = 0;
 		int tty_name_len = 0;
     	char *pid_tree;
@@ -1407,6 +1465,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
         data = (struct execve_data *)ri->data;
         argv = data -> argv;
+        free_abs_path = data -> free_abs_path;
 
         sessionid = get_sessionid();
 
@@ -1554,6 +1613,9 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
         if (likely(strcmp(socket_pname_buf, "-2")))
             kfree(socket_pname_buf);
+
+        if (free_abs_path == 1)
+            kfree(data->abs_path);
 
         kfree(data->ld_preload);
         kfree(data->ssh_connection);
