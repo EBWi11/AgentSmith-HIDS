@@ -1148,7 +1148,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             task_files = files_fdtable(task->files);
 
             for (i = 0; task_files->fd[i] != NULL; i++) {
-                if(i>20)
+                if(i > 8)
                     break;
 
                 d_name = d_path(&(task_files->fd[i]->f_path), fd_buff, 24);
@@ -1508,7 +1508,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             task_files = files_fdtable(task->files);
 
             for (i = 0; task_files->fd[i] != NULL; i++) {
-                if(i > 20)
+                if(i > 8)
                     break;
 
                 d_name = d_path(&(task_files->fd[i]->f_path), fd_buff, 24);
