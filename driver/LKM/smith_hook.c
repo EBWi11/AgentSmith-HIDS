@@ -563,7 +563,7 @@ struct execve_data {
     char *argv;
     char *ssh_connection;
     char *ld_preload;
-    int *free_abs_path;
+    int free_abs_path;
 };
 
 #ifdef CONFIG_COMPAT
