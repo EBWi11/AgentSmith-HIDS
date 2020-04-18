@@ -1145,7 +1145,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                 else
                     tty_name = tty->name;
             } else
-                tty_name = tty->name;
+                tty_name = "-1";
         } else
             tty_name = "-1";
 
@@ -1517,7 +1517,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                 else
                     tty_name = tty->name;
             } else
-                tty_name = tty->name;
+                tty_name = "-1";
         } else
             tty_name = "-1";
 
