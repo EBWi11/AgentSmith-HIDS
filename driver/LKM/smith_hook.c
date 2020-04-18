@@ -1121,21 +1121,27 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
 	    sessionid = get_sessionid();
 
-        if(strlen(current->comm) > 0)
-            comm = str_replace(current->comm, "\n", " ");
-        else
-            comm = "";
-
         pid_tree = get_pid_tree();
         tty = get_current_tty();
 
-        if(tty) {
-            tty_name_len = strlen(tty_name);
-            if(tty_name_len == 0) {
-                tty_name = "-1";
-            } else {
+        if(likely(current->comm != NILL)) {
+            if(likely(strlen(current->comm)) > 0)
+                comm = str_replace(current->comm, "\n", " ");
+            else
+                comm = "";
+        } else
+            comm = "";
+
+        tty = get_current_tty();
+        if(likely(tty)) {
+            if(likely(tty->name != NULL)) {
+                tty_name_len = strlen(tty->name);
+                if(tty_name_len == 0)
+                    tty_name = "-1";
+                else
+                    tty_name = tty->name;
+            } else
                 tty_name = tty->name;
-            }
         } else
             tty_name = "-1";
 
@@ -1484,19 +1490,24 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
         sessionid = get_sessionid();
 
-        if(strlen(current->comm) > 0)
-            comm = str_replace(current->comm, "\n", " ");
-        else
+        if(likely(current->comm != NILL)) {
+            if(likely(strlen(current->comm)) > 0)
+                comm = str_replace(current->comm, "\n", " ");
+            else
+                comm = "";
+        } else
             comm = "";
 
         tty = get_current_tty();
-        if(tty) {
-            tty_name_len = strlen(tty->name);
-            if(tty_name_len == 0) {
-                tty_name = "-1";
-            } else {
+        if(likely(tty)) {
+            if(likely(tty->name != NULL)) {
+                tty_name_len = strlen(tty->name);
+                if(tty_name_len == 0)
+                    tty_name = "-1";
+                else
+                    tty_name = tty->name;
+            } else
                 tty_name = tty->name;
-            }
         } else
             tty_name = "-1";
 
