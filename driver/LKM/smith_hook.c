@@ -1124,7 +1124,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         pid_tree = get_pid_tree();
         tty = get_current_tty();
 
-        if(likely(current->comm != NILL)) {
+        if(likely(current->comm != NULL)) {
             if(likely(strlen(current->comm)) > 0)
                 comm = str_replace(current->comm, "\n", " ");
             else
@@ -1490,7 +1490,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
         sessionid = get_sessionid();
 
-        if(likely(current->comm != NILL)) {
+        if(likely(current->comm != NULL)) {
             if(likely(strlen(current->comm)) > 0)
                 comm = str_replace(current->comm, "\n", " ");
             else
