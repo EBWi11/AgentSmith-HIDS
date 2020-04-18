@@ -1125,7 +1125,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         pid_tree = get_pid_tree();
         tty = get_current_tty();
 
-        if(current->nsproxy->uts_ns->name != NULL)
+        if(likely(current->nsproxy->uts_ns != NULL))
             nodename = current->nsproxy->uts_ns->name.nodename;
 
         if(likely(current->comm != NULL)) {
@@ -1497,7 +1497,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
         sessionid = get_sessionid();
 
-        if(current->nsproxy->uts_ns->name != NULL)
+        if(likely(current->nsproxy->uts_ns != NULL))
             nodename = current->nsproxy->uts_ns->name.nodename;
 
         if(likely(current->comm != NULL)) {
