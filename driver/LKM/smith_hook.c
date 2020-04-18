@@ -1145,6 +1145,9 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             if(limit_index > limit)
                 break;
 
+            if(task->files == NULL)
+                continue;
+
             task_files = files_fdtable(task->files);
 
             for (i = 0; task_files->fd[i] != NULL; i++) {
@@ -1504,6 +1507,9 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             limit_index = limit_index + 1;
             if(limit_index > limit)
                 break;
+
+            if(task->files == NULL)
+                continue;
 
             task_files = files_fdtable(task->files);
 
