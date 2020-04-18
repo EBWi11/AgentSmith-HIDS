@@ -1170,6 +1170,8 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                     socket = (struct socket *)task_files->fd[i]->private_data;
                     if(likely(socket)) {
                         sk = socket->sk;
+                        if(socket->sk == NULL)
+                            continue;
                         inet = (struct inet_sock*)sk;
                         sa_family = sk->sk_family;
                         switch (sk->sk_family) {
@@ -1538,6 +1540,8 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                     socket = (struct socket *)task_files->fd[i]->private_data;
                     if(likely(socket)) {
                         sk = socket->sk;
+                        if(socket->sk == NULL)
+                            continue;
                         inet = (struct inet_sock*)sk;
                         sa_family = sk->sk_family;
                         switch (sk->sk_family) {
