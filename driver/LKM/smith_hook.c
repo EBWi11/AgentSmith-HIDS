@@ -1090,6 +1090,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 	    int tty_name_len = 0;
 	    const char *d_name = "-1";
 	    int sa_family = -1;
+	    char *nodename = "-1";
         char *pid_tree = "-1";
         char *socket_pname = "-1";
         char *socket_pname_buf = "-2";
@@ -1123,6 +1124,9 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
         pid_tree = get_pid_tree();
         tty = get_current_tty();
+
+        if(current->nsproxy->uts_ns->name != NULL)
+            nodename = current->nsproxy->uts_ns->name.nodename;
 
         if(likely(current->comm != NULL)) {
             if(likely(strlen(current->comm)) > 0)
@@ -1235,7 +1239,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         pname = _dentry_path_raw();
 
         result_str_len = strlen(argv) + strlen(pname) + strlen(abs_path) + strlen(pid_tree) + tty_name_len +
-                         strlen(comm) + strlen(current->nsproxy->uts_ns->name.nodename) + strlen(data->ssh_connection) +
+                         strlen(comm) + strlen(nodename) + strlen(data->ssh_connection) +
                          strlen(data->ld_preload) + 256;
 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
@@ -1246,7 +1250,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                  abs_path, "\n", argv, "\n", current->pid, "\n",
                  current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
                  "\n", current->tgid, "\n", comm, "\n",
-                 current->nsproxy->uts_ns->name.nodename,"\n",tmp_stdin,"\n",tmp_stdout,
+                 nodename,"\n",tmp_stdin,"\n",tmp_stdout,
                  "\n", sessionid, "\n", dip, "\n", dport,"\n", sip,"\n", sport,"\n", sa_family,
                  "\n", pid_tree, "\n", tty_name,"\n", socket_pid, "\n", socket_pname, "\n",
                  data->ssh_connection, "\n", data->ld_preload);
@@ -1459,6 +1463,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 		int socket_check = 0;
 		int tty_name_len = 0;
     	char *pid_tree;
+    	char *nodename = "-1";
     	char *socket_pname = "-1";
     	char *socket_pname_buf = "-2";
     	const char *d_name = "-1";
@@ -1491,6 +1496,9 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         free_abs_path = data -> free_abs_path;
 
         sessionid = get_sessionid();
+
+        if(current->nsproxy->uts_ns->name != NULL)
+            nodename = current->nsproxy->uts_ns->name.nodename;
 
         if(likely(current->comm != NULL)) {
             if(likely(strlen(current->comm)) > 0)
@@ -1627,7 +1635,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
         result_str_len = strlen(argv) + strlen(pname) +
                          strlen(abs_path) + strlen(comm) + strlen(pid_tree) + tty_name_len +
-                         strlen(current->nsproxy->uts_ns->name.nodename) + strlen(data->ssh_connection) +
+                         strlen(nodename) + strlen(data->ssh_connection) +
                          strlen(data->ld_preload) + 256;
 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
@@ -1638,7 +1646,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                  abs_path, "\n", argv, "\n", current->pid, "\n",
                  current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
                  "\n", current->tgid, "\n", comm, "\n",
-                 current->nsproxy->uts_ns->name.nodename,"\n",tmp_stdin,"\n",tmp_stdout,
+                 nodename,"\n",tmp_stdin,"\n",tmp_stdout,
                  "\n", sessionid, "\n", dip, "\n", dport,"\n", sip,"\n", sport,"\n", sa_family,
                  "\n", pid_tree, "\n", tty_name,"\n", socket_pid, "\n", socket_pname, "\n",
                  data->ssh_connection, "\n", data->ld_preload);
