@@ -324,6 +324,7 @@ char *get_pid_tree(void)
     int data_len;
     int limit = 7;
     int limit_index = 0;
+    int comm_free = 0;
     char *tmp_data = NULL;
     char *res = NULL;
     char *comm = NULL;
@@ -332,9 +333,13 @@ char *get_pid_tree(void)
 
     task = current;
 
-    if(strlen(task->comm) > 0)
+    if(strlen(task->comm) > 0) {
         comm = str_replace(current->comm, "\n", " ");
-    else
+        if(likely(comm != NULL))
+            comm_free = 1;
+        else
+            comm = "";
+    } else
         comm = "";
 
     snprintf(pid,sizeof(size_t),"%d",task->pid);
@@ -344,7 +349,11 @@ char *get_pid_tree(void)
     strcat(tmp_data,comm);
     strcat(tmp_data,")");
 
+    if(likely(comm_free == 1))
+        kfree(comm);
+
     while(task->pid != 1){
+        comm_free = 0;
         limit_index = limit_index + 1;
         if(limit_index > limit)
             break;
@@ -352,9 +361,13 @@ char *get_pid_tree(void)
         task = task->parent;
         data_len = strlen(task->comm) + sizeof(size_t) + 8;
 
-        if(data_len > sizeof(size_t) + 8)
+        if(data_len > sizeof(size_t) + 8) {
             comm = str_replace(task->comm, "\n", " ");
-        else
+            if(likely(comm != NULL))
+                comm_free = 1;
+            else
+                comm = "";
+        } else
             comm = "";
 
         res = kzalloc(data_len + strlen(tmp_data), GFP_ATOMIC);
@@ -367,6 +380,9 @@ char *get_pid_tree(void)
         strcat(res,tmp_data);
         strcpy(tmp_data, res);
         kfree(res);
+
+        if(likely(comm_free == 1))
+            kfree(comm);
     }
 
     return tmp_data;
@@ -443,6 +459,7 @@ int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     int result_str_len;
 
 	if (share_mem_flag != -1) {
+	    int comm_free = 0;
 	    unsigned int sessionid;
         char dip[64] = "-1";
         char sip[64] = "-1";
@@ -533,9 +550,13 @@ int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
             abs_path = get_exe_file(current, buffer, PATH_MAX);
 
-            if(strlen(current->comm) > 0)
+            if(strlen(current->comm) > 0) {
                 comm = str_replace(current->comm, "\n", " ");
-            else
+                if(likely(comm != NULL))
+                    comm_free = 1;
+                else
+                    comm = "1";
+            } else
                 comm = "";
 
             result_str_len = strlen(current->nsproxy->uts_ns->name.nodename) +
@@ -554,6 +575,9 @@ int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
             send_msg_to_user(result_str, 1);
             kfree(buffer);
+
+            if(likely(comm_free == 1))
+                kfree(comm);
         }
     }
 
@@ -570,6 +594,7 @@ struct execve_data {
     char *ssh_connection;
     char *ld_preload;
     int free_abs_path;
+    int argv_free;
 };
 
 #ifdef CONFIG_COMPAT
@@ -585,6 +610,7 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
     char *argv_res_tmp = NULL;
     const char __user *native;
     if (share_mem_flag != -1) {
+        int argv_free = 0;
         int ssh_connection_flag = 0;
         int ld_preload_flag = 0;
         char *ssh_connection = NULL;
@@ -669,9 +695,13 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
             strcpy(ld_preload, "-1");
         data->ld_preload = ld_preload;
 
-        if (likely(argv_len > 0))
+        if (likely(argv_len > 0)) {
             argv_res_tmp = str_replace(argv_res, "\n", " ");
-        else
+            if(likely(argv_res_tmp != NULL))
+                argv_free = 1;
+            else
+                argv_res_tmp = "";
+        } else
             argv_res_tmp = "";
 
         tmp_buf = kzalloc(256, GFP_ATOMIC);
@@ -703,6 +733,7 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
         data->argv = argv_res_tmp;
         data->abs_path = abs_path;
         data->free_abs_path = free_abs_path;
+        data->argv_free = argv_free;
 
         if(likely(argv_len > 0))
             kfree(argv_res);
@@ -722,6 +753,7 @@ int compat_execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs 
     char *argv_res_tmp = NULL;
     const char __user *native;
     if (share_mem_flag != -1) {
+        int argv_free = 0;
         int ssh_connection_flag = 0;
         int ld_preload_flag = 0;
         char *ssh_connection = NULL;
@@ -806,9 +838,13 @@ int compat_execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs 
             strcpy(ld_preload, "-1");
         data->ld_preload = ld_preload;
 
-        if (likely(argv_len > 0))
+        if (likely(argv_len > 0)) {
             argv_res_tmp = str_replace(argv_res, "\n", " ");
-        else
+            if(likely(argv_res_tmp != NULL))
+                argv_free = 1;
+            else
+                argv_res_tmp = "";
+        } else
             argv_res_tmp = "";
 
         tmp_buf = kzalloc(256, GFP_ATOMIC);
@@ -840,6 +876,7 @@ int compat_execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs 
         data->argv = argv_res_tmp;
         data->abs_path = abs_path;
         data->free_abs_path = free_abs_path;
+        data->argv_free = argv_free;
 
         if(likely(argv_len > 0))
             kfree(argv_res);
@@ -860,6 +897,7 @@ int execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     char *argv_res_tmp = NULL;
     const char __user *native;
     if (share_mem_flag != -1) {
+        int argv_free = 0;
         int ssh_connection_flag = 0;
         int ld_preload_flag = 0;
         char *ssh_connection = NULL;
@@ -935,9 +973,13 @@ int execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             strcpy(ld_preload, "-1");
         data->ld_preload = ld_preload;
 
-        if (likely(argv_len > 0))
+        if (likely(argv_len > 0)) {
             argv_res_tmp = str_replace(argv_res, "\n", " ");
-        else
+            if(likely(argv_res_tmp != NULL))
+                argv_free = 1;
+            else
+                argv_res_tmp = "";
+        } else
             argv_res_tmp = "";
 
         tmp_buf = kzalloc(256, GFP_ATOMIC);
@@ -969,6 +1011,7 @@ int execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         data->argv = argv_res_tmp;
         data->abs_path = abs_path;
         data->free_abs_path = free_abs_path;
+        data->argv_free = argv_free;
 
         if(likely(argv_len > 0))
             kfree(argv_res);
@@ -988,6 +1031,7 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     char *argv_res_tmp = NULL;
     const char __user *native;
     if (share_mem_flag != -1) {
+        int argv_free = 0;
         int ssh_connection_flag = 0;
         int ld_preload_flag = 0;
         char *ssh_connection = NULL;
@@ -1063,9 +1107,13 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             strcpy(ld_preload, "-1");
         data->ld_preload = ld_preload;
 
-        if (likely(argv_len > 0))
+        if (likely(argv_len > 0)) {
             argv_res_tmp = str_replace(argv_res, "\n", " ");
-        else
+            if(likely(argv_res_tmp != NULL))
+                argv_free = 1;
+            else
+                argv_res_tmp = "";
+        } else
             argv_res_tmp = "";
 
         tmp_buf = kzalloc(256, GFP_ATOMIC);
@@ -1097,6 +1145,7 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         data->argv = argv_res_tmp;
         data->abs_path = abs_path;
         data->free_abs_path = free_abs_path;
+        data->argv_free = argv_free;
 
         if(likely(argv_len > 0))
             kfree(argv_res);
@@ -1119,6 +1168,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 	if (share_mem_flag != -1) {
 	    int i;
 	    int limit = 5;
+	    int comm_free = 0;
         int limit_index = 0;
 	    int free_abs_path;
 	    pid_t socket_pid = -1;
@@ -1165,9 +1215,13 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             nodename = current->nsproxy->uts_ns->name.nodename;
 
         if(likely(current->comm != NULL)) {
-            if(likely(strlen(current->comm)) > 0)
+            if(likely(strlen(current->comm)) > 0) {
                 comm = str_replace(current->comm, "\n", " ");
-            else
+                if(likely(comm != NULL))
+                    comm_free = 1;
+                else
+                    comm = "1";
+            } else
                 comm = "";
         } else
             comm = "";
@@ -1296,8 +1350,14 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         if (likely(strcmp(socket_pname_buf, "-2")))
             kfree(socket_pname_buf);
 
-        if (free_abs_path == 1)
+        if (likely(free_abs_path == 1))
             kfree(data->abs_path);
+
+        if(likely(comm_free == 1))
+            kfree(comm);
+
+        if(likely(data->argv_free == 1))
+            kfree(data->argv);
 
         kfree(data->ld_preload);
         kfree(data->ssh_connection);
@@ -1311,6 +1371,7 @@ struct execve_data {
     char *argv;
     char *ssh_connection;
     char *ld_preload;
+    int argv_free;
 };
 
 int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
@@ -1321,6 +1382,7 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
     char *argv_res_tmp = NULL;
     const char __user *native;
     if (share_mem_flag != -1) {
+        int argv_free = 0;
         int ssh_connection_flag = 0;
         int ld_preload_flag = 0;
         char *ssh_connection = NULL;
@@ -1394,12 +1456,17 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
             strcpy(ld_preload, "-1");
         data->ld_preload = ld_preload;
 
-        if (likely(argv_len > 0))
+        if (likely(argv_len > 0)) {
             argv_res_tmp = str_replace(argv_res, "\n", " ");
-        else
+            if(likely(argv_res_tmp != NULL))
+                argv_free = 1;
+            else
+                argv_res_tmp = "";
+        } else
             argv_res_tmp = "";
 
         data->argv = argv_res_tmp;
+        data->argv_free = argv_free;
 
         if(likely(argv_len > 0))
             kfree(argv_res);
@@ -1415,6 +1482,7 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     char *argv_res_tmp = NULL;
     const char __user *native;
     if (share_mem_flag != -1) {
+        int argv_free = 0;
         int ssh_connection_flag = 0;
         int ld_preload_flag = 0;
         char *ssh_connection = NULL;
@@ -1488,12 +1556,17 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             strcpy(ld_preload, "-1");
         data->ld_preload = ld_preload;
 
-        if(likely(argv_len > 0))
+        if (likely(argv_len > 0)) {
             argv_res_tmp = str_replace(argv_res, "\n", " ");
-        else
+            if(likely(argv_res_tmp != NULL))
+                argv_free = 1;
+            else
+                argv_res_tmp = "";
+        } else
             argv_res_tmp = "";
 
         data->argv = argv_res_tmp;
+        data->argv_free = argv_free;
 
         if(likely(argv_len > 0))
             kfree(argv_res);
@@ -1557,9 +1630,13 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             nodename = current->nsproxy->uts_ns->name.nodename;
 
         if(likely(current->comm != NULL)) {
-            if(likely(strlen(current->comm)) > 0)
+            if(likely(strlen(current->comm)) > 0) {
                 comm = str_replace(current->comm, "\n", " ");
-            else
+                if(likely(comm != NULL))
+                    comm_free = 1;
+                else
+                    comm = "";
+            } else
                 comm = "";
         } else
             comm = "";
@@ -1715,8 +1792,14 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         if (likely(strcmp(socket_pname_buf, "-2")))
             kfree(socket_pname_buf);
 
-        if (free_abs_path == 1)
+        if (likely(free_abs_path == 1))
             kfree(data->abs_path);
+
+        if(likely(comm_free == 1))
+            kfree(comm);
+
+        if(likely(data->argv_free == 1))
+            kfree(data->argv);
 
         kfree(data->ld_preload);
         kfree(data->ssh_connection);
@@ -1758,6 +1841,7 @@ int security_inode_create_handler(struct kretprobe_instance *ri, struct pt_regs 
     int result_str_len;
     char *comm = NULL;
     if (share_mem_flag != -1) {
+        int comm_free = 0;
         struct security_inode_create_data *data;
         char *buffer = NULL;
         char *pathstr = NULL;
@@ -1770,9 +1854,13 @@ int security_inode_create_handler(struct kretprobe_instance *ri, struct pt_regs 
 
         sessionid = get_sessionid();
 
-        if(strlen(current->comm) > 0)
+        if(strlen(current->comm) > 0) {
             comm = str_replace(current->comm, "\n", " ");
-        else
+            if(likely(comm != NULL))
+                comm_free = 1;
+            else
+                comm = "";
+        } else
             comm = "";
 
         result_str_len = strlen(current->nsproxy->uts_ns->name.nodename)
@@ -1793,6 +1881,9 @@ int security_inode_create_handler(struct kretprobe_instance *ri, struct pt_regs 
         send_msg_to_user(result_str, 1);
         kfree(data->pname_buf);
         kfree(buffer);
+
+        if(likely(comm_free == 1))
+            kfree(comm);
     }
     return 0;
 }
@@ -1812,6 +1903,7 @@ void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long f
 
 	request = (long) p_get_arg1(regs);
 	if (share_mem_flag != -1) {
+	    int comm_free = 0;
 	    if (request == PTRACE_POKETEXT || request == PTRACE_POKEDATA) {
         	pid = (long) p_get_arg2(regs);
         	addr = (void *) p_get_arg3(regs);
@@ -1821,9 +1913,13 @@ void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long f
             buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
             abs_path = get_exe_file(current, buffer, PATH_MAX);
 
-            if(strlen(current->comm) > 0)
+            if(strlen(current->comm) > 0) {
                 comm = str_replace(current->comm, "\n", " ");
-            else
+                if(likely(comm != NULL))
+                    comm_free = 1;
+                else
+                    comm = "";
+            } else
                 comm = "";
 
             result_str_len = strlen(current->nsproxy->uts_ns->name.nodename) +
@@ -1841,6 +1937,9 @@ void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long f
 
             send_msg_to_user(result_str, 1);
             kfree(buffer);
+
+            if(likely(comm_free == 1))
+                kfree(comm);
 	    }
 	}
 }
@@ -1884,6 +1983,7 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     char *buffer = NULL;
 
 	if (share_mem_flag != -1) {
+	    int comm_free = 0;
 	    struct recvfrom_data *data;
         struct sockaddr tmp_dirp;
         struct sockaddr_in *sin;
@@ -1980,9 +2080,13 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
             abs_path = get_exe_file(current, buffer, PATH_MAX);
 
-            if(strlen(current->comm) > 0)
+            if(strlen(current->comm) > 0) {
                 comm = str_replace(current->comm, "\n", " ");
-            else
+                if(likely(comm != NULL))
+                    comm_free = 1;
+                else
+                    comm = "";
+            } else
                 comm = "";
 
             result_str_len = strlen(query) + strlen(current->nsproxy->uts_ns->name.nodename) +
@@ -2003,6 +2107,9 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             kfree(query);
             kfree(recv_data);
             kfree(buffer);
+
+            if(likely(comm_free == 1))
+                kfree(comm);
         }
 	}
     return 0;
@@ -2022,6 +2129,7 @@ void load_module_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned l
     char *buffer = NULL;
 
 	if (share_mem_flag != -1) {
+	    int comm_free = 0;
 	    struct path files_path;
         struct files_struct *current_files;
         struct fdtable *files_table;
@@ -2042,9 +2150,13 @@ void load_module_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned l
         files_path = files_table->fd[i - 1]->f_path;
         cwd = d_path(&files_path, init_module_buf, PATH_MAX);
 
-        if(strlen(current->comm) > 0)
+        if(strlen(current->comm) > 0) {
             comm = str_replace(current->comm, "\n", " ");
-        else
+            if(likely(comm != NULL))
+                comm_free = 1;
+            else
+                comm = "";
+        } else
             comm = "";
 
         result_str_len = strlen(cwd) + strlen(current->nsproxy->uts_ns->name.nodename)
@@ -2092,15 +2204,20 @@ int update_cred_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         now_uid = get_current_uid();
 
         if(now_uid == 0) {
+            int comm_free = 0;
 	        struct update_cred_data *data;
 	        char *comm = NULL;
 	        char *buffer = NULL;
             data = (struct update_cred_data *)ri->data;
 
             if(data->old_uid != 0) {
-                if(strlen(current->comm) > 0)
+                if(strlen(current->comm) > 0) {
                     comm = str_replace(current->comm, "\n", " ");
-                else
+                    if(likely(comm != NULL))
+                        comm_free = 1;
+                    else
+                        comm = "";
+                } else
                     comm = "";
 
                 if (strcmp(comm, "sudo") != 0 && strcmp(comm, "su") != 0 && strcmp(comm, "sshd") != 0) {
@@ -2128,6 +2245,9 @@ int update_cred_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
                     send_msg_to_user(result_str, 1);
                     kfree(buffer);
+
+                    if(likely(comm_free == 1))
+                        kfree(comm);
                 }
             }
         }
@@ -2156,6 +2276,7 @@ int mprotect_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 int mprotect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
     if (share_mem_flag != -1) {
+        int comm_free = 0;
         int retval;
         struct mprotect_data *data;
         data = (struct mprotect_data *)ri->data;
@@ -2170,9 +2291,13 @@ int mprotect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                 char *result_str = NULL;
                 char *abs_path;
 
-                if(strlen(current->comm) > 0)
+                if(strlen(current->comm) > 0) {
                     comm = str_replace(current->comm, "\n", " ");
-                else
+                    if(likely(comm != NULL))
+                        comm_free = 1;
+                    else
+                        comm = "";
+                } else
                     comm = "";
 
                 sessionid = get_sessionid();
@@ -2193,6 +2318,9 @@ int mprotect_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
                 send_msg_to_user(result_str, 1);
                 kfree(buffer);
+
+                if(likely(comm_free == 1))
+                    kfree(comm);
             }
         }
     }
