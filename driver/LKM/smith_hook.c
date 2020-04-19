@@ -585,6 +585,8 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
     char *argv_res_tmp = NULL;
     const char __user *native;
     if (share_mem_flag != -1) {
+        int ssh_connection_flag = 0;
+        int ld_preload_flag = 0;
         char *ssh_connection = NULL;
         char *ld_preload = NULL;
         struct execve_data *data;
@@ -637,27 +639,34 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
             for (i = 0; i < env_len; i++) {
                 native = get_user_arg_ptr(env_ptr, i);
                 if (unlikely(IS_ERR(native)))
-                    break;
+                    continue;
 
                 len = strnlen_user(native, MAX_ARG_STRLEN);
-                if(!len)
-                    break;
+                if(unlikely(!len))
+                    continue;
                 else if(len > 14) {
                     memset(buf, 0, 255);
-                    if (copy_from_user(buf, native, 255))
+                    if (unlikely(copy_from_user(buf, native, 255)))
                         break;
                     else {
                         if(strncmp("SSH_CONNECTION=", buf, 11) == 0) {
                             strcpy(ssh_connection, buf + 15);
+                            ssh_connection_flag = 1;
                         } else if(strncmp("LD_PRELOAD=", buf, 11) == 0) {
                             strcpy(ld_preload, buf + 11);
+                            ld_preload_flag = 1;
                         }
                     }
                 }
             }
         }
 
+        if(unlikely(ssh_connection_flag == 0))
+            strcpy(ssh_connection, "-1");
         data->ssh_connection = ssh_connection;
+
+        if(unlikely(ld_preload_flag == 0))
+            strcpy(ld_preload, "-1");
         data->ld_preload = ld_preload;
 
         if (likely(argv_len > 0))
@@ -713,6 +722,8 @@ int compat_execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs 
     char *argv_res_tmp = NULL;
     const char __user *native;
     if (share_mem_flag != -1) {
+        int ssh_connection_flag = 0;
+        int ld_preload_flag = 0;
         char *ssh_connection = NULL;
         char *ld_preload = NULL;
         struct execve_data *data;
@@ -765,27 +776,34 @@ int compat_execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs 
             for (i = 0; i < env_len; i++) {
                 native = get_user_arg_ptr(env_ptr, i);
                 if (unlikely(IS_ERR(native)))
-                    break;
+                    continue;
 
                 len = strnlen_user(native, MAX_ARG_STRLEN);
-                if(!len)
-                    break;
+                if(unlikely(!len))
+                    continue;
                 else if(len > 14) {
                     memset(buf, 0, 255);
-                    if (copy_from_user(buf, native, 255))
+                    if (unlikely(copy_from_user(buf, native, 255)))
                         break;
                     else {
                         if(strncmp("SSH_CONNECTION=", buf, 11) == 0) {
                             strcpy(ssh_connection, buf + 15);
+                            ssh_connection_flag = 1;
                         } else if(strncmp("LD_PRELOAD=", buf, 11) == 0) {
                             strcpy(ld_preload, buf + 11);
+                            ld_preload_flag = 1;
                         }
                     }
                 }
             }
         }
 
+        if(unlikely(ssh_connection_flag == 0))
+            strcpy(ssh_connection, "-1");
         data->ssh_connection = ssh_connection;
+
+        if(unlikely(ld_preload_flag == 0))
+            strcpy(ld_preload, "-1");
         data->ld_preload = ld_preload;
 
         if (likely(argv_len > 0))
@@ -842,6 +860,8 @@ int execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     char *argv_res_tmp = NULL;
     const char __user *native;
     if (share_mem_flag != -1) {
+        int ssh_connection_flag = 0;
+        int ld_preload_flag = 0;
         char *ssh_connection = NULL;
         char *ld_preload = NULL;
         struct execve_data *data;
@@ -885,27 +905,34 @@ int execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             for (i = 0; i < env_len; i++) {
                 native = get_user_arg_ptr(env_ptr, i);
                 if (unlikely(IS_ERR(native)))
-                    break;
+                    continue;
 
                 len = strnlen_user(native, MAX_ARG_STRLEN);
-                if(!len)
-                    break;
+                if(unlikely(!len))
+                    continue;
                 else if(len > 14) {
                     memset(buf, 0, 255);
-                    if (copy_from_user(buf, native, 255))
+                    if (unlikely(copy_from_user(buf, native, 255)))
                         break;
                     else {
                         if(strncmp("SSH_CONNECTION=", buf, 11) == 0) {
                             strcpy(ssh_connection, buf + 15);
+                            ssh_connection_flag = 1;
                         } else if(strncmp("LD_PRELOAD=", buf, 11) == 0) {
                             strcpy(ld_preload, buf + 11);
+                            ld_preload_flag = 1;
                         }
                     }
                 }
             }
         }
 
+        if(unlikely(ssh_connection_flag == 0))
+            strcpy(ssh_connection, "-1");
         data->ssh_connection = ssh_connection;
+
+        if(unlikely(ld_preload_flag == 0))
+            strcpy(ld_preload, "-1");
         data->ld_preload = ld_preload;
 
         if (likely(argv_len > 0))
@@ -961,6 +988,8 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     char *argv_res_tmp = NULL;
     const char __user *native;
     if (share_mem_flag != -1) {
+        int ssh_connection_flag = 0;
+        int ld_preload_flag = 0;
         char *ssh_connection = NULL;
         char *ld_preload = NULL;
         struct execve_data *data;
@@ -1004,27 +1033,34 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             for (i = 0; i < env_len; i++) {
                 native = get_user_arg_ptr(env_ptr, i);
                 if (unlikely(IS_ERR(native)))
-                    break;
+                    continue;
 
                 len = strnlen_user(native, MAX_ARG_STRLEN);
-                if(!len)
-                    break;
+                if(unlikely(!len))
+                    continue;
                 else if(len > 14) {
                     memset(buf, 0, 255);
-                    if (copy_from_user(buf, native, 255))
+                    if (unlikely(copy_from_user(buf, native, 255)))
                         break;
                     else {
                         if(strncmp("SSH_CONNECTION=", buf, 11) == 0) {
                             strcpy(ssh_connection, buf + 15);
+                            ssh_connection_flag = 1;
                         } else if(strncmp("LD_PRELOAD=", buf, 11) == 0) {
                             strcpy(ld_preload, buf + 11);
+                            ld_preload_flag = 1;
                         }
                     }
                 }
             }
         }
 
+        if(unlikely(ssh_connection_flag == 0))
+            strcpy(ssh_connection, "-1");
         data->ssh_connection = ssh_connection;
+
+        if(unlikely(ld_preload_flag == 0))
+            strcpy(ld_preload, "-1");
         data->ld_preload = ld_preload;
 
         if (likely(argv_len > 0))
@@ -1285,6 +1321,8 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
     char *argv_res_tmp = NULL;
     const char __user *native;
     if (share_mem_flag != -1) {
+        int ssh_connection_flag = 0;
+        int ld_preload_flag = 0;
         char *ssh_connection = NULL;
         char *ld_preload = NULL;
         struct execve_data *data;
@@ -1323,29 +1361,37 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
 
         if(likely(env_len > 0)) {
             char buf[256];
-            for(i = 0; i < argv_len; i ++) {
-                if(get_user(native, env + i))
-                    break;
+            for (i = 0; i < env_len; i++) {
+                native = get_user_arg_ptr(env_ptr, i);
+                if (unlikely(IS_ERR(native)))
+                    continue;
 
                 len = strnlen_user(native, MAX_ARG_STRLEN);
-                if(!len)
-                    break;
+                if(unlikely(!len))
+                    continue;
                 else if(len > 14) {
                     memset(buf, 0, 255);
-                    if (copy_from_user(buf, native, 255))
+                    if (unlikely(copy_from_user(buf, native, 255)))
                         break;
                     else {
                         if(strncmp("SSH_CONNECTION=", buf, 11) == 0) {
                             strcpy(ssh_connection, buf + 15);
+                            ssh_connection_flag = 1;
                         } else if(strncmp("LD_PRELOAD=", buf, 11) == 0) {
                             strcpy(ld_preload, buf + 11);
+                            ld_preload_flag = 1;
                         }
                     }
                 }
             }
         }
 
+        if(unlikely(ssh_connection_flag == 0))
+            strcpy(ssh_connection, "-1");
         data->ssh_connection = ssh_connection;
+
+        if(unlikely(ld_preload_flag == 0))
+            strcpy(ld_preload, "-1");
         data->ld_preload = ld_preload;
 
         if (likely(argv_len > 0))
@@ -1369,6 +1415,8 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
     char *argv_res_tmp = NULL;
     const char __user *native;
     if (share_mem_flag != -1) {
+        int ssh_connection_flag = 0;
+        int ld_preload_flag = 0;
         char *ssh_connection = NULL;
         char *ld_preload = NULL;
         struct execve_data *data;
@@ -1407,29 +1455,37 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
         if(likely(env_len > 0)) {
             char buf[256];
-            for(i = 0; i < env_len; i ++) {
-                if(get_user(native, env + i))
-                    break;
+            for (i = 0; i < env_len; i++) {
+                native = get_user_arg_ptr(env_ptr, i);
+                if (unlikely(IS_ERR(native)))
+                    continue;
 
                 len = strnlen_user(native, MAX_ARG_STRLEN);
-                if(!len)
-                    break;
+                if(unlikely(!len))
+                    continue;
                 else if(len > 14) {
                     memset(buf, 0, 255);
-                    if (copy_from_user(buf, native, 255))
+                    if (unlikely(copy_from_user(buf, native, 255)))
                         break;
                     else {
-                        if(strncmp("SSH_CONNECTION=", buf, 15) == 0) {
+                        if(strncmp("SSH_CONNECTION=", buf, 11) == 0) {
                             strcpy(ssh_connection, buf + 15);
+                            ssh_connection_flag = 1;
                         } else if(strncmp("LD_PRELOAD=", buf, 11) == 0) {
                             strcpy(ld_preload, buf + 11);
+                            ld_preload_flag = 1;
                         }
                     }
                 }
             }
         }
 
+        if(unlikely(ssh_connection_flag == 0))
+            strcpy(ssh_connection, "-1");
         data->ssh_connection = ssh_connection;
+
+        if(unlikely(ld_preload_flag == 0))
+            strcpy(ld_preload, "-1");
         data->ld_preload = ld_preload;
 
         if(likely(argv_len > 0))
