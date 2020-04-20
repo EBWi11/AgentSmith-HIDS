@@ -1252,7 +1252,11 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                 }
 
                 if(strncmp("socket:[", d_name, 8) == 0) {
-                    socket = (struct socket *)task_files->fd[i]->private_data;
+                    void *tmp = task_files->fd[i]->private_data;
+                    if(unlikely(tmp == NULL))
+                        continue;
+
+                    socket = (struct socket *)tmp;
                     if(likely(socket)) {
                         sk = socket->sk;
                         if(socket->sk == NULL)
@@ -1668,7 +1672,11 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                 }
 
                 if (strncmp("socket:[", d_name, 8) == 0) {
-                    socket = (struct socket *) task_files->fd[i]->private_data;
+                    void *tmp = task_files->fd[i]->private_data;
+                    if(unlikely(tmp == NULL))
+                        continue;
+
+                    socket = (struct socket *)tmp;
                     if (likely(socket)) {
                         sk = socket->sk;
                         if (socket->sk == NULL)
