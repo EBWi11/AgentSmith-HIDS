@@ -19,51 +19,56 @@ static char *sh_mem = NULL;
 static rwlock_t _write_index_lock;
 
 static void lock_init(void);
+
 static inline void write_index_lock(void);
+
 static inline void write_index_unlock(void);
+
 static void do_init_share_mem(int type);
+
 static int device_open(struct inode *inode, struct file *file);
+
 static int device_close(struct inode *indoe, struct file *file);
+
 static int device_mmap(struct file *filp, struct vm_area_struct *vma);
 
 static const struct file_operations mchar_fops = {
-    .owner = THIS_MODULE,
-    .open = device_open,
-    .release = device_close,
-    .mmap = device_mmap,
+        .owner = THIS_MODULE,
+        .open = device_open,
+        .release = device_close,
+        .mmap = device_mmap,
 };
 
 static int get_read_index(void);
+
 static struct msg_slot get_solt(int len, int next);
+
 static int get_write_index(void);
+
 static void fix_write_index(int index);
+
 static int send_msg_to_user_memshare(char *msg, int kfree_flag);
 
-static void lock_init(void)
-{
+static void lock_init(void) {
     rwlock_init(&_write_index_lock);
 }
 
-static inline void write_index_lock(void)
-{
+static inline void write_index_lock(void) {
     write_lock(&_write_index_lock);
 }
 
-static inline void write_index_unlock(void)
-{
+static inline void write_index_unlock(void) {
     write_unlock(&_write_index_lock);
 }
 
-static void do_init_share_mem(int type)
-{
+static void do_init_share_mem(int type) {
     struct sh_mem_list_head _init_list_head = {0, -1};
     if (type == 1)
         _init_list_head.next = 8;
     memcpy(sh_mem, &_init_list_head, 8);
 }
 
-static int device_open(struct inode *inode, struct file *file)
-{
+static int device_open(struct inode *inode, struct file *file) {
     if (!mutex_trylock(&mchar_mutex)) {
         return -1;
     } else {
@@ -78,19 +83,17 @@ static int device_open(struct inode *inode, struct file *file)
     return 0;
 }
 
-static int device_close(struct inode *indoe, struct file *file)
-{
+static int device_close(struct inode *indoe, struct file *file) {
     mutex_unlock(&mchar_mutex);
     share_mem_flag = -1;
 
     return 0;
 }
 
-static int device_mmap(struct file *filp, struct vm_area_struct *vma)
-{
+static int device_mmap(struct file *filp, struct vm_area_struct *vma) {
     int ret = 0;
     struct page *page = NULL;
-    unsigned long size = (unsigned long)(vma->vm_end - vma->vm_start);
+    unsigned long size = (unsigned long) (vma->vm_end - vma->vm_start);
 
     vma->vm_flags |= 0;
 
@@ -99,56 +102,51 @@ static int device_mmap(struct file *filp, struct vm_area_struct *vma)
         goto out;
     }
 
-    page = virt_to_page((unsigned long)sh_mem + (vma->vm_pgoff << PAGE_SHIFT));
+    page = virt_to_page((unsigned long) sh_mem + (vma->vm_pgoff << PAGE_SHIFT));
     ret = remap_pfn_range(vma, vma->vm_start, page_to_pfn(page), size, vma->vm_page_prot);
     if (ret != 0) {
         goto out;
     }
 
-out:
+    out:
     return ret;
 }
 
-static int get_read_index(void)
-{
+static int get_read_index(void) {
     int i;
     struct sh_mem_list_head *_list_head;
 
     for (i = 0; i < 8; i++)
         list_head_char[i] = sh_mem[i];
 
-    _list_head = (struct sh_mem_list_head *)list_head_char;
+    _list_head = (struct sh_mem_list_head *) list_head_char;
     return _list_head->read_index;
 }
 
-static struct msg_slot get_solt(int len, int next)
-{
+static struct msg_slot get_solt(int len, int next) {
     struct msg_slot new_msg_slot = {len, next};
     return new_msg_slot;
 }
 
-static int get_write_index(void)
-{
+static int get_write_index(void) {
     return write_index;
 }
 
-static void fix_write_index(int index)
-{
+static void fix_write_index(int index) {
     write_index = index;
 }
 
-static int send_msg_to_user_memshare(char *msg, int kfree_flag)
-{
+static int send_msg_to_user_memshare(char *msg, int kfree_flag) {
     int raw_data_len = 0;
     int curr_write_index = -1;
     int now_write_index = -1;
     int now_read_index = -1;
     struct msg_slot new_msg_slot;
 
-    if(likely(share_mem_flag == 1)) {
+    if (likely(share_mem_flag == 1)) {
         raw_data_len = strlen(msg);
 
-        if(unlikely(raw_data_len == 0)) {
+        if (unlikely(raw_data_len == 0)) {
             if (msg && kfree_flag == 1)
                 kfree(msg);
             return 0;
@@ -158,12 +156,12 @@ static int send_msg_to_user_memshare(char *msg, int kfree_flag)
 
         curr_write_index = get_write_index();
 
-        if(unlikely(pre_slot_len != 0))
+        if (unlikely(pre_slot_len != 0))
             now_write_index = curr_write_index + 1;
         else
             now_write_index = curr_write_index;
 
-        if(unlikely(check_read_index_flag == 1)) {
+        if (unlikely(check_read_index_flag == 1)) {
             now_read_index = get_read_index();
             if (now_read_index > curr_write_index + 1) {
                 if ((curr_write_index + 1024 + raw_data_len) > now_read_index)
@@ -171,7 +169,7 @@ static int send_msg_to_user_memshare(char *msg, int kfree_flag)
             }
         }
 
-        if(unlikely((curr_write_index + raw_data_len) >= BOUNDARY)) {
+        if (unlikely((curr_write_index + raw_data_len) >= BOUNDARY)) {
             now_read_index = get_read_index();
             if (now_read_index <= CHECK_READ_INDEX_THRESHOLD) {
 #if (KERNEL_PRINT == 1)
@@ -201,29 +199,27 @@ static int send_msg_to_user_memshare(char *msg, int kfree_flag)
         write_index_unlock();
     }
 
-    if(likely(msg && kfree_flag == 1))
+    if (likely(msg && kfree_flag == 1))
         kfree(msg);
 
     return 0;
 
-out:
+    out:
     write_index_unlock();
-    if(likely(msg && kfree_flag == 1))
+    if (likely(msg && kfree_flag == 1))
         kfree(msg);
 
     return 0;
 }
 
-int send_msg_to_user(char *msg, int kfree_flag)
-{
+int send_msg_to_user(char *msg, int kfree_flag) {
 #if (KERNEL_PRINT == 2)
     printk("%s\n", msg);
 #endif
     return send_msg_to_user_memshare(msg, kfree_flag);
 }
 
-int init_share_mem(void)
-{
+int init_share_mem(void) {
     int i;
     share_mem_flag = -1;
     list_head_char = kzalloc(8, GFP_ATOMIC);
@@ -259,7 +255,7 @@ int init_share_mem(void)
         return -ENOMEM;
     } else {
         for (i = 0; i < MAX_SIZE; i += PAGE_SIZE)
-            SetPageReserved(virt_to_page(((unsigned long)sh_mem) + i));
+            SetPageReserved(virt_to_page(((unsigned long) sh_mem) + i));
     }
 
     mutex_init(&mchar_mutex);
@@ -267,8 +263,7 @@ int init_share_mem(void)
     return 0;
 }
 
-void uninstall_share_mem(void)
-{
+void uninstall_share_mem(void) {
     int i;
     device_destroy(class, MKDEV(major, 0));
     class_unregister(class);
@@ -280,7 +275,7 @@ void uninstall_share_mem(void)
 
     if (sh_mem) {
         for (i = 0; i < MAX_SIZE; i += PAGE_SIZE)
-            ClearPageReserved(virt_to_page(((unsigned long)sh_mem) + i));
+            ClearPageReserved(virt_to_page(((unsigned long) sh_mem) + i));
         kfree(sh_mem);
     }
 }

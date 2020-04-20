@@ -80,7 +80,7 @@ static inline unsigned long p_get_arg6(struct pt_regs *p_regs) {
 #endif
 
 static inline int get_current_uid(void) {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 5, 0)
     return current->real_cred->uid.val;
 #else
     return current->real_cred->uid;
@@ -98,9 +98,9 @@ static void *getDNSQuery(unsigned char *data, int index, char *res) {
             flag = (data + index)[i];
         } else if (flag == 0) {
             flag = (data + index)[i];
-            res[i-1] = 46;
+            res[i - 1] = 46;
         } else {
-            res[i-1] = (data + index)[i];
+            res[i - 1] = (data + index)[i];
             flag = flag - 1;
         }
     }

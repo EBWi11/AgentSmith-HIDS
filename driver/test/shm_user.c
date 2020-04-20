@@ -25,14 +25,12 @@ char shm_res[NLMSG_SPACE(4096)] = {0};
 char *tmp_slot_len;
 char *sh_mem;
 
-struct msg_slot
-{
+struct msg_slot {
     int len;
     int next;
 };
 
-struct sh_mem_list_head
-{
+struct sh_mem_list_head {
     int read_index;
     int next;
 };
@@ -40,8 +38,7 @@ struct sh_mem_list_head
 struct msg_slot *slot;
 struct sh_mem_list_head *list_head;
 
-static char *get_user_id(const char *msg)
-{
+static char *get_user_id(const char *msg) {
     int i;
     int first = strcspn(msg, split_ymbol);
 
@@ -54,8 +51,7 @@ static char *get_user_id(const char *msg)
     return user_id;
 }
 
-static char *get_user(uid_t uid)
-{
+static char *get_user(uid_t uid) {
     struct passwd *pws;
     pws = getpwuid(uid);
     if (pws)
@@ -64,49 +60,40 @@ static char *get_user(uid_t uid)
         return "UNKNOW";
 }
 
-struct msg_slot *get_slot(void)
-{
+struct msg_slot *get_slot(void) {
     int i;
     for (i = 0; i < 9; i++)
         tmp_slot_len[i] = sh_mem[shm_read_index + i];
 
-    return (struct msg_slot *)tmp_slot_len;
+    return (struct msg_slot *) tmp_slot_len;
 }
 
-static void clear_sh_mem(void)
-{
+static void clear_sh_mem(void) {
     int i;
-    if (shm_read_index > 0 && pre_read_index > 0)
-    {
-        if (shm_read_index > pre_read_index)
-        {
-            printf("clear:%d-%d\n",pre_read_index,pre_read_index + (shm_read_index - pre_read_index));
+    if (shm_read_index > 0 && pre_read_index > 0) {
+        if (shm_read_index > pre_read_index) {
+            printf("clear:%d-%d\n", pre_read_index, pre_read_index + (shm_read_index - pre_read_index));
             for (i = 0; i < (shm_read_index - pre_read_index); i++)
                 sh_mem[pre_read_index + i] = 0;
-        }
-        else
-        {
-            printf("clear:%d-%d\n",pre_read_index,pre_read_index + (MAX_SIZE - pre_read_index));
+        } else {
+            printf("clear:%d-%d\n", pre_read_index, pre_read_index + (MAX_SIZE - pre_read_index));
             for (i = 0; i < (MAX_SIZE - pre_read_index); i++)
                 sh_mem[pre_read_index + i] = 0;
         }
     }
 }
 
-static char *get_msg(struct msg_slot *slot)
-{
+static char *get_msg(struct msg_slot *slot) {
     char *tmp_data;
     tmp_data = malloc(slot->len + 4);
-    if (tmp_data)
-    {
+    if (tmp_data) {
         memset(tmp_data, '\0', slot->len + 4);
         snprintf(tmp_data, slot->len + 1, "%s", &sh_mem[shm_read_index + 8]);
     }
     return tmp_data;
 }
 
-static char *shm_msg_factory_no_callback(char *msg)
-{
+static char *shm_msg_factory_no_callback(char *msg) {
     int shm_res_len;
     char *user_id = NULL;
     char *username = NULL;
@@ -116,16 +103,14 @@ static char *shm_msg_factory_no_callback(char *msg)
     gettimeofday(&ts, NULL);
     sprintf(time_buffer, "%ld\0", ts.tv_sec * 1000 + ts.tv_usec / 1000);
 
-    if (msg)
-    {
-        if(strlen(msg) < 4024){
+    if (msg) {
+        if (strlen(msg) < 4024) {
             strcat(shm_res, msg);
             free(msg);
             strcat(shm_res, "\n");
             shm_res_len = strlen(shm_res);
 
-            if (shm_res_len > 16)
-            {
+            if (shm_res_len > 16) {
                 user_id = get_user_id(shm_res);
                 username = get_user(atoi(user_id));
                 strcat(shm_res, username);
@@ -140,28 +125,23 @@ static char *shm_msg_factory_no_callback(char *msg)
     return "";
 }
 
-void init(void)
-{
+void init(void) {
     tmp_slot_len = malloc(8);
 }
 
-void shm_init(void)
-{
-    if (shm_fd == -1)
-    {
+void shm_init(void) {
+    if (shm_fd == -1) {
         shm_read_index = 8;
         pre_read_index = 0;
         shm_fd = open(DEVICE_FILENAME, O_RDWR | O_SYNC);
-        sh_mem = (char *)mmap(NULL, MAX_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
-        list_head = (struct sh_mem_list_head *)mmap(NULL, 8, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+        sh_mem = (char *) mmap(NULL, MAX_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+        list_head = (struct sh_mem_list_head *) mmap(NULL, 8, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
         list_head->read_index = 0;
     }
 }
 
-void shm_close(void)
-{
-    if (shm_fd != -1)
-    {
+void shm_close(void) {
+    if (shm_fd != -1) {
         close(shm_fd);
         munmap(sh_mem, MAX_SIZE);
         munmap(list_head, 8);
@@ -169,15 +149,13 @@ void shm_close(void)
     }
 }
 
-char *shm_run_no_callback(void)
-{
+char *shm_run_no_callback(void) {
     char *res = NULL;
-    while (1)
-    {
+    while (1) {
         slot = get_slot();
         if ((slot->next) == -1 || (slot->next) == 1) {
             if ((slot->len) > 0) {
-                printf("read_index:%d next:%d\n",shm_read_index,slot->next);
+                printf("read_index:%d next:%d\n", shm_read_index, slot->next);
                 res = shm_msg_factory_no_callback(get_msg(slot));
                 clear_sh_mem();
                 list_head->read_index = shm_read_index;
@@ -191,13 +169,12 @@ char *shm_run_no_callback(void)
                 return res;
             }
         } else {
-            nanosleep((const struct timespec[]){{0, 850000}}, NULL);
+            nanosleep((const struct timespec[]) {{0, 50000}}, NULL);
         }
     }
 }
 
-void main()
-{
+void main() {
     init();
     shm_init();
     while (1)
