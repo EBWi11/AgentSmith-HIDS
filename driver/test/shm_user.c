@@ -169,7 +169,7 @@ char *shm_run_no_callback(void) {
                 return res;
             }
         } else {
-            nanosleep((const struct timespec[]) {{0, 50000}}, NULL);
+            nanosleep((const struct timespec[]) {{0, 850000}}, NULL);
         }
     }
 }
