@@ -2260,9 +2260,10 @@ int mprotect_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
     if (share_mem_flag != -1) {
         int comm_free = 0;
         int retval;
+        unsigned long prot;
         struct mprotect_data *data;
         data = (struct mprotect_data *) ri->data;
-        unsigned long prot = data->prot;
+        prot = data->prot;
         retval = regs_return_value(regs);
         if (retval == 0) {
             if (prot & PROT_READ || prot & PROT_EXEC) {
