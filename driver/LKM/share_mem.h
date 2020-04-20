@@ -33,5 +33,7 @@ struct sh_mem_list_head {
 };
 
 int init_share_mem(void);
+
 int send_msg_to_user(char *msg, int kfree_flag);
+
 void uninstall_share_mem(void);
