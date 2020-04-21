@@ -1160,6 +1160,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         int i;
         int limit = 5;
         int comm_free = 0;
+        int pid_tree_free = 0;
         int limit_index = 0;
         int free_abs_path;
         pid_t socket_pid = -1;
@@ -1198,8 +1199,6 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         free_abs_path = data -> free_abs_path;
 
         sessionid = get_sessionid();
-
-        pid_tree = get_pid_tree();
         tty = get_current_tty();
 
         if(likely(current->nsproxy->uts_ns != NULL))
@@ -1286,6 +1285,8 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             }
 
             if (socket_check == 1) {
+                pid_tree = get_pid_tree();
+                pid_tree_free = 1;
                 socket_pid = task->pid;
                 socket_pname_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
                 if (unlikely(!socket_pname_buf)) {
@@ -1354,9 +1355,11 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         if(likely(data->argv_free == 1))
             kfree(data->argv);
 
+        if(pid_tree_free == 1)
+            kfree(pid_tree);
+
         kfree(data->ld_preload);
         kfree(data->ssh_connection);
-        kfree(pid_tree);
     }
     return 0;
 }
@@ -1582,6 +1585,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
     if (share_mem_flag != -1) {
         pid_t socket_pid = -1;
         int i;
+        int pid_tree_free = 0;
         int free_abs_path;
         int socket_check = 0;
         int tty_name_len = 0;
@@ -1616,8 +1620,8 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
 
         data = (struct execve_data *) ri->data;
         argv = data->argv;
-        free_abs_path = data->free_abs_path;
 
+        free_abs_path = data->free_abs_path;
         sessionid = get_sessionid();
 
         if (likely(current->nsproxy->uts_ns != NULL))
@@ -1648,8 +1652,6 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
         } else
             tty_name = "-1";
 
-        pid_tree = get_pid_tree();
-
         task = current;
         while (task->pid != 1) {
             limit_index = limit_index + 1;
@@ -1673,10 +1675,10 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
 
                 if (strncmp("socket:[", d_name, 8) == 0) {
                     void *tmp = task_files->fd[i]->private_data;
-                    if(unlikely(tmp == NULL))
+                    if (unlikely(tmp == NULL))
                         continue;
 
-                    socket = (struct socket *)tmp;
+                    socket = (struct socket *) tmp;
                     if (likely(socket)) {
                         sk = socket->sk;
                         if (socket->sk == NULL)
@@ -1720,6 +1722,8 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
             }
 
             if (socket_check == 1) {
+                pid_tree = get_pid_tree();
+                pid_tree_free = 1;
                 socket_pid = task->pid;
                 socket_pname_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
                 if (unlikely(!socket_pname_buf)) {
@@ -1799,9 +1803,11 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
         if (likely(data->argv_free == 1))
             kfree(data->argv);
 
+        if (pid_tree_free == 1)
+            kfree(pid_tree);
+
         kfree(data->ld_preload);
         kfree(data->ssh_connection);
-        kfree(pid_tree);
     }
 
     return 0;
