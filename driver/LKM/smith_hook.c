@@ -142,6 +142,8 @@ char *_dentry_path_raw(void) {
     pwd = current->fs->pwd;
     path_get(&pwd);
     pname_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
+    if (unlikely(!pname_buf))
+        return "-1";
     cwd = d_path(&pwd, pname_buf, PATH_MAX);
     kfree(pname_buf);
     return cwd;
@@ -157,7 +159,7 @@ char *getfullpath(struct inode *inod,char *buffer,int len)
     struct inode* pinode = inod;
 
     buffer[len - 1] = '\0';
-    if(pinode == NULL)
+    if(unlikely(!pinode))
         return NULL;
 
     hlist_for_each(plist, &pinode->i_dentry) {
@@ -172,9 +174,8 @@ char *getfullpath(struct inode *inod,char *buffer,int len)
         }
     }
 
-    if(dent == NULL) {
+    if(unlikely(!dent))
         return NULL;
-    }
 
     name = dentry_path_raw(dent, buffer, len);
     return name;
@@ -231,7 +232,7 @@ char *getfullpath(struct inode *inod, char *buffer, int len) {
     struct inode *pinode = inod;
 
     buffer[PATH_MAX - 1] = '\0';
-    if (pinode == NULL)
+    if (unlikely(!pinode))
         return NULL;
 
     list_for_each(plist, &pinode->i_dentry)
@@ -244,7 +245,7 @@ char *getfullpath(struct inode *inod, char *buffer, int len) {
         }
     }
 
-    if (dent == NULL)
+    if (unlikely(!dent))
         return NULL;
 
     spin_lock(&inod->i_lock);
@@ -301,7 +302,7 @@ char *str_replace(char *orig, char *rep, char *with) {
 
     tmp = result = kzalloc(strlen(orig) + (len_with - len_rep) * count + 1, GFP_ATOMIC);
 
-    if (!result)
+    if (unlikely(!result))
         return NULL;
 
     while (count--) {
@@ -331,7 +332,7 @@ char *get_pid_tree(void) {
 
     if (strlen(task->comm) > 0) {
         comm = str_replace(current->comm, "\n", " ");
-        if (likely(comm != NULL))
+        if (likely(comm))
             comm_free = 1;
         else
             comm = "";
@@ -340,6 +341,10 @@ char *get_pid_tree(void) {
 
     snprintf(pid, sizeof(size_t), "%d", task->pid);
     tmp_data = kzalloc(4096, GFP_ATOMIC);
+
+    if (unlikely(!tmp_data))
+        return NULL;
+
     strcat(tmp_data, pid);
     strcat(tmp_data, "(");
     strcat(tmp_data, comm);
@@ -359,7 +364,7 @@ char *get_pid_tree(void) {
 
         if (data_len > sizeof(size_t) + 8) {
             comm = str_replace(task->comm, "\n", " ");
-            if (likely(comm != NULL))
+            if (likely(comm))
                 comm_free = 1;
             else
                 comm = "";
@@ -367,6 +372,13 @@ char *get_pid_tree(void) {
             comm = "";
 
         res = kzalloc(data_len + strlen(tmp_data), GFP_ATOMIC);
+
+        if (unlikely(!res)) {
+            kfree(res);
+            if (likely(comm_free == 1))
+                kfree(comm);
+            return NULL;
+        }
 
         snprintf(pid, sizeof(size_t), "%d", task->pid);
         strcat(res, pid);
@@ -539,11 +551,15 @@ int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
 
         if (flag == 1) {
             buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
-            abs_path = get_exe_file(current, buffer, PATH_MAX);
+            
+            if (unlikely(!buffer))
+                abs_path = "-2";
+            else
+                abs_path = get_exe_file(current, buffer, PATH_MAX);
 
             if (strlen(current->comm) > 0) {
                 comm = str_replace(current->comm, "\n", " ");
-                if (likely(comm != NULL))
+                if (likely(comm))
                     comm_free = 1;
                 else
                     comm = "";
@@ -554,18 +570,21 @@ int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                              strlen(comm) + strlen(abs_path) + 172;
 
             result_str = kzalloc(result_str_len, GFP_ATOMIC);
+            if (likely(result_str)) {
+                snprintf(result_str, result_str_len,
+                         "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%u",
+                         get_current_uid(), "\n", CONNECT_TYPE, "\n", sa_family,
+                         "\n", fd, "\n", dport, "\n", dip, "\n", abs_path, "\n",
+                         current->pid, "\n", current->real_parent->pid, "\n",
+                         pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                         comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
+                         sip, "\n", sport, "\n", retval, "\n", sessionid);
 
-            snprintf(result_str, result_str_len,
-                     "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%u",
-                     get_current_uid(), "\n", CONNECT_TYPE, "\n", sa_family,
-                     "\n", fd, "\n", dport, "\n", dip, "\n", abs_path, "\n",
-                     current->pid, "\n", current->real_parent->pid, "\n",
-                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                     comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                     sip, "\n", sport, "\n", retval, "\n", sessionid);
+                send_msg_to_user(result_str, 1);
+            }
 
-            send_msg_to_user(result_str, 1);
-            kfree(buffer);
+            if (likely(strcmp(abs_path, "-2")))
+                kfree(buffer);
 
             if (likely(comm_free == 1))
                 kfree(comm);
@@ -627,26 +646,39 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
 
         if(likely(argv_len > 0)) {
             argv_res = kzalloc(argv_res_len + 1, GFP_ATOMIC);
-            for (i = 0; i < argv_len; i++) {
-                native = get_user_arg_ptr(argv_ptr, i);
-                if (unlikely(IS_ERR(native)))
+            if(unlikely(!argv_res))
+                argv_res = NULL;
+            else {
+                for (i = 0; i < argv_len; i++) {
+                    native = get_user_arg_ptr(argv_ptr, i);
+                    if (unlikely(IS_ERR(native)))
+                        break;
+
+                    len = strnlen_user(native, MAX_ARG_STRLEN);
+                    if (unlikely(!len))
+                        break;
+
+                    if (offset + len > argv_res_len - 1)
                     break;
 
-                len = strnlen_user(native, MAX_ARG_STRLEN);
-                if (!len)
-                    break;
+                    if (unlikely(copy_from_user(argv_res + offset, native, len)))
+                        break;
 
-                if (offset + len > argv_res_len - 1)
-                    break;
-
-                if (copy_from_user(argv_res + offset, native, len))
-                    break;
-
-                offset += len - 1;
-                *(argv_res + offset) = ' ';
-                offset += 1;
+                    offset += len - 1;
+                    *(argv_res + offset) = ' ';
+                    offset += 1;
+                }
             }
         }
+        
+        if (likely(argv_res)) {
+            argv_res_tmp = str_replace(argv_res, "\n", " ");
+            if(likely(argv_res_tmp))
+                argv_free = 1;
+            else
+                argv_res_tmp = "";
+        } else
+            argv_res_tmp = "";
 
         ssh_connection = kzalloc(255, GFP_ATOMIC);
         ld_preload = kzalloc(255, GFP_ATOMIC);
@@ -667,11 +699,17 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
                         break;
                     else {
                         if(strncmp("SSH_CONNECTION=", buf, 11) == 0) {
-                            strcpy(ssh_connection, buf + 15);
-                            ssh_connection_flag = 1;
+                            if(likely(ssh_connection)) {
+                                strcpy(ssh_connection, buf + 15);
+                                ssh_connection_flag = 1;
+                            } else
+                                ssh_connection = "";
                         } else if(strncmp("LD_PRELOAD=", buf, 11) == 0) {
-                            strcpy(ld_preload, buf + 11);
-                            ld_preload_flag = 1;
+                            if (likely(ld_preload)) {
+                                strcpy(ld_preload, buf + 11);
+                                ld_preload_flag = 1;
+                            } else
+                                ld_preload = "";
                         }
                     }
                 }
@@ -686,37 +724,32 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
             strcpy(ld_preload, "-1");
         data->ld_preload = ld_preload;
 
-        if (likely(argv_len > 0)) {
-            argv_res_tmp = str_replace(argv_res, "\n", " ");
-            if(likely(argv_res_tmp != NULL))
-                argv_free = 1;
-            else
-                argv_res_tmp = "";
-        } else
-            argv_res_tmp = "";
-
         tmp_buf = kzalloc(256, GFP_ATOMIC);
-        if(copy_from_user(tmp_buf, (const char __user *)p_get_arg1(regs), 256))
-            abs_path = "-1";
+        if(unlikely(!tmp_buf))
+            abs_path = "-2";
         else {
-            if(unlikely(strcmp(tmp_buf, "/") != 0 && strcmp(tmp_buf, ".") != 0)) {
-                abs_path = tmp_buf;
-                free_abs_path = 1;
-            } else {
-                error = user_path_at(AT_FDCWD, (const char __user *)p_get_arg1(regs), LOOKUP_FOLLOW, &exe_file);
-                if (unlikely(error)) {
-                    abs_path = "-1";
+            if(unlikely(copy_from_user(tmp_buf, (const char __user *)p_get_arg1(regs), 256)))
+                abs_path = "-1";
+            else {
+                if(unlikely(strcmp(tmp_buf, "/") != 0 && strcmp(tmp_buf, ".") != 0)) {
+                    abs_path = tmp_buf;
+                    free_abs_path = 1;
                 } else {
-                    exe_file_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
-                    if (unlikely(!exe_file_buf)) {
-                        abs_path = "-2";
-                    } else {
-                        abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
-                        if (unlikely(IS_ERR(abs_path)))
-                            abs_path = "-1";
-                        kfree(exe_file_buf);
+                    error = user_path_at(AT_FDCWD, (const char __user *)p_get_arg1(regs), LOOKUP_FOLLOW, &exe_file);
+                    if (unlikely(error))
+                        abs_path = "-1";
+                    else {
+                        exe_file_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
+                        if (unlikely(!exe_file_buf)) {
+                            abs_path = "-2";
+                        } else {
+                            abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
+                            if (unlikely(IS_ERR(abs_path)))
+                                abs_path = "-1";
+                            kfree(exe_file_buf);
+                        }
+                        path_put(&exe_file);
                     }
-                    path_put(&exe_file);
                 }
             }
         }
@@ -726,7 +759,7 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
         data->free_abs_path = free_abs_path;
         data->argv_free = argv_free;
 
-        if(likely(argv_len > 0))
+        if(likely(argv_res))
             kfree(argv_res);
     }
     return 0;
@@ -770,26 +803,39 @@ int compat_execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs 
 
         if(likely(argv_len > 0)) {
             argv_res = kzalloc(argv_res_len + 1, GFP_ATOMIC);
-            for (i = 0; i < argv_len; i++) {
-                native = get_user_arg_ptr(argv_ptr, i);
-                if (unlikely(IS_ERR(native)))
+            if(unlikely(!argv_res))
+                argv_res = NULL;
+            else {
+                for (i = 0; i < argv_len; i++) {
+                    native = get_user_arg_ptr(argv_ptr, i);
+                    if (unlikely(IS_ERR(native)))
+                        break;
+
+                    len = strnlen_user(native, MAX_ARG_STRLEN);
+                    if (unlikely(!len))
+                        break;
+
+                    if (offset + len > argv_res_len - 1)
                     break;
 
-                len = strnlen_user(native, MAX_ARG_STRLEN);
-                if (!len)
-                    break;
+                    if (unlikely(copy_from_user(argv_res + offset, native, len)))
+                        break;
 
-                if (offset + len > argv_res_len + 1)
-                    break;
-
-                if (copy_from_user(argv_res + offset, native, len))
-                    break;
-
-                offset += len - 1;
-                *(argv_res + offset) = ' ';
-                offset += 1;
+                    offset += len - 1;
+                    *(argv_res + offset) = ' ';
+                    offset += 1;
+                }
             }
         }
+
+        if (likely(argv_res)) {
+            argv_res_tmp = str_replace(argv_res, "\n", " ");
+            if(likely(argv_res_tmp))
+                argv_free = 1;
+            else
+                argv_res_tmp = "";
+        } else
+            argv_res_tmp = "";
 
         ssh_connection = kzalloc(255, GFP_ATOMIC);
         ld_preload = kzalloc(255, GFP_ATOMIC);
@@ -810,11 +856,17 @@ int compat_execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs 
                         break;
                     else {
                         if(strncmp("SSH_CONNECTION=", buf, 11) == 0) {
-                            strcpy(ssh_connection, buf + 15);
-                            ssh_connection_flag = 1;
+                            if(likely(ssh_connection)) {
+                                strcpy(ssh_connection, buf + 15);
+                                ssh_connection_flag = 1;
+                            } else
+                                ssh_connection = "";
                         } else if(strncmp("LD_PRELOAD=", buf, 11) == 0) {
-                            strcpy(ld_preload, buf + 11);
-                            ld_preload_flag = 1;
+                            if (likely(ld_preload)) {
+                                strcpy(ld_preload, buf + 11);
+                                ld_preload_flag = 1;
+                            } else
+                                ld_preload = "";
                         }
                     }
                 }
@@ -829,37 +881,32 @@ int compat_execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs 
             strcpy(ld_preload, "-1");
         data->ld_preload = ld_preload;
 
-        if (likely(argv_len > 0)) {
-            argv_res_tmp = str_replace(argv_res, "\n", " ");
-            if(likely(argv_res_tmp != NULL))
-                argv_free = 1;
-            else
-                argv_res_tmp = "";
-        } else
-            argv_res_tmp = "";
-
         tmp_buf = kzalloc(256, GFP_ATOMIC);
-        if(copy_from_user(tmp_buf, (const char __user *)p_get_arg1(regs), 256))
-            abs_path = "-1";
+        if(unlikely(!tmp_buf))
+            abs_path = "-2";
         else {
-            if(unlikely(strcmp(tmp_buf, "/") != 0 && strcmp(tmp_buf, ".") != 0)) {
-                abs_path = tmp_buf;
-                free_abs_path = 1;
-            } else {
-                error = user_path_at(AT_FDCWD, (const char __user *)p_get_arg1(regs), LOOKUP_FOLLOW, &exe_file);
-                if (unlikely(error)) {
-                    abs_path = "-1";
+            if(unlikely(copy_from_user(tmp_buf, (const char __user *)p_get_arg1(regs), 256)))
+                abs_path = "-1";
+            else {
+                if(unlikely(strcmp(tmp_buf, "/") != 0 && strcmp(tmp_buf, ".") != 0)) {
+                    abs_path = tmp_buf;
+                    free_abs_path = 1;
                 } else {
-                    exe_file_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
-                    if (unlikely(!exe_file_buf)) {
-                        abs_path = "-2";
-                    } else {
-                        abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
-                        if (unlikely(IS_ERR(abs_path)))
-                            abs_path = "-1";
-                        kfree(exe_file_buf);
+                    error = user_path_at(AT_FDCWD, (const char __user *)p_get_arg1(regs), LOOKUP_FOLLOW, &exe_file);
+                    if (unlikely(error))
+                        abs_path = "-1";
+                    else {
+                        exe_file_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
+                        if (unlikely(!exe_file_buf)) {
+                            abs_path = "-2";
+                        } else {
+                            abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
+                            if (unlikely(IS_ERR(abs_path)))
+                                abs_path = "-1";
+                            kfree(exe_file_buf);
+                        }
+                        path_put(&exe_file);
                     }
-                    path_put(&exe_file);
                 }
             }
         }
@@ -869,7 +916,7 @@ int compat_execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs 
         data->free_abs_path = free_abs_path;
         data->argv_free = argv_free;
 
-        if(likely(argv_len > 0))
+        if(likely(argv_res))
             kfree(argv_res);
     }
     return 0;
@@ -905,26 +952,39 @@ int execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
         if(likely(argv_len > 0)) {
             argv_res = kzalloc(argv_res_len + 1, GFP_ATOMIC);
-            for (i = 0; i < argv_len; i++) {
-                native = get_user_arg_ptr(argv_ptr, i);
-                if (unlikely(IS_ERR(native)))
+            if(unlikely(!argv_res))
+                argv_res = NULL;
+            else {
+                for (i = 0; i < argv_len; i++) {
+                    native = get_user_arg_ptr(argv_ptr, i);
+                    if (unlikely(IS_ERR(native)))
+                        break;
+
+                    len = strnlen_user(native, MAX_ARG_STRLEN);
+                    if (unlikely(!len))
+                        break;
+
+                    if (offset + len > argv_res_len - 1)
                     break;
 
-                len = strnlen_user(native, MAX_ARG_STRLEN);
-                if (!len)
-                    break;
+                    if (unlikely(copy_from_user(argv_res + offset, native, len)))
+                        break;
 
-                if (offset + len > argv_res_len - 1)
-                    break;
-
-                if (copy_from_user(argv_res + offset, native, len))
-                    break;
-
-                offset += len - 1;
-                *(argv_res + offset) = ' ';
-                offset += 1;
+                    offset += len - 1;
+                    *(argv_res + offset) = ' ';
+                    offset += 1;
+                }
             }
         }
+
+        if (likely(argv_res)) {
+            argv_res_tmp = str_replace(argv_res, "\n", " ");
+            if(likely(argv_res_tmp))
+                argv_free = 1;
+            else
+                argv_res_tmp = "";
+        } else
+            argv_res_tmp = "";
 
         ssh_connection = kzalloc(255, GFP_ATOMIC);
         ld_preload = kzalloc(255, GFP_ATOMIC);
@@ -933,10 +993,12 @@ int execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             char buf[256];
             for (i = 0; i < env_len; i++) {
                 native = get_user_arg_ptr(env_ptr, i);
+
                 if (unlikely(IS_ERR(native)))
                     continue;
 
                 len = strnlen_user(native, MAX_ARG_STRLEN);
+
                 if(unlikely(!len))
                     continue;
                 else if(len > 14) {
@@ -945,11 +1007,17 @@ int execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                         break;
                     else {
                         if(strncmp("SSH_CONNECTION=", buf, 11) == 0) {
-                            strcpy(ssh_connection, buf + 15);
-                            ssh_connection_flag = 1;
+                            if(likely(ssh_connection)) {
+                                strcpy(ssh_connection, buf + 15);
+                                ssh_connection_flag = 1;
+                            } else
+                                ssh_connection = "";
                         } else if(strncmp("LD_PRELOAD=", buf, 11) == 0) {
-                            strcpy(ld_preload, buf + 11);
-                            ld_preload_flag = 1;
+                            if (likely(ld_preload)) {
+                                strcpy(ld_preload, buf + 11);
+                                ld_preload_flag = 1;
+                            } else
+                                ld_preload = "";
                         }
                     }
                 }
@@ -964,37 +1032,32 @@ int execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             strcpy(ld_preload, "-1");
         data->ld_preload = ld_preload;
 
-        if (likely(argv_len > 0)) {
-            argv_res_tmp = str_replace(argv_res, "\n", " ");
-            if(likely(argv_res_tmp != NULL))
-                argv_free = 1;
-            else
-                argv_res_tmp = "";
-        } else
-            argv_res_tmp = "";
-
         tmp_buf = kzalloc(256, GFP_ATOMIC);
-        if(copy_from_user(tmp_buf, (const char __user *)p_get_arg1(regs), 256))
-            abs_path = "-1";
+        if(unlikely(!tmp_buf))
+            abs_path = "-2";
         else {
-            if(unlikely(strcmp(tmp_buf, "/") != 0 && strcmp(tmp_buf, ".") != 0)) {
-                abs_path = tmp_buf;
-                free_abs_path = 1;
-            } else {
-                error = user_path_at(AT_FDCWD, (const char __user *)p_get_arg1(regs), LOOKUP_FOLLOW, &exe_file);
-                if (unlikely(error)) {
-                    abs_path = "-1";
+            if(unlikely(copy_from_user(tmp_buf, (const char __user *)p_get_arg1(regs), 256)))
+                abs_path = "-1";
+            else {
+                if(unlikely(strcmp(tmp_buf, "/") != 0 && strcmp(tmp_buf, ".") != 0)) {
+                    abs_path = tmp_buf;
+                    free_abs_path = 1;
                 } else {
-                    exe_file_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
-                    if (unlikely(!exe_file_buf)) {
-                        abs_path = "-2";
-                    } else {
-                        abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
-                        if (unlikely(IS_ERR(abs_path)))
-                            abs_path = "-1";
-                        kfree(exe_file_buf);
+                    error = user_path_at(AT_FDCWD, (const char __user *)p_get_arg1(regs), LOOKUP_FOLLOW, &exe_file);
+                    if (unlikely(error))
+                        abs_path = "-1";
+                    else {
+                        exe_file_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
+                        if (unlikely(!exe_file_buf)) {
+                            abs_path = "-2";
+                        } else {
+                            abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
+                            if (unlikely(IS_ERR(abs_path)))
+                                abs_path = "-1";
+                            kfree(exe_file_buf);
+                        }
+                        path_put(&exe_file);
                     }
-                    path_put(&exe_file);
                 }
             }
         }
@@ -1004,7 +1067,7 @@ int execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         data->free_abs_path = free_abs_path;
         data->argv_free = argv_free;
 
-        if(likely(argv_len > 0))
+        if(likely(argv_res))
             kfree(argv_res);
     }
     return 0;
@@ -1039,26 +1102,40 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
         if(likely(argv_len > 0)) {
             argv_res = kzalloc(argv_res_len + 1, GFP_ATOMIC);
-            for (i = 0; i < argv_len; i++) {
-                native = get_user_arg_ptr(argv_ptr, i);
-                if (unlikely(IS_ERR(native)))
+
+            if(unlikely(!argv_res))
+                argv_res = NULL;
+            else {
+                for (i = 0; i < argv_len; i++) {
+                    native = get_user_arg_ptr(argv_ptr, i);
+                    if (unlikely(IS_ERR(native)))
+                        break;
+
+                    len = strnlen_user(native, MAX_ARG_STRLEN);
+                    if (unlikely(!len))
+                        break;
+
+                    if (offset + len > argv_res_len - 1)
                     break;
 
-                len = strnlen_user(native, MAX_ARG_STRLEN);
-                if (!len)
-                    break;
+                    if (unlikely(copy_from_user(argv_res + offset, native, len)))
+                        break;
 
-                if (offset + len > argv_res_len - 1)
-                    break;
-
-                if (copy_from_user(argv_res + offset, native, len))
-                    break;
-
-                offset += len - 1;
-                *(argv_res + offset) = ' ';
-                offset += 1;
+                    offset += len - 1;
+                    *(argv_res + offset) = ' ';
+                    offset += 1;
+                }
             }
         }
+
+        if (likely(argv_res)) {
+            argv_res_tmp = str_replace(argv_res, "\n", " ");
+            if(likely(argv_res_tmp))
+                argv_free = 1;
+            else
+                argv_res_tmp = "";
+        } else
+            argv_res_tmp = "";
 
         ssh_connection = kzalloc(255, GFP_ATOMIC);
         ld_preload = kzalloc(255, GFP_ATOMIC);
@@ -1079,11 +1156,17 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                         break;
                     else {
                         if(strncmp("SSH_CONNECTION=", buf, 11) == 0) {
-                            strcpy(ssh_connection, buf + 15);
-                            ssh_connection_flag = 1;
+                            if(likely(ssh_connection)) {
+                                strcpy(ssh_connection, buf + 15);
+                                ssh_connection_flag = 1;
+                            } else
+                                ssh_connection = "";
                         } else if(strncmp("LD_PRELOAD=", buf, 11) == 0) {
-                            strcpy(ld_preload, buf + 11);
-                            ld_preload_flag = 1;
+                            if (likely(ld_preload)) {
+                                strcpy(ld_preload, buf + 11);
+                                ld_preload_flag = 1;
+                            } else
+                                ld_preload = "";
                         }
                     }
                 }
@@ -1098,37 +1181,32 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             strcpy(ld_preload, "-1");
         data->ld_preload = ld_preload;
 
-        if (likely(argv_len > 0)) {
-            argv_res_tmp = str_replace(argv_res, "\n", " ");
-            if(likely(argv_res_tmp != NULL))
-                argv_free = 1;
-            else
-                argv_res_tmp = "";
-        } else
-            argv_res_tmp = "";
-
         tmp_buf = kzalloc(256, GFP_ATOMIC);
-        if(copy_from_user(tmp_buf, (const char __user *)p_get_arg1(regs), 256))
-            abs_path = "-1";
+        if(unlikely(!tmp_buf))
+            abs_path = "-2";
         else {
-            if(unlikely(strcmp(tmp_buf, "/") != 0 && strcmp(tmp_buf, ".") != 0)) {
-                abs_path = tmp_buf;
-                free_abs_path = 1;
-            } else {
-                error = user_path_at(AT_FDCWD, (const char __user *)p_get_arg1(regs), LOOKUP_FOLLOW, &exe_file);
-                if (unlikely(error)) {
-                    abs_path = "-1";
+            if(unlikely(copy_from_user(tmp_buf, (const char __user *)p_get_arg1(regs), 256)))
+                abs_path = "-1";
+            else {
+                if(unlikely(strcmp(tmp_buf, "/") != 0 && strcmp(tmp_buf, ".") != 0)) {
+                    abs_path = tmp_buf;
+                    free_abs_path = 1;
                 } else {
-                    exe_file_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
-                    if (unlikely(!exe_file_buf)) {
-                        abs_path = "-2";
-                    } else {
-                        abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
-                        if (unlikely(IS_ERR(abs_path)))
-                            abs_path = "-1";
-                        kfree(exe_file_buf);
+                    error = user_path_at(AT_FDCWD, (const char __user *)p_get_arg1(regs), LOOKUP_FOLLOW, &exe_file);
+                    if (unlikely(error))
+                        abs_path = "-1";
+                    else {
+                        exe_file_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
+                        if (unlikely(!exe_file_buf)) {
+                            abs_path = "-2";
+                        } else {
+                            abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
+                            if (unlikely(IS_ERR(abs_path)))
+                                abs_path = "-1";
+                            kfree(exe_file_buf);
+                        }
+                        path_put(&exe_file);
                     }
-                    path_put(&exe_file);
                 }
             }
         }
@@ -1138,7 +1216,7 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         data->free_abs_path = free_abs_path;
         data->argv_free = argv_free;
 
-        if(likely(argv_len > 0))
+        if(likely(argv_res))
             kfree(argv_res);
     }
     return 0;
@@ -1201,13 +1279,13 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         sessionid = get_sessionid();
         tty = get_current_tty();
 
-        if(likely(current->nsproxy->uts_ns != NULL))
+        if(likely(current->nsproxy->uts_ns))
             nodename = current->nsproxy->uts_ns->name.nodename;
 
-        if(likely(current->comm != NULL)) {
+        if(likely(current->comm)) {
             if(likely(strlen(current->comm)) > 0) {
                 comm = str_replace(current->comm, "\n", " ");
-                if(likely(comm != NULL))
+                if(likely(comm))
                     comm_free = 1;
                 else
                     comm = "";
@@ -1218,7 +1296,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
         tty = get_current_tty();
         if(likely(tty)) {
-            if(likely(tty->name != NULL)) {
+            if(likely(tty->name)) {
                 tty_name_len = strlen(tty->name);
                 if(tty_name_len == 0)
                     tty_name = "-1";
@@ -1235,12 +1313,12 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             if(limit_index > limit)
                 break;
 
-            if(task->files == NULL)
+            if(unlikely(!task->files))
                 continue;
 
             task_files = files_fdtable(task->files);
 
-            for (i = 0; task_files->fd[i] != NULL; i++) {
+            for (i = 0; task_files->fd[i]; i++) {
                 if(i > 7)
                     break;
 
@@ -1252,13 +1330,13 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
                 if(strncmp("socket:[", d_name, 8) == 0) {
                     void *tmp = task_files->fd[i]->private_data;
-                    if(unlikely(tmp == NULL))
+                    if(unlikely(!tmp))
                         continue;
 
                     socket = (struct socket *)tmp;
                     if(likely(socket)) {
                         sk = socket->sk;
-                        if(socket->sk == NULL)
+                        if(unlikely(socket->sk))
                             continue;
                         inet = (struct inet_sock*)sk;
                         sa_family = sk->sk_family;
@@ -1286,41 +1364,40 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
             if (socket_check == 1) {
                 pid_tree = get_pid_tree();
+                if(unlikely(!pid_tree))
+                    pid_tree = "-1";
+                else
+                    pid_tree_free = 1;
+
                 pid_tree_free = 1;
                 socket_pid = task->pid;
                 socket_pname_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
-                if (unlikely(!socket_pname_buf)) {
+                if (unlikely(!socket_pname_buf))
                     socket_pname = "-2";
-                } else {
+                else {
                     socket_pname = get_exe_file(task, socket_pname_buf, PATH_MAX);
-                    if (unlikely(!socket_pname)) {
+                    if (unlikely(!socket_pname))
                         socket_pname = "-1";
-                    }
                 }
                 break;
-            } else {
+            } else
                 task = task->parent;
-            }
         }
 
         files = files_fdtable(current->files);
-        if(likely(files->fd[0] != NULL)) {
+        if(likely(files->fd[0])) {
             tmp_stdin = d_path(&(files->fd[0]->f_path), stdin_fd_buf, PATH_MAX);
-            if (unlikely(IS_ERR(tmp_stdin))) {
+            if (unlikely(IS_ERR(tmp_stdin)))
                 tmp_stdin = "-1";
-            }
-        } else {
+        } else
             tmp_stdin = "";
-        }
 
-        if(likely(files->fd[1] != NULL)) {
+        if(likely(files->fd[1])) {
             tmp_stdout = d_path(&(files->fd[1]->f_path), stdout_fd_buf, PATH_MAX);
-            if (unlikely(IS_ERR(tmp_stdout))) {
+            if (unlikely(IS_ERR(tmp_stdout)))
                 tmp_stdout = "-1";
-            }
-        } else {
+        } else
             tmp_stdout = "";
-        }
 
         pname = _dentry_path_raw();
 
@@ -1330,7 +1407,8 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
-        snprintf(result_str, result_str_len,
+        if(likely(result_str)) {
+            snprintf(result_str, result_str_len,
                  "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%u%s%s%s%s%s%s%s%s%s%d%s%s%s%s%s%d%s%s%s%s%s%s",
                  get_current_uid(), "\n", EXECVE_TYPE, "\n", pname, "\n",
                  abs_path, "\n", argv, "\n", current->pid, "\n",
@@ -1341,7 +1419,8 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                  "\n", pid_tree, "\n", tty_name,"\n", socket_pid, "\n", socket_pname, "\n",
                  data->ssh_connection, "\n", data->ld_preload);
 
-        send_msg_to_user(result_str, 1);
+            send_msg_to_user(result_str, 1);
+        }
 
         if (likely(strcmp(socket_pname_buf, "-2")))
             kfree(socket_pname_buf);
@@ -1394,27 +1473,41 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
         argv_res_len = 128 * (argv_len + 2);
         argv_len = count(argv, MAX_ARG_STRINGS);
 
-        if (likely(argv_len > 0)) {
+        if(likely(argv_len > 0)) {
             argv_res = kzalloc(argv_res_len + 1, GFP_ATOMIC);
-            for (i = 0; i < argv_len; i++) {
-                if (get_user(native, argv + i))
-                    break;
+            if(unlikely(!argv_res))
+                argv_res = NULL;
+            else {
+                for (i = 0; i < argv_len; i++) {
+                    native = get_user_arg_ptr(argv_ptr, i);
+                    if (unlikely(IS_ERR(native)))
+                        break;
 
-                len = strnlen_user(native, MAX_ARG_STRLEN);
-                if (!len)
-                    break;
+                    len = strnlen_user(native, MAX_ARG_STRLEN);
+                    if (unlikely(!len))
+                        break;
 
-                if (offset + len > argv_res_len - 1)
-                    break;
+                    if (offset + len > argv_res_len - 1)
+                        break;
 
-                if (copy_from_user(argv_res + offset, native, len))
-                    break;
+                    if (unlikely(copy_from_user(argv_res + offset, native, len)))
+                        break;
 
-                offset += len - 1;
-                *(argv_res + offset) = ' ';
-                offset += 1;
+                    offset += len - 1;
+                    *(argv_res + offset) = ' ';
+                    offset += 1;
+                }
             }
         }
+
+        if (likely(argv_res)) {
+            argv_res_tmp = str_replace(argv_res, "\n", " ");
+            if(likely(argv_res_tmp))
+                argv_free = 1;
+            else
+                argv_res_tmp = "";
+        } else
+            argv_res_tmp = "";
 
         ssh_connection = kzalloc(255, GFP_ATOMIC);
         ld_preload = kzalloc(255, GFP_ATOMIC);
@@ -1435,11 +1528,17 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
                         break;
                     else {
                         if (strncmp("SSH_CONNECTION=", buf, 11) == 0) {
-                            strcpy(ssh_connection, buf + 15);
-                            ssh_connection_flag = 1;
+                            if(likely(ssh_connection)) {
+                                strcpy(ssh_connection, buf + 15);
+                                ssh_connection_flag = 1;
+                            } else
+                                ssh_connection = "";
                         } else if (strncmp("LD_PRELOAD=", buf, 11) == 0) {
-                            strcpy(ld_preload, buf + 11);
-                            ld_preload_flag = 1;
+                            if(likely(ld_preload)) {
+                                strcpy(ld_preload, buf + 11);
+                                ld_preload_flag = 1;
+                            } else
+                                ld_preload = "";
                         }
                     }
                 }
@@ -1452,21 +1551,12 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
 
         if (unlikely(ld_preload_flag == 0))
             strcpy(ld_preload, "-1");
+
         data->ld_preload = ld_preload;
-
-        if (likely(argv_len > 0)) {
-            argv_res_tmp = str_replace(argv_res, "\n", " ");
-            if (likely(argv_res_tmp != NULL))
-                argv_free = 1;
-            else
-                argv_res_tmp = "";
-        } else
-            argv_res_tmp = "";
-
         data->argv = argv_res_tmp;
         data->argv_free = argv_free;
 
-        if (likely(argv_len > 0))
+        if (likely(argv_res))
             kfree(argv_res);
     }
     return 0;
@@ -1494,27 +1584,41 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
         argv_len = count(argv, MAX_ARG_STRINGS);
         env_len = count(env, MAX_ARG_STRINGS);
 
-        if (likely(argv_len > 0)) {
+        if(likely(argv_len > 0)) {
             argv_res = kzalloc(argv_res_len + 1, GFP_ATOMIC);
-            for (i = 0; i < argv_len; i++) {
-                if (get_user(native, argv + i))
-                    break;
+            if(unlikely(!argv_res))
+                argv_res = NULL;
+            else {
+                for (i = 0; i < argv_len; i++) {
+                    native = get_user_arg_ptr(argv_ptr, i);
+                    if (unlikely(IS_ERR(native)))
+                        break;
 
-                len = strnlen_user(native, MAX_ARG_STRLEN);
-                if (!len)
-                    break;
+                    len = strnlen_user(native, MAX_ARG_STRLEN);
+                    if (unlikely(!len))
+                        break;
 
-                if (offset + len > argv_res_len - 1)
-                    break;
+                    if (offset + len > argv_res_len - 1)
+                        break;
 
-                if (copy_from_user(argv_res + offset, native, len))
-                    break;
+                    if (unlikely(copy_from_user(argv_res + offset, native, len)))
+                        break;
 
-                offset += len - 1;
-                *(argv_res + offset) = ' ';
-                offset += 1;
+                    offset += len - 1;
+                    *(argv_res + offset) = ' ';
+                    offset += 1;
+                }
             }
         }
+
+        if (likely(argv_res)) {
+            argv_res_tmp = str_replace(argv_res, "\n", " ");
+            if(likely(argv_res_tmp))
+                argv_free = 1;
+            else
+                argv_res_tmp = "";
+        } else
+            argv_res_tmp = "";
 
         ssh_connection = kzalloc(255, GFP_ATOMIC);
         ld_preload = kzalloc(255, GFP_ATOMIC);
@@ -1535,11 +1639,17 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                         break;
                     else {
                         if (strncmp("SSH_CONNECTION=", buf, 11) == 0) {
-                            strcpy(ssh_connection, buf + 15);
-                            ssh_connection_flag = 1;
+                            if(likely(ssh_connection)) {
+                                strcpy(ssh_connection, buf + 15);
+                                ssh_connection_flag = 1;
+                            } else
+                                ssh_connection = "";
                         } else if (strncmp("LD_PRELOAD=", buf, 11) == 0) {
-                            strcpy(ld_preload, buf + 11);
-                            ld_preload_flag = 1;
+                            if(likely(ld_preload)) {
+                                strcpy(ld_preload, buf + 11);
+                                ld_preload_flag = 1;
+                            } else
+                                ld_preload = "";
                         }
                     }
                 }
@@ -1552,21 +1662,12 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
 
         if (unlikely(ld_preload_flag == 0))
             strcpy(ld_preload, "-1");
+
         data->ld_preload = ld_preload;
-
-        if (likely(argv_len > 0)) {
-            argv_res_tmp = str_replace(argv_res, "\n", " ");
-            if (likely(argv_res_tmp != NULL))
-                argv_free = 1;
-            else
-                argv_res_tmp = "";
-        } else
-            argv_res_tmp = "";
-
         data->argv = argv_res_tmp;
         data->argv_free = argv_free;
 
-        if (likely(argv_len > 0))
+        if (likely(argv_res))
             kfree(argv_res);
     }
     return 0;
@@ -1624,13 +1725,13 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
         free_abs_path = data->free_abs_path;
         sessionid = get_sessionid();
 
-        if (likely(current->nsproxy->uts_ns != NULL))
+        if (likely(current->nsproxy->uts_ns))
             nodename = current->nsproxy->uts_ns->name.nodename;
 
-        if (likely(current->comm != NULL)) {
+        if (likely(current->comm)) {
             if (likely(strlen(current->comm)) > 0) {
                 comm = str_replace(current->comm, "\n", " ");
-                if (likely(comm != NULL))
+                if (likely(comm))
                     comm_free = 1;
                 else
                     comm = "";
@@ -1641,7 +1742,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
 
         tty = get_current_tty();
         if (likely(tty)) {
-            if (likely(tty->name != NULL)) {
+            if (likely(tty->name)) {
                 tty_name_len = strlen(tty->name);
                 if (tty_name_len == 0)
                     tty_name = "-1";
@@ -1658,12 +1759,12 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
             if (limit_index > limit)
                 break;
 
-            if (task->files == NULL)
+            if (unlikely(!task->files))
                 continue;
 
             task_files = files_fdtable(task->files);
 
-            for (i = 0; task_files->fd[i] != NULL; i++) {
+            for (i = 0; task_files->fd[i]; i++) {
                 if (i > 7)
                     break;
 
@@ -1675,13 +1776,13 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
 
                 if (strncmp("socket:[", d_name, 8) == 0) {
                     void *tmp = task_files->fd[i]->private_data;
-                    if (unlikely(tmp == NULL))
+                    if (unlikely(!tmp))
                         continue;
 
                     socket = (struct socket *) tmp;
                     if (likely(socket)) {
                         sk = socket->sk;
-                        if (socket->sk == NULL)
+                        if (unlikely(!socket->sk))
                             continue;
                         inet = (struct inet_sock *) sk;
                         sa_family = sk->sk_family;
@@ -1723,7 +1824,11 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
 
             if (socket_check == 1) {
                 pid_tree = get_pid_tree();
-                pid_tree_free = 1;
+                if (unlikely(!pid_tree))
+                    pid_tree = "-1";
+                else
+                    pid_tree_free = 1;
+
                 socket_pid = task->pid;
                 socket_pname_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
                 if (unlikely(!socket_pname_buf)) {
@@ -1741,7 +1846,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
         }
 
         files = files_fdtable(current->files);
-        if (likely(files->fd[0] != NULL)) {
+        if (likely(files->fd[0])) {
             tmp_stdin = d_path(&(files->fd[0]->f_path), tmp_stdin_fd, PATH_MAX);
             if (unlikely(IS_ERR(tmp_stdin))) {
                 tmp_stdin = "-1";
@@ -1750,7 +1855,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
             tmp_stdin = "";
         }
 
-        if (likely(files->fd[1] != NULL)) {
+        if (likely(files->fd[1])) {
             tmp_stdout = d_path(&(files->fd[1]->f_path), tmp_stdout_fd, PATH_MAX);
             if (unlikely(IS_ERR(tmp_stdout))) {
                 tmp_stdout = "-1";
@@ -1774,19 +1879,20 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                          strlen(data->ld_preload) + 256;
 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
+        if(likely(result_str)) {
+            snprintf(result_str, result_str_len,
+                     "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%u%s%s%s%s%s%s%s%s%s%d%s%s%s%s%s%d%s%s%s%s%s%s",
+                     get_current_uid(), "\n", EXECVE_TYPE, "\n", pname, "\n",
+                     abs_path, "\n", argv, "\n", current->pid, "\n",
+                     current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
+                     "\n", current->tgid, "\n", comm, "\n",
+                     nodename, "\n", tmp_stdin, "\n", tmp_stdout,
+                     "\n", sessionid, "\n", dip, "\n", dport, "\n", sip, "\n", sport, "\n", sa_family,
+                     "\n", pid_tree, "\n", tty_name, "\n", socket_pid, "\n", socket_pname, "\n",
+                     data->ssh_connection, "\n", data->ld_preload);
 
-        snprintf(result_str, result_str_len,
-                 "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%u%s%s%s%s%s%s%s%s%s%d%s%s%s%s%s%d%s%s%s%s%s%s",
-                 get_current_uid(), "\n", EXECVE_TYPE, "\n", pname, "\n",
-                 abs_path, "\n", argv, "\n", current->pid, "\n",
-                 current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
-                 "\n", current->tgid, "\n", comm, "\n",
-                 nodename, "\n", tmp_stdin, "\n", tmp_stdout,
-                 "\n", sessionid, "\n", dip, "\n", dport, "\n", sip, "\n", sport, "\n", sa_family,
-                 "\n", pid_tree, "\n", tty_name, "\n", socket_pid, "\n", socket_pname, "\n",
-                 data->ssh_connection, "\n", data->ld_preload);
-
-        send_msg_to_user(result_str, 1);
+            send_msg_to_user(result_str, 1);
+        }
 
         if (likely(strcmp(buffer, "-2")))
             kfree(buffer);
@@ -1827,11 +1933,17 @@ int security_inode_create_entry_handler(struct kretprobe_instance *ri, struct pt
         struct security_inode_create_data *data;
         pname_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
         data = (struct security_inode_create_data *) ri->data;
+        if (unlikely(!pname_buf)) {
+            pname_buf = "-2";
+            result_str = "-2";
+        } else {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 38)
-        result_str = dentry_path_raw((struct dentry *) p_regs_get_arg2(regs),pname_buf,PATH_MAX);
+            result_str = dentry_path_raw((struct dentry *) p_regs_get_arg2(regs),pname_buf,PATH_MAX);
 #else
-        result_str = __dentry_path((struct dentry *) p_regs_get_arg2(regs), pname_buf, PATH_MAX);
+            result_str = __dentry_path((struct dentry *) p_regs_get_arg2(regs), pname_buf, PATH_MAX);
 #endif
+        }
+
         data->filename = result_str;
         data->pname_buf = pname_buf;
     }
@@ -1853,13 +1965,16 @@ int security_inode_create_handler(struct kretprobe_instance *ri, struct pt_regs 
         data = (struct security_inode_create_data *) ri->data;
         pathstr = data->filename;
         buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
-        abs_path = get_exe_file(current, buffer, PATH_MAX);
+        if (unlikely(!buffer))
+            abs_path = "-2";
+        else
+            abs_path = get_exe_file(current, buffer, PATH_MAX);
 
         sessionid = get_sessionid();
 
         if (strlen(current->comm) > 0) {
             comm = str_replace(current->comm, "\n", " ");
-            if (likely(comm != NULL))
+            if (likely(comm))
                 comm_free = 1;
             else
                 comm = "";
@@ -1874,16 +1989,20 @@ int security_inode_create_handler(struct kretprobe_instance *ri, struct pt_regs 
             pathstr = "";
 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
+        if (likely(result_str)) {
+            snprintf(result_str, result_str_len,
+                     "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
+                     get_current_uid(), "\n", CREATE_FILE, "\n", abs_path, "\n", pathstr,
+                     "\n", current->pid, "\n", current->real_parent->pid, "\n",
+                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                     comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
+            send_msg_to_user(result_str, 1);
+        }
 
-        snprintf(result_str, result_str_len,
-                 "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
-                 get_current_uid(), "\n", CREATE_FILE, "\n", abs_path, "\n", pathstr,
-                 "\n", current->pid, "\n", current->real_parent->pid, "\n",
-                 pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                 comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
-        send_msg_to_user(result_str, 1);
-        kfree(data->pname_buf);
-        kfree(buffer);
+        if (likely(strcmp(data->pname_buf, "-2")))
+            kfree(data->pname_buf);
+        if (likely(strcmp(abs_path, "-2")))
+            kfree(buffer);
 
         if (likely(comm_free == 1))
             kfree(comm);
@@ -1913,11 +2032,14 @@ void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long f
             sessionid = get_sessionid();
 
             buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
-            abs_path = get_exe_file(current, buffer, PATH_MAX);
+            if (unlikely(!buffer))
+                abs_path = "-2";
+            else
+                abs_path = get_exe_file(current, buffer, PATH_MAX);
 
             if (strlen(current->comm) > 0) {
                 comm = str_replace(current->comm, "\n", " ");
-                if (likely(comm != NULL))
+                if (likely(comm))
                     comm_free = 1;
                 else
                     comm = "";
@@ -1929,16 +2051,19 @@ void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long f
 
             result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
-            snprintf(result_str, result_str_len,
-                     "%d%s%s%s%ld%s%ld%s%p%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
-                     get_current_uid(), "\n", PTRACE_TYPE, "\n", request,
-                     "\n", pid, "\n", addr, "\n", &data, "\n", abs_path, "\n",
-                     current->pid, "\n", current->real_parent->pid, "\n",
-                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                     comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
+            if(likely(result_str)) {
+                snprintf(result_str, result_str_len,
+                         "%d%s%s%s%ld%s%ld%s%p%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
+                         get_current_uid(), "\n", PTRACE_TYPE, "\n", request,
+                         "\n", pid, "\n", addr, "\n", &data, "\n", abs_path, "\n",
+                         current->pid, "\n", current->real_parent->pid, "\n",
+                         pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                         comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
+                send_msg_to_user(result_str, 1);
+            }
 
-            send_msg_to_user(result_str, 1);
-            kfree(buffer);
+            if (likely(strcmp(abs_path, "-2")))
+                kfree(buffer);
 
             if (likely(comm_free == 1))
                 kfree(comm);
@@ -2010,7 +2135,11 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
             sin = (struct sockaddr_in *) &tmp_dirp;
             if (sin->sin_port == 13568 || sin->sin_port == 59668) {
                 recv_data = kzalloc(data->size, GFP_ATOMIC);
-                recv_data_copy_res = copy_from_user(recv_data, data->ubuf, data->size);
+                if (unlikely(!recv_data))
+                    recv_data = "-2";
+                else
+                    recv_data_copy_res = copy_from_user(recv_data, data->ubuf, data->size);
+
                 if (strlen(recv_data) >= 8) {
                     qr = (recv_data[2] & 0x80) ? 1 : 0;
 
@@ -2019,7 +2148,10 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                         opcode = (recv_data[2] >> 3) & 0x0f;
                         rcode = recv_data[3] & 0x0f;
                         query = kzalloc(strlen(recv_data + 12), GFP_ATOMIC);
-                        getDNSQuery(recv_data, 12, query);
+                        if (unlikely(!query))
+                            query = "-2";
+                        else
+                            getDNSQuery(recv_data, 12, query);
                         snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr.s_addr));
                         snprintf(dport, 16, "%d", Ntohs(sin->sin_port));
                         if (sock) {
@@ -2047,7 +2179,10 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
             sin6 = (struct sockaddr_in6 *) &tmp_dirp;
             if (sin6->sin6_port == 13568 || sin6->sin6_port == 59668) {
                 recv_data = kzalloc(data->size, GFP_ATOMIC);
-                recv_data_copy_res = copy_from_user(recv_data, (void *) p_get_arg2(regs), data->size);
+                if (unlikely(!recv_data))
+                    recv_data = "-2";
+                else
+                    recv_data_copy_res = copy_from_user(recv_data, data->ubuf, data->size);
 
                 if (strlen(recv_data) >= 8) {
                     qr = (recv_data[2] & 0x80) ? 1 : 0;
@@ -2056,7 +2191,10 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                         opcode = (recv_data[2] >> 3) & 0x0f;
                         rcode = recv_data[3] & 0x0f;
                         query = kzalloc(strlen(recv_data + 12), GFP_ATOMIC);
-                        getDNSQuery(recv_data, 12, query);
+                        if (unlikely(!query))
+                            query = "-2";
+                        else
+                            getDNSQuery(recv_data, 12, query);
                         snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sin6->sin6_addr));
                         snprintf(dport, 16, "%d", Ntohs(sin6->sin6_port));
                         if (sock) {
@@ -2079,11 +2217,14 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
 
         if (flag == 1) {
             buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
-            abs_path = get_exe_file(current, buffer, PATH_MAX);
+            if (unlikely(!buffer))
+                abs_path = "-2";
+            else
+                abs_path = get_exe_file(current, buffer, PATH_MAX);
 
             if (strlen(current->comm) > 0) {
                 comm = str_replace(current->comm, "\n", " ");
-                if (likely(comm != NULL))
+                if (likely(comm))
                     comm_free = 1;
                 else
                     comm = "";
@@ -2094,20 +2235,27 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                              strlen(comm) + strlen(abs_path) + 172;
 
             result_str = kzalloc(result_str_len, GFP_ATOMIC);
+            if (likely(result_str)) {
+                snprintf(result_str, result_str_len,
+                         "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%s%s%u",
+                         get_current_uid(), "\n", DNS_TYPE, "\n", sa_family,
+                         "\n", data->fd, "\n", dport, "\n", dip, "\n", abs_path, "\n",
+                         current->pid, "\n", current->real_parent->pid, "\n",
+                         pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                         comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
+                         sip, "\n", sport, "\n", qr, "\n", opcode, "\n", rcode, "\n", query, "\n", sessionid);
 
-            snprintf(result_str, result_str_len,
-                     "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%s%s%u",
-                     get_current_uid(), "\n", DNS_TYPE, "\n", sa_family,
-                     "\n", data->fd, "\n", dport, "\n", dip, "\n", abs_path, "\n",
-                     current->pid, "\n", current->real_parent->pid, "\n",
-                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                     comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                     sip, "\n", sport, "\n", qr, "\n", opcode, "\n", rcode, "\n", query, "\n", sessionid);
+                send_msg_to_user(result_str, 1);
+            }
 
-            send_msg_to_user(result_str, 1);
-            kfree(query);
-            kfree(recv_data);
-            kfree(buffer);
+            if (likely(strcmp(query, "-2")))
+                kfree(query);
+
+            if (likely(strcmp(recv_data, "-2")))
+                kfree(recv_data);
+
+            if (likely(strcmp(abs_path, "-2")))
+                kfree(buffer);
 
             if (likely(comm_free == 1))
                 kfree(comm);
@@ -2141,18 +2289,21 @@ void load_module_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned l
         current_files = current->files;
         files_table = files_fdtable(current_files);
 
-        while (files_table->fd[i] != NULL)
+        while (files_table->fd[i])
             i++;
 
         buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
-        abs_path = get_exe_file(current, buffer, PATH_MAX);
+        if (unlikely(!buffer))
+            abs_path = "-2";
+        else
+            abs_path = get_exe_file(current, buffer, PATH_MAX);
 
         files_path = files_table->fd[i - 1]->f_path;
         cwd = d_path(&files_path, init_module_buf, PATH_MAX);
 
         if (strlen(current->comm) > 0) {
             comm = str_replace(current->comm, "\n", " ");
-            if (likely(comm != NULL))
+            if (likely(comm))
                 comm_free = 1;
             else
                 comm = "";
@@ -2163,15 +2314,18 @@ void load_module_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned l
                          + strlen(comm) + strlen(abs_path) + 192;
 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
+        if (likely(result_str)) {
+            snprintf(result_str, result_str_len, "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
+                     get_current_uid(), "\n", LOAD_MODULE_TYPE, "\n", abs_path, "\n", cwd,
+                     "\n", current->pid, "\n", current->real_parent->pid, "\n",
+                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                     comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
 
-        snprintf(result_str, result_str_len, "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
-                 get_current_uid(), "\n", LOAD_MODULE_TYPE, "\n", abs_path, "\n", cwd,
-                 "\n", current->pid, "\n", current->real_parent->pid, "\n",
-                 pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                 comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
+            send_msg_to_user(result_str, 1);
+        }
 
-        send_msg_to_user(result_str, 1);
-        kfree(buffer);
+        if (likely(strcmp(abs_path, "-2")))
+            kfree(buffer);
     }
 }
 
@@ -2211,7 +2365,7 @@ int update_cred_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
             if (data->old_uid != 0) {
                 if (strlen(current->comm) > 0) {
                     comm = str_replace(current->comm, "\n", " ");
-                    if (likely(comm != NULL))
+                    if (likely(comm))
                         comm_free = 1;
                     else
                         comm = "";
@@ -2225,7 +2379,10 @@ int update_cred_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                     char *abs_path;
 
                     buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
-                    abs_path = get_exe_file(current, buffer, PATH_MAX);
+                    if (unlikely(!buffer))
+                        abs_path = "-2";
+                    else
+                        abs_path = get_exe_file(current, buffer, PATH_MAX);
 
                     sessionid = get_sessionid();
 
@@ -2233,16 +2390,19 @@ int update_cred_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                                      + strlen(comm) + strlen(abs_path) + 192;
 
                     result_str = kzalloc(result_str_len, GFP_ATOMIC);
+                    if (likely(result_str)) {
+                        snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%d%s%s%s%u",
+                                 get_current_uid(), "\n", UPDATE_CRED_TYPE, "\n", abs_path,
+                                 "\n", current->pid, "\n", current->real_parent->pid, "\n",
+                                 pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                                 comm, "\n", data->old_uid, "\n", current->nsproxy->uts_ns->name.nodename,
+                                 "\n", sessionid);
 
-                    snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%d%s%s%s%u",
-                             get_current_uid(), "\n", UPDATE_CRED_TYPE, "\n", abs_path,
-                             "\n", current->pid, "\n", current->real_parent->pid, "\n",
-                             pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                             comm, "\n", data->old_uid, "\n", current->nsproxy->uts_ns->name.nodename,
-                             "\n", sessionid);
+                        send_msg_to_user(result_str, 1);
+                    }
 
-                    send_msg_to_user(result_str, 1);
-                    kfree(buffer);
+                    if (likely(strcmp(abs_path, "-2")))
+                        kfree(buffer);
 
                     if (likely(comm_free == 1))
                         kfree(comm);
@@ -2290,7 +2450,7 @@ int mprotect_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
 
                 if (strlen(current->comm) > 0) {
                     comm = str_replace(current->comm, "\n", " ");
-                    if (likely(comm != NULL))
+                    if (likely(comm))
                         comm_free = 1;
                     else
                         comm = "";
@@ -2300,21 +2460,28 @@ int mprotect_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                 sessionid = get_sessionid();
 
                 buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
-                abs_path = get_exe_file(current, buffer, PATH_MAX);
+                if (unlikely(!buffer))
+                    abs_path = "-2";
+                else
+                    abs_path = get_exe_file(current, buffer, PATH_MAX);
 
                 result_str_len = strlen(current->nsproxy->uts_ns->name.nodename)
                                  + strlen(comm) + strlen(abs_path) + 192;
 
                 result_str = kzalloc(result_str_len, GFP_ATOMIC);
-                snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%lu%s%u%s%lu%s%s%s%u",
-                         get_current_uid(), "\n", MPROTECT_TYPE, "\n", abs_path,
-                         "\n", current->pid, "\n", current->real_parent->pid, "\n",
-                         pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                         comm, "\n", data->start, "\n", data->len, "\n", data->prot,
-                         "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
+                if (likely(result_str)) {
+                    snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%lu%s%u%s%lu%s%s%s%u",
+                             get_current_uid(), "\n", MPROTECT_TYPE, "\n", abs_path,
+                             "\n", current->pid, "\n", current->real_parent->pid, "\n",
+                             pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                             comm, "\n", data->start, "\n", data->len, "\n", data->prot,
+                             "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
 
-                send_msg_to_user(result_str, 1);
-                kfree(buffer);
+                    send_msg_to_user(result_str, 1);
+                }
+
+                if (likely(strcmp(abs_path, "-2")))
+                    kfree(buffer);
 
                 if (likely(comm_free == 1))
                     kfree(comm);
@@ -2752,7 +2919,7 @@ module_init(smith_init)
 module_exit(smith_exit)
 
 MODULE_LICENSE("GPL v2");
-MODULE_VERSION("1.2.0");
+MODULE_VERSION("1.2.1");
 MODULE_AUTHOR("E_Bwill <cy_sniper@yeah.net>");
 MODULE_DESCRIPTION("get execve,connect,ptrace,load_module,dns_query,create_file,cred_change,"
 "proc_file_hook,syscall_hook,lkm_hidden,interrupts_hook info");

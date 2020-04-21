@@ -223,6 +223,11 @@ int init_share_mem(void) {
     int i;
     share_mem_flag = -1;
     list_head_char = kzalloc(8, GFP_ATOMIC);
+    if (list_head_char == NULL) {
+        pr_err("[SMITH] SHMEM_INIT_ERROR\n");
+        return -ENOMEM;
+    }
+
     major = register_chrdev(0, DEVICE_NAME, &mchar_fops);
 
     if (major < 0) {
