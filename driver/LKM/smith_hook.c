@@ -3039,4 +3039,4 @@ MODULE_LICENSE("GPL v2");
 MODULE_VERSION("1.2.1");
 MODULE_AUTHOR("E_Bwill <cy_sniper@yeah.net>");
 MODULE_DESCRIPTION("get execve,connect,ptrace,load_module,dns_query,create_file,cred_change,"
-"proc_file_hook,syscall_hook,lkm_hidden,interrupts_hook info");
+"and proc_file_hook,syscall_hook,lkm_hidden,interrupts_hook info");
