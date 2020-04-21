@@ -9,9 +9,9 @@
 #include <time.h>
 #include <netinet/in.h>
 
-#define NLMSG_ALIGNTO	4U
+#define NLMSG_ALIGNTO    4U
 #define NLMSG_ALIGN(len) ( ((len)+NLMSG_ALIGNTO-1) & ~(NLMSG_ALIGNTO-1) )
-#define NLMSG_HDRLEN	 ((int) NLMSG_ALIGN(64))
+#define NLMSG_HDRLEN     ((int) NLMSG_ALIGN(64))
 #define NLMSG_LENGTH(len) ((len) + NLMSG_HDRLEN)
 #define NLMSG_SPACE(len) NLMSG_ALIGN(NLMSG_LENGTH(len))
 
@@ -32,18 +32,16 @@ char *tmp_slot_len;
 char *sh_mem;
 
 struct timeval {
-	long tv_sec;
-	long tv_usec;
+    long tv_sec;
+    long tv_usec;
 };
 
-struct msg_slot
-{
+struct msg_slot {
     int len;
     int next;
 };
 
-struct sh_mem_list_head
-{
+struct sh_mem_list_head {
     int read_index;
     int next;
 };
@@ -51,8 +49,7 @@ struct sh_mem_list_head
 struct msg_slot *slot;
 struct sh_mem_list_head *list_head;
 
-static char *get_user_id(const char *msg)
-{
+static char *get_user_id(const char *msg) {
     int i;
     int first = strcspn(msg, split_ymbol);
 
@@ -65,8 +62,7 @@ static char *get_user_id(const char *msg)
     return user_id;
 }
 
-static char *get_user(uid_t uid)
-{
+static char *get_user(uid_t uid) {
     struct passwd *pws;
     pws = getpwuid(uid);
     if (pws)
@@ -75,17 +71,15 @@ static char *get_user(uid_t uid)
         return "UNKNOW";
 }
 
-struct msg_slot *get_slot(void)
-{
+struct msg_slot *get_slot(void) {
     int i;
     for (i = 0; i < 9; i++)
         tmp_slot_len[i] = sh_mem[shm_read_index + i];
 
-    return (struct msg_slot *)tmp_slot_len;
+    return (struct msg_slot *) tmp_slot_len;
 }
 
-static void clear_sh_mem(void)
-{
+static void clear_sh_mem(void) {
     int i;
     if (shm_read_index > 0 && pre_read_index > 0) {
         if (shm_read_index > pre_read_index) {
@@ -98,8 +92,7 @@ static void clear_sh_mem(void)
     }
 }
 
-static char *get_msg(struct msg_slot *slot)
-{
+static char *get_msg(struct msg_slot *slot) {
     char *tmp_data;
     tmp_data = malloc(slot->len + 4);
     if (tmp_data) {
@@ -109,8 +102,7 @@ static char *get_msg(struct msg_slot *slot)
     return tmp_data;
 }
 
-static char *shm_msg_factory_no_callback(char *msg)
-{
+static char *shm_msg_factory_no_callback(char *msg) {
     int shm_res_len;
     char *user_id = NULL;
     char *username = NULL;
@@ -121,7 +113,7 @@ static char *shm_msg_factory_no_callback(char *msg)
     sprintf(time_buffer, "%ld\0", ts.tv_sec * 1000 + ts.tv_usec / 1000);
 
     if (msg) {
-        if(strlen(msg) < 4024) {
+        if (strlen(msg) < 4024) {
             strcat(shm_res, msg);
             free(msg);
             strcat(shm_res, "\n");
@@ -142,25 +134,22 @@ static char *shm_msg_factory_no_callback(char *msg)
     return "";
 }
 
-void init(void)
-{
+void init(void) {
     tmp_slot_len = malloc(8);
 }
 
-void shm_init(void)
-{
+void shm_init(void) {
     if (shm_fd == -1) {
         shm_read_index = 8;
         pre_read_index = 0;
         shm_fd = open(DEVICE_FILENAME, O_RDWR | O_SYNC);
-        sh_mem = (char *)mmap(NULL, MAX_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
-        list_head = (struct sh_mem_list_head *)mmap(NULL, 8, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+        sh_mem = (char *) mmap(NULL, MAX_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+        list_head = (struct sh_mem_list_head *) mmap(NULL, 8, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
         list_head->read_index = 0;
     }
 }
 
-void shm_close(void)
-{
+void shm_close(void) {
     if (shm_fd != -1) {
         close(shm_fd);
         munmap(sh_mem, MAX_SIZE);
@@ -169,8 +158,7 @@ void shm_close(void)
     }
 }
 
-char *shm_run_no_callback(void)
-{
+char *shm_run_no_callback(void) {
     char *res = NULL;
     while (1) {
         slot = get_slot();
@@ -189,7 +177,7 @@ char *shm_run_no_callback(void)
                 return res;
             }
         } else {
-            nanosleep((const struct timespec[]){{0, 850000}}, NULL);
+            nanosleep((const struct timespec[]) {{0, 850000}}, NULL);
         }
     }
 }

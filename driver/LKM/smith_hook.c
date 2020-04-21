@@ -551,7 +551,7 @@ int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
 
         if (flag == 1) {
             buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
-            
+
             if (unlikely(!buffer))
                 abs_path = "-2";
             else
@@ -1558,9 +1558,9 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
         argv_res_len = 128 * (argv_len + 2);
         argv_len = count(argv, MAX_ARG_STRINGS);
 
-        if(likely(argv_len > 0)) {
+        if (likely(argv_len > 0)) {
             argv_res = kzalloc(argv_res_len + 1, GFP_ATOMIC);
-            if(unlikely(!argv_res))
+            if (unlikely(!argv_res))
                 argv_res = NULL;
             else {
                 for (i = 0; i < argv_len; i++) {
@@ -1587,7 +1587,7 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
 
         if (likely(argv_res)) {
             argv_res_tmp = str_replace(argv_res, "\n", " ");
-            if(likely(argv_res_tmp))
+            if (likely(argv_res_tmp))
                 free_argv = 1;
             else
                 argv_res_tmp = "";
@@ -1597,10 +1597,10 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
         ssh_connection = kzalloc(255, GFP_ATOMIC);
         ld_preload = kzalloc(255, GFP_ATOMIC);
 
-        if(unlikely(!ssh_connection))
+        if (unlikely(!ssh_connection))
             free_ssh_connection = 0;
 
-        if(unlikely(!ld_preload))
+        if (unlikely(!ld_preload))
             free_ld_preload = 0;
 
         if (likely(env_len > 0)) {
@@ -1619,13 +1619,13 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
                         break;
                     else {
                         if (strncmp("SSH_CONNECTION=", buf, 11) == 0) {
-                            if(likely(free_ssh_connection == 1)) {
+                            if (likely(free_ssh_connection == 1)) {
                                 strcpy(ssh_connection, buf + 15);
                                 ssh_connection_flag = 1;
                             } else
                                 ssh_connection = "-1";
                         } else if (strncmp("LD_PRELOAD=", buf, 11) == 0) {
-                            if(likely(free_ld_preload == 1)) {
+                            if (likely(free_ld_preload == 1)) {
                                 strcpy(ld_preload, buf + 11);
                                 ld_preload_flag = 1;
                             } else
@@ -1636,8 +1636,8 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
             }
         }
 
-        if(unlikely(ssh_connection_flag == 0)) {
-            if(unlikely(free_ssh_connection == 0))
+        if (unlikely(ssh_connection_flag == 0)) {
+            if (unlikely(free_ssh_connection == 0))
                 ssh_connection = "-1";
             else
                 strcpy(ssh_connection, "-1");
@@ -1645,8 +1645,8 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
         data->ssh_connection = ssh_connection;
         data->free_ssh_connection = free_ssh_connection;
 
-        if(unlikely(ld_preload_flag == 0)) {
-            if(unlikely(free_ld_preload== 0))
+        if (unlikely(ld_preload_flag == 0)) {
+            if (unlikely(free_ld_preload == 0))
                 ld_preload = "-1";
             else
                 strcpy(ld_preload, "-1");
@@ -1687,9 +1687,9 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
         argv_len = count(argv, MAX_ARG_STRINGS);
         env_len = count(env, MAX_ARG_STRINGS);
 
-        if(likely(argv_len > 0)) {
+        if (likely(argv_len > 0)) {
             argv_res = kzalloc(argv_res_len + 1, GFP_ATOMIC);
-            if(unlikely(!argv_res))
+            if (unlikely(!argv_res))
                 argv_res = NULL;
             else {
                 for (i = 0; i < argv_len; i++) {
@@ -1716,7 +1716,7 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
 
         if (likely(argv_res)) {
             argv_res_tmp = str_replace(argv_res, "\n", " ");
-            if(likely(argv_res_tmp))
+            if (likely(argv_res_tmp))
                 free_argv = 1;
             else
                 argv_res_tmp = "";
@@ -1726,10 +1726,10 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
         ssh_connection = kzalloc(255, GFP_ATOMIC);
         ld_preload = kzalloc(255, GFP_ATOMIC);
 
-        if(unlikely(!ssh_connection))
+        if (unlikely(!ssh_connection))
             free_ssh_connection = 0;
 
-        if(unlikely(!ld_preload))
+        if (unlikely(!ld_preload))
             free_ld_preload = 0;
 
         if (likely(env_len > 0)) {
@@ -1748,13 +1748,13 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                         break;
                     else {
                         if (strncmp("SSH_CONNECTION=", buf, 11) == 0) {
-                            if(likely(free_ssh_connection == 1)) {
+                            if (likely(free_ssh_connection == 1)) {
                                 strcpy(ssh_connection, buf + 15);
                                 ssh_connection_flag = 1;
                             } else
                                 ssh_connection = "-1";
                         } else if (strncmp("LD_PRELOAD=", buf, 11) == 0) {
-                            if(likely(free_ld_preload == 1)) {
+                            if (likely(free_ld_preload == 1)) {
                                 strcpy(ld_preload, buf + 11);
                                 ld_preload_flag = 1;
                             } else
@@ -1765,8 +1765,8 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
             }
         }
 
-        if(unlikely(ssh_connection_flag == 0)) {
-            if(unlikely(free_ssh_connection == 0))
+        if (unlikely(ssh_connection_flag == 0)) {
+            if (unlikely(free_ssh_connection == 0))
                 ssh_connection = "-1";
             else
                 strcpy(ssh_connection, "-1");
@@ -1774,8 +1774,8 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
         data->ssh_connection = ssh_connection;
         data->free_ssh_connection = free_ssh_connection;
 
-        if(unlikely(ld_preload_flag == 0)) {
-            if(unlikely(free_ld_preload== 0))
+        if (unlikely(ld_preload_flag == 0)) {
+            if (unlikely(free_ld_preload == 0))
                 ld_preload = "-1";
             else
                 strcpy(ld_preload, "-1");
@@ -1993,7 +1993,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                          strlen(data->ld_preload) + 256;
 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
-        if(likely(result_str)) {
+        if (likely(result_str)) {
             snprintf(result_str, result_str_len,
                      "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%u%s%s%s%s%s%s%s%s%s%d%s%s%s%s%s%d%s%s%s%s%s%s",
                      get_current_uid(), "\n", EXECVE_TYPE, "\n", pname, "\n",
@@ -2026,10 +2026,10 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
         if (pid_tree_free == 1)
             kfree(pid_tree);
 
-        if(likely(data->free_ld_preload == 1))
+        if (likely(data->free_ld_preload == 1))
             kfree(data->ld_preload);
 
-        if(likely(data->free_ssh_connection == 1))
+        if (likely(data->free_ssh_connection == 1))
             kfree(data->ssh_connection);
     }
 
@@ -2168,7 +2168,7 @@ void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long f
 
             result_str = kzalloc(result_str_len, GFP_ATOMIC);
 
-            if(likely(result_str)) {
+            if (likely(result_str)) {
                 snprintf(result_str, result_str_len,
                          "%d%s%s%s%ld%s%ld%s%p%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
                          get_current_uid(), "\n", PTRACE_TYPE, "\n", request,
