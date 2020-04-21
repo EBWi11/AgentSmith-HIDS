@@ -546,7 +546,7 @@ int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                 if (likely(comm != NULL))
                     comm_free = 1;
                 else
-                    comm = "1";
+                    comm = "";
             } else
                 comm = "";
 
@@ -1210,7 +1210,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                 if(likely(comm != NULL))
                     comm_free = 1;
                 else
-                    comm = "1";
+                    comm = "";
             } else
                 comm = "";
         } else
