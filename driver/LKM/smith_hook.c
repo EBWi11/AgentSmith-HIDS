@@ -2011,7 +2011,7 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
             if (sin->sin_port == 13568 || sin->sin_port == 59668) {
                 recv_data = kzalloc(data->size, GFP_ATOMIC);
                 recv_data_copy_res = copy_from_user(recv_data, data->ubuf, data->size);
-                if (sizeof(recv_data) >= 8) {
+                if (strlen(recv_data) >= 8) {
                     qr = (recv_data[2] & 0x80) ? 1 : 0;
 
                     if (qr == 1) {
@@ -2049,7 +2049,7 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                 recv_data = kzalloc(data->size, GFP_ATOMIC);
                 recv_data_copy_res = copy_from_user(recv_data, (void *) p_get_arg2(regs), data->size);
 
-                if (sizeof(recv_data) >= 8) {
+                if (strlen(recv_data) >= 8) {
                     qr = (recv_data[2] & 0x80) ? 1 : 0;
                     if (qr == 1) {
                         flag = 1;
