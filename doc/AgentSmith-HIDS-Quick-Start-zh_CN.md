@@ -82,6 +82,7 @@
 | ---------------- | ------------------------------------------------------------ |
 | EXECVE_HOOK      | execve() Hook Switch:<br />1. Enable;<br />Default:1         |
 | CONNECT_HOOK     | connect() Hook Switch:<br />1. Enable;<br />Default:1        |
+| BIND_HOOK         | Bind Hook Switch:<br />1. Enable;<br />Default:1              |
 | DNS_HOOK         | DNS Hook Switch:<br />1. Enable;<br />Default:1              |
 | PTRACE_HOOK      | Porcess Injection Detect Hook Switch:<br />1. Enable;<br />Default:1 |
 | MPROTECT_HOOK | Detect mprotect(PROT_READ or PROT_EXEC) in real time:<br />1.Enable;<br />Default: 0 |

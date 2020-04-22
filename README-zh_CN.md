@@ -389,23 +389,27 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ### 关于性能
 
-测试环境：
+测试环境(VM)：
 
-| CPU       | Intel(R) Core(TM) i7-4870HQ CPU @ 2.50GHz    2核 |
+| CPU       |  Intel(R) Xeon(R) Platinum 8260 CPU @ 2.40GHz    4核 |
 | --------- | ------------------------------------------------ |
-| RAM       | 2GB                                              |
-| OS/Kernel | Centos7  /  3.10.0-1062.7.1.el7.x86_64           |
+| RAM       | 8GB                                              |
+| OS/Kernel | Debian9  /  4.14.81.bm.19-amd64          |
 
-测试结果：
+测试负载：
 
-| Hook Handler           | Average Delay(us) |
-| ---------------------- | ----------------- |
-| execve_entry_handler   | 10.4              |
-| connect_handler        | 7.5               |
-| connect_entry_handler  | 0.06              |
-| recvfrom_handler       | 9.2               |
-| recvfrom_entry_handler | 0.17              |
-| fsnotify_post_handler  | 0.07              |
+`ltp -f syscalls`
+
+测试结果(1min)：
+
+| Hook Handler           | Average Delay(us) |  TP99(us) |   TP95(us) |   TP90(us) |
+| ---------------------- | ----------------- | ----|----|----|
+|   connect_entry_handler| 0.2914          |6.7627|0.355|0.3012|
+|   connect_handler      |   2.1406        |18.3801|12.102|7.832|
+|   execve_entry_handler |   5.9320        |13.7034|9.908|8.334|
+|   execve_handler       |   6.8826        |26.0584|15.9976|12.6260|
+|   security_inode_create_entry_handler|   1.9963|9.3042|6.7730|4.6816|
+|   security_inode_create_handler|   4.2114|13.2165|8.83775|6.534|
 
 原始测试数据：
 
