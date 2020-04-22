@@ -34,9 +34,9 @@
 
 #define SMITH_NAME_MAX    (PATH_MAX - sizeof(struct filename))
 
-#define MPROTECT_TYPE "10"
-#define EXECVE_TYPE "59"
 #define CONNECT_TYPE "42"
+#define BIND_TYPE "49"
+#define EXECVE_TYPE "59"
 #define PTRACE_TYPE "101"
 #define DNS_TYPE "601"
 #define CREATE_FILE "602"

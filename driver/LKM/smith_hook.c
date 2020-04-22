@@ -3,7 +3,7 @@
 * Author:	E_BWill
 * Year:		2019
 * File:		smith_hook.c
-* Description:	get execve,connect,ptrace,load_module,dns_query,create_file,cred_change,proc_file_hook,syscall_hook,lkm_hidden,interrupts_hook info
+* Description:	get execve,connect,bind,ptrace,load_module,dns_query,create_file,cred_change,proc_file_hook,syscall_hook,lkm_hidden,interrupts_hook info
 
 * AgentSmith-HIDS is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -26,6 +26,7 @@
 #define ROOTKIT_CHECK 1
 
 #define CONNECT_HOOK 1
+#define BIND_HOOK 1
 #define EXECVE_HOOK 1
 #define CREATE_FILE_HOOK 1
 #define PTRACE_HOOK 1
@@ -37,6 +38,7 @@ int share_mem_flag = -1;
 int checkCPUendianRes = 0;
 
 char connect_kprobe_state = 0x0;
+char bind_kprobe_state = 0x0;
 char execve_kprobe_state = 0x0;
 char compat_execve_kprobe_state = 0x0;
 char create_file_kprobe_state = 0x0;
@@ -394,6 +396,11 @@ char *get_pid_tree(void) {
     return tmp_data;
 }
 
+struct bind_data {
+    int fd;
+    struct sockaddr *dirp;
+};
+
 struct connect_data {
     int fd;
     struct sockaddr *dirp;
@@ -440,6 +447,134 @@ unsigned int get_sessionid(void) {
     return sessionid;
 }
 
+int bind_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
+    struct bind_data *data;
+    if (share_mem_flag != -1) {
+        data = (struct bind_data *) ri->data;
+        data->dirp = (struct sockaddr *) p_get_arg2(regs);
+    }
+    return 0;
+}
+
+int bind_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
+    int fd;
+    int flag = 0;
+    int copy_res;
+    int retval;
+    int sa_family;
+    int result_str_len;
+
+    if (share_mem_flag != -1) {
+        int comm_free = 0;
+        unsigned int sessionid;
+        char sip[64] = "-1";
+        char sport[16] = "-1";
+        char *abs_path = NULL;
+        char *result_str;
+        char *comm = NULL;
+        char *buffer = NULL;
+        struct sockaddr tmp_dirp;
+        struct bind_data *data;
+        struct sockaddr_in *sin;
+        struct sockaddr_in6 *sin6;
+
+        retval = regs_return_value(regs);
+        data = (struct bind_data *) ri->data;
+
+        copy_res = copy_from_user(&tmp_dirp, data->dirp, 16);
+
+        if (unlikely(copy_res))
+            goto out;
+
+        switch (tmp_dirp.sa_family) {
+            case AF_INET:
+                sin = (struct sockaddr_in *) &tmp_dirp;
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
+            if (likely(tmp_dirp.sa_data)) {
+                snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr));
+                snprintf(sport, 16, "%d", Ntohs(sin->sin_port));
+                flag = 1;
+            }
+#else
+                if (likely(tmp_dirp.sa_data)) {
+                    snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr));
+                    snprintf(sport, 16, "%d", Ntohs(sin->sin_port));
+                    flag = 1;
+                }
+#endif
+                sa_family = AF_INET;
+                break;
+#if IS_ENABLED(CONFIG_IPV6)
+            case AF_INET6:
+                sin6 = (struct sockaddr_in6 *) &tmp_dirp;
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
+                if (likely(tmp_dirp.sa_data)) {
+                    snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sin6->sin6_addr));
+                    snprintf(sport, 16, "%d", Ntohs(sin6->sin6_port));
+                    flag = 1;
+                }
+#else
+                if (likely(tmp_dirp.sa_data)) {
+                    snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sin6->sin6_addr));
+                    snprintf(sport, 16, "%d", Ntohs(sin6->sin6_port));
+                    flag = 1;
+                }
+#endif
+                sa_family = AF_INET6;
+                break;
+#endif
+            default:
+                break;
+        }
+
+        if (flag == 1) {
+            sessionid = get_sessionid();
+            buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
+
+            if (unlikely(!buffer))
+                abs_path = "-2";
+            else
+                abs_path = get_exe_file(current, buffer, PATH_MAX);
+
+            if (strlen(current->comm) > 0) {
+                comm = str_replace(current->comm, "\n", " ");
+                if (likely(comm))
+                    comm_free = 1;
+                else
+                    comm = "";
+            } else
+                comm = "";
+
+            result_str_len = strlen(current->nsproxy->uts_ns->name.nodename) +
+                             strlen(comm) + strlen(abs_path) + 172;
+
+            result_str = kzalloc(result_str_len, GFP_ATOMIC);
+            if (likely(result_str)) {
+                snprintf(result_str, result_str_len,
+                         "%d%s%s%s%d%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%u",
+                         get_current_uid(), "\n", BIND_TYPE, "\n", sa_family,
+                         "\n", abs_path, "\n", current->pid, "\n", current->real_parent->pid,
+                         "\n", pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                         comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
+                         sip, "\n", sport, "\n", retval, "\n", sessionid);
+
+                send_msg_to_user(result_str, 1);
+            }
+
+            if (likely(strcmp(abs_path, "-2")))
+                kfree(buffer);
+
+            if (likely(comm_free == 1))
+                kfree(comm);
+        }
+    }
+
+    return 0;
+
+    out:
+    return 0;
+}
+
 int connect_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
     struct connect_data *data;
     if (share_mem_flag != -1) {
@@ -476,7 +611,6 @@ int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
         struct connect_data *data;
         struct inet_sock *inet;
 
-        sessionid = get_sessionid();
         retval = regs_return_value(regs);
 
         data = (struct connect_data *) ri->data;
@@ -548,6 +682,7 @@ int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
         }
 
         if (flag == 1) {
+            sessionid = get_sessionid();
             buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
 
             if (unlikely(!buffer))
@@ -1191,7 +1326,7 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
     if (share_mem_flag != -1) {
         char **argv = (char **) p_get_arg2(regs);
         char **env = (char **) p_get_arg3(regs);
-        get_execve_data(argv, env, (struct execve_data *)ri->data);
+        get_execve_data(argv, env, (struct execve_data *) ri->data);
     }
     return 0;
 }
@@ -1200,7 +1335,7 @@ int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
     if (share_mem_flag != -1) {
         char **argv = (char **) p_get_arg2(regs);
         char **env = (char **) p_get_arg3(regs);
-        get_execve_data(argv, env, (struct execve_data *)ri->data);
+        get_execve_data(argv, env, (struct execve_data *) ri->data);
     }
     return 0;
 }
@@ -1951,6 +2086,14 @@ struct kretprobe connect_kretprobe = {
         .maxactive = 40,
 };
 
+struct kretprobe bind_kretprobe = {
+        .kp.symbol_name = P_GET_SYSCALL_NAME(bind),
+        .data_size  = sizeof(struct bind_data),
+        .handler = bind_handler,
+        .entry_handler = bind_entry_handler,
+        .maxactive = 40,
+};
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
 struct kretprobe execveat_kretprobe = {
     .kp.symbol_name = P_GET_SYSCALL_NAME(execveat),
@@ -2035,6 +2178,20 @@ int connect_register_kprobe(void) {
 
 void unregister_kretprobe_connect(void) {
     unregister_kretprobe(&connect_kretprobe);
+}
+
+int bind_register_kprobe(void) {
+    int ret;
+    ret = register_kretprobe(&bind_kretprobe);
+
+    if (ret == 0)
+        bind_kprobe_state = 0x1;
+
+    return ret;
+}
+
+void unregister_kretprobe_bind(void) {
+    unregister_kretprobe(&bind_kretprobe);
 }
 
 int execve_register_kprobe(void) {
@@ -2175,6 +2332,9 @@ void uninstall_kprobe(void) {
     if (connect_kprobe_state == 0x1)
         unregister_kretprobe_connect();
 
+    if (bind_kprobe_state == 0x1)
+        unregister_kretprobe_bind();
+
     if (execve_kprobe_state == 0x1)
         unregister_kprobe_execve();
 
@@ -2226,6 +2386,14 @@ smith_init(void) {
         if (ret < 0) {
             printk(KERN_INFO
             "[SMITH] connect register_kprobe failed, returned %d\n", ret);
+        }
+    }
+
+    if (BIND_HOOK == 1) {
+        ret = bind_register_kprobe();
+        if (ret < 0) {
+            printk(KERN_INFO
+            "[SMITH] bind register_kprobe failed, returned %d\n", ret);
         }
     }
 
@@ -2311,9 +2479,9 @@ smith_init(void) {
 
     printk(KERN_INFO
     "[SMITH] register_kprobe success: connect_hook: %d,load_module_hook:"
-    " %d,execve_hook: %d,create_file_hook: %d,ptrace_hook: %d, update_cred_hook:"
+    " %d,execve_hook: %d,bind_hook: %d,create_file_hook: %d,ptrace_hook: %d, update_cred_hook:"
     " %d, DNS_HOOK: %d,EXIT_PROTECT: %d,ROOTKIT_CHECK: %d\n",
-            CONNECT_HOOK, LOAD_MODULE_HOOK, EXECVE_HOOK, CREATE_FILE_HOOK,
+            CONNECT_HOOK, LOAD_MODULE_HOOK, EXECVE_HOOK, BIND_HOOK, CREATE_FILE_HOOK,
             PTRACE_HOOK, UPDATE_CRED_HOOK, DNS_HOOK, EXIT_PROTECT, ROOTKIT_CHECK);
 
     return 0;
@@ -2338,7 +2506,7 @@ module_init(smith_init)
 module_exit(smith_exit)
 
 MODULE_LICENSE("GPL v2");
-MODULE_VERSION("1.2.1");
+MODULE_VERSION("1.2.3");
 MODULE_AUTHOR("E_Bwill <cy_sniper@yeah.net>");
-MODULE_DESCRIPTION("get execve,connect,ptrace,load_module,dns_query,create_file,cred_change,"
+MODULE_DESCRIPTION("get execve,connect,bind,ptrace,load_module,dns_query,create_file,cred_change,"
 "and proc_file_hook,syscall_hook,lkm_hidden,interrupts_hook info");

@@ -69,7 +69,8 @@ fn parser_secure_log(data: String, local_ip: String, hostname: String) -> (Strin
     struct LoginAlterStruct<T, U> {
         data_type: T,
         status: T,
-        x_type: T, //for Will: need to rename this variable
+        x_type: T,
+        //for Will: need to rename this variable
         user_exsit: T,
         user: T,
         from_ip: T,
@@ -78,7 +79,8 @@ fn parser_secure_log(data: String, local_ip: String, hostname: String) -> (Strin
         time: U,
         local_ip: T,
         hostname: T,
-    };
+    }
+    ;
 
     impl<T, U> LoginAlterStruct<T, U> {
         fn update_status_and_type(&mut self, status: T, x_type: T) {
@@ -172,7 +174,7 @@ fn get_secure_log(tx: Sender<Vec<u8>>) {
         hostname.clone(),
         tx,
     )
-    .unwrap();
+        .unwrap();
     log_watcher.watch(&parser_secure_log);
 }
 
@@ -229,8 +231,10 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                 tgid: T,
                 comm: T,
                 nodename: T,
-                stdin_content: T, //For will, element renamed, json content changed accordingly
-                stdout_content: T, //For will, element renamed, json content changed accordingly
+                stdin_content: T,
+                //For will, element renamed, json content changed accordingly
+                stdout_content: T,
+                //For will, element renamed, json content changed accordingly
                 sessionid: T,
                 dip: T,
                 dport: T,
@@ -249,7 +253,8 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                 hostname_str: T,
                 exe_md5: T,
                 socket_process_exe_md5: T,
-            };
+            }
+            ;
 
             #[derive(Serialize, Deserialize)]
             struct LoadModuleMsgStruct<T> {
@@ -270,7 +275,8 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                 hostname_str: T,
                 exe_md5: T,
                 load_file_md5: T,
-            };
+            }
+            ;
 
             #[derive(Serialize, Deserialize)]
             struct ConnectMsgStruct<T> {
@@ -296,7 +302,32 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                 local_ip_str: T,
                 hostname_str: T,
                 exe_md5: T,
-            };
+            }
+            ;
+
+            #[derive(Serialize, Deserialize)]
+            struct BindMsgStruct<T> {
+                uid: T,
+                data_type: T,
+                sa_family: T,
+                exe: T,
+                pid: T,
+                ppid: T,
+                pgid: T,
+                tgid: T,
+                comm: T,
+                nodename: T,
+                sip: T,
+                sport: T,
+                res: T,
+                sessionid: T,
+                user: T,
+                time: T,
+                local_ip_str: T,
+                hostname_str: T,
+                exe_md5: T,
+            }
+            ;
 
             #[derive(Serialize, Deserialize)]
             struct PtraceMsgStruct<T> {
@@ -319,7 +350,8 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                 local_ip_str: T,
                 hostname_str: T,
                 exe_md5: T,
-            };
+            }
+            ;
 
             #[derive(Serialize, Deserialize)]
             struct DnsMsgStruct<T> {
@@ -348,7 +380,8 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                 local_ip: T,
                 hostname: T,
                 exe_md5: T,
-            };
+            }
+            ;
 
             #[derive(Serialize, Deserialize)]
             struct CreateFileMsgStruct<T> {
@@ -369,7 +402,8 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                 hostname_str: T,
                 exe_md5: T,
                 create_file_md5: T,
-            };
+            }
+            ;
 
             #[derive(Serialize, Deserialize)]
             struct ProcFileHookMsgStruct<T> {
@@ -380,7 +414,8 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                 time: T,
                 local_ip_str: T,
                 hostname_str: T,
-            };
+            }
+            ;
 
             #[derive(Serialize, Deserialize)]
             struct ModuleHiddenMsgStruct<T> {
@@ -391,7 +426,8 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                 time: T,
                 local_ip_str: T,
                 hostname_str: T,
-            };
+            }
+            ;
 
             #[derive(Serialize, Deserialize)]
             struct InterruptHookMsgStruct<T> {
@@ -403,7 +439,8 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                 time: T,
                 local_ip_str: T,
                 hostname_str: T,
-            };
+            }
+            ;
 
             #[derive(Serialize, Deserialize)]
             struct SyscallHookMsgStruct<T> {
@@ -415,7 +452,8 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                 time: T,
                 local_ip_str: T,
                 hostname_str: T,
-            };
+            }
+            ;
 
             #[derive(Serialize, Deserialize)]
             struct UpdateCredHookMsgStruct<T> {
@@ -435,30 +473,8 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                 local_ip_str: T,
                 hostname_str: T,
                 exe_md5: T,
-            };
-
-            #[derive(Serialize, Deserialize)]
-            struct MprotectHookMsgStruct<T> {
-                uid: T,
-                data_type: T,
-                exe: T,
-                pid: T,
-                ppid: T,
-                pgid: T,
-                tgid: T,
-                comm: T,
-                start: T,
-                len: T,
-                prot: T,
-                nodename: T,
-                sessionid: T,
-                user: T,
-                time: T,
-                local_ip_str: T,
-                hostname_str: T,
-                exe_md5: T,
-            };
-
+            }
+            ;
 
             let md5_str;
             let mut send_flag = 0;
@@ -469,7 +485,69 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
             let mut white_list_attr: bool = false;
 
             match msg_type {
-                
+                "49" => {
+                    if tmp_sa_family == "2" {
+                        if ipv4_whitelist_range.contains(&msg_split[5].parse::<Ipv4Addr>().unwrap())
+                        {
+                            white_list_attr = true;
+                        }
+                    } else if tmp_sa_family == "10" {
+                        if ipv6_whitelist_range.contains(&msg_split[5].parse::<Ipv6Addr>().unwrap())
+                        {
+                            white_list_attr = true;
+                        }
+                    };
+
+                    if exe_white_list.contains(msg_split[6]) {
+                        white_list_attr = true;
+                    };
+
+                    if msg_split[4] == agent_pid
+                        || msg_split[5] == agent_pid
+                        || msg_split[6] == agent_pid
+                        || msg_split[7] == agent_pid
+                    {
+                        white_list_attr = true;
+                    };
+
+                    if white_list_attr == false {
+                        let mut bind_msg = BindMsgStruct {
+                            uid: msg_split[0],
+                            data_type: msg_split[1],
+                            sa_family: msg_split[2],
+                            exe: msg_split[3],
+                            pid: msg_split[4],
+                            ppid: msg_split[5],
+                            pgid: msg_split[6],
+                            tgid: msg_split[7],
+                            comm: msg_split[8],
+                            nodename: msg_split[9],
+                            sip: msg_split[10],
+                            sport: msg_split[11],
+                            res: msg_split[12],
+                            sessionid: msg_split[13],
+                            user: msg_split[14],
+                            time: msg_split[15],
+                            local_ip_str: local_ip_str,
+                            hostname_str: hostname_str,
+                            exe_md5: "",
+                        };
+
+                        if bind_msg.exe != "-1" {
+                            if !cache.contains_key(bind_msg.exe) {
+                                md5_str = get_md5(bind_msg.exe.to_string());
+                                cache.insert(bind_msg.exe.to_string(), md5_str.clone());
+                            } else {
+                                md5_str =
+                                    cache.get(&bind_msg.exe.to_string()).unwrap().to_string();
+                            }
+                            bind_msg.exe_md5 = &md5_str.as_str();
+                        };
+
+                        send_flag = 1;
+                        msg_str = serde_json::to_string(&bind_msg).unwrap();
+                    };
+                }
                 "42" => {
                     if tmp_sa_family == "2" {
                         if ipv4_whitelist_range.contains(&msg_split[5].parse::<Ipv4Addr>().unwrap())
@@ -531,11 +609,11 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                             }
                             connect_msg.exe_md5 = &md5_str.as_str();
                         };
-                        
+
                         send_flag = 1;
                         msg_str = serde_json::to_string(&connect_msg).unwrap();
                     };
-                },
+                }
 
                 "59" => {
                     if exe_white_list.contains(msg_split[3]) {
@@ -624,8 +702,8 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                         send_flag = 1;
                         msg_str = serde_json::to_string(&execve_msg).unwrap();
                     };
-                },
-  
+                }
+
                 "101" => {
                     if exe_white_list.contains(msg_split[6]) {
                         white_list_attr = true;
@@ -668,13 +746,13 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                         } else {
                             md5_str = "-1".to_string();
                         }
-                        
+
                         ptrace_msg.exe_md5 = md5_str.as_str();
                         send_flag = 1;
 
                         msg_str = serde_json::to_string(&ptrace_msg).unwrap();
                     };
-                },
+                }
 
                 "601" => {
                     if msg_split[7] == agent_pid
@@ -732,8 +810,8 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                         send_flag = 1;
                         msg_str = serde_json::to_string(&dns_msg).unwrap();
                     }
-                },
-  
+                }
+
                 "602" => {
                     if msg_split[4] == agent_pid
                         || msg_split[5] == agent_pid
@@ -811,8 +889,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                             }
                         }
 
-                        if !filter_check_flag {
-                        }
+                        if !filter_check_flag {}
 
                         let md5_tmp;
                         if create_file_msg.file_path != "-1" {
@@ -833,7 +910,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                         send_flag = 1;
                         msg_str = serde_json::to_string(&create_file_msg).unwrap();
                     };
-                },
+                }
 
                 "603" => {
                     if exe_white_list.contains(msg_split[2]) {
@@ -875,7 +952,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                             md5_str = "-1".to_string();
                         }
                         load_module_msg.exe_md5 = md5_str.as_str();
-                        
+
                         let md5_tmp;
                         if load_module_msg.lkm_file != "-1" {
                             if !cache.contains_key(load_module_msg.lkm_file) {
@@ -890,13 +967,13 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                         } else {
                             md5_tmp = "-1".to_string();
                         }
-                        
+
                         load_module_msg.load_file_md5 = md5_tmp.as_str();
                         send_flag = 1;
-                    
+
                         msg_str = serde_json::to_string(&load_module_msg).unwrap();
                     }
-                },
+                }
 
                 "604" => {
                     if exe_white_list.contains(msg_split[2]) {
@@ -940,53 +1017,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                         send_flag = 1;
                         msg_str = serde_json::to_string(&update_cred_hook_msg).unwrap();
                     }
-                },
-
-                "10" => {
-                    if exe_white_list.contains(msg_split[2]) {
-                        white_list_attr = true;
-                    }
-
-                    if white_list_attr == false {
-                        let mut mprotect_hook_msg = MprotectHookMsgStruct {
-                            uid: msg_split[0],
-                            data_type: msg_split[1],
-                            exe: msg_split[2],
-                            pid: msg_split[3],
-                            ppid: msg_split[4],
-                            pgid: msg_split[5],
-                            tgid: msg_split[6],
-                            comm: msg_split[7],
-                            start: msg_split[8],
-                            len: msg_split[9],
-                            prot: msg_split[10],
-                            nodename: msg_split[11],
-                            sessionid: msg_split[12],
-                            user: msg_split[13],
-                            time: msg_split[14],
-                            local_ip_str: local_ip_str,
-                            hostname_str: hostname_str,
-                            exe_md5: "",
-                        };
-
-                        if mprotect_hook_msg.exe != "-1" {
-                            if !cache.contains_key(mprotect_hook_msg.exe) {
-                                md5_str = get_md5(mprotect_hook_msg.exe.to_string());
-                                cache.insert(mprotect_hook_msg.exe.to_string(), md5_str.clone());
-                            } else {
-                                md5_str = cache
-                                    .get(&mprotect_hook_msg.exe.to_string())
-                                    .unwrap()
-                                    .to_string();
-                            }
-                        } else {
-                            md5_str = "-1".to_string();
-                        }
-                        mprotect_hook_msg.exe_md5 = md5_str.as_str();
-                        send_flag = 1;
-                        msg_str = serde_json::to_string(&mprotect_hook_msg).unwrap();
-                    }
-                },
+                }
 
                 "700" => {
                     let proc_file_hook_msg = ProcFileHookMsgStruct {
@@ -1000,7 +1031,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                     };
                     send_flag = 1;
                     msg_str = serde_json::to_string(&proc_file_hook_msg).unwrap();
-                },
+                }
 
                 "701" => {
                     let syscall_hook_msg = SyscallHookMsgStruct {
@@ -1016,7 +1047,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
 
                     send_flag = 1;
                     msg_str = serde_json::to_string(&syscall_hook_msg).unwrap();
-                },
+                }
 
                 "702" => {
                     let module_hidden_msg = ModuleHiddenMsgStruct {
@@ -1030,7 +1061,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                     };
                     send_flag = 1;
                     msg_str = serde_json::to_string(&module_hidden_msg).unwrap();
-                },
+                }
 
                 "703" => {
                     let interrupt_hook_msg = InterruptHookMsgStruct {
@@ -1045,9 +1076,9 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                     };
                     send_flag = 1;
                     msg_str = serde_json::to_string(&interrupt_hook_msg).unwrap();
-                },
+                }
 
-                _ => {},
+                _ => {}
             }
 
             if send_flag == 1 {
