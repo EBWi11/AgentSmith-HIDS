@@ -85,7 +85,6 @@
 | BIND_HOOK         | Bind Hook Switch:<br />1. Enable;<br />Default:1              |
 | DNS_HOOK         | DNS Hook Switch:<br />1. Enable;<br />Default:1              |
 | PTRACE_HOOK      | Porcess Injection Detect Hook Switch:<br />1. Enable;<br />Default:1 |
-| MPROTECT_HOOK | Detect mprotect(PROT_READ or PROT_EXEC) in real time:<br />1.Enable;<br />Default: 0 |
 | CREATE_FILE_HOOK | Create File Detect Hook Switch:<br />1. Enable;<br />Default:1 |
 | LOAD_MODULE_HOOK | init_module() Hook Switch:<br />1. Enable;<br />Default:1    |
 | EXIT_PROTECT     | Protect the agent itself from being rmmod:<br />1.Enable;<br />Default: 0 |

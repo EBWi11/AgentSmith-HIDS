@@ -84,7 +84,6 @@ Note: Since the Agent obtains the local IP through the command: hostname -i, ple
 | CONNECT_HOOK     | connect() Hook Switch:<br />1. Enable;<br />Default:1        |
 | BIND_HOOK         | Bind Hook Switch:<br />1. Enable;<br />Default:1              |
 | DNS_HOOK         | DNS Hook Switch:<br />1. Enable;<br />Default:1              |
-| MPROTECT_HOOK | Detect mprotect(PROT_READ or PROT_EXEC) in real time:<br />1.Enable;<br />Default: 0 |
 | PTRACE_HOOK      | Porcess Injection Detect Hook Switch:<br />1. Enable;<br />Default:1 |
 | CREATE_FILE_HOOK | Create File Detect Hook Switch:<br />1. Enable;<br />Default:1 |
 | LOAD_MODULE_HOOK | init_module() Hook Switch:<br />1. Enable;<br />Default:1    |
