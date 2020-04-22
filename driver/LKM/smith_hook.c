@@ -457,7 +457,6 @@ int bind_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
 }
 
 int bind_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
-    int fd;
     int flag = 0;
     int copy_res;
     int retval;

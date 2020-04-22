@@ -486,18 +486,6 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
 
             match msg_type {
                 "49" => {
-                    if tmp_sa_family == "2" {
-                        if ipv4_whitelist_range.contains(&msg_split[5].parse::<Ipv4Addr>().unwrap())
-                        {
-                            white_list_attr = true;
-                        }
-                    } else if tmp_sa_family == "10" {
-                        if ipv6_whitelist_range.contains(&msg_split[5].parse::<Ipv6Addr>().unwrap())
-                        {
-                            white_list_attr = true;
-                        }
-                    };
-
                     if exe_white_list.contains(msg_split[6]) {
                         white_list_attr = true;
                     };

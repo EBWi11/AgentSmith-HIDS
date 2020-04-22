@@ -104,6 +104,33 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 }
 ```
 
+### Bind Hook
+
+通过Hook **sys_bind()** 实现，数据样例：
+
+```json
+{
+    "uid":"0",
+    "data_type":"49",
+    "sa_family":"2",
+    "exe":"/usr/bin/python2.7",
+    "pid":"109640",
+    "ppid":"215496",
+    "pgid":"109640",
+    "tgid":"109640",
+    "comm":"python",
+    "nodename":"n225-117-018",
+    "sip":"0.0.0.0",
+    "sport":"8000",
+    "res":"0",
+    "sessionid":"30",
+    "user":"root",
+    "time":"1587540231936",
+    "local_ip_str":"10.225.117.18",
+    "hostname_str":"n225-117-018",
+    "exe_md5":"4f458165a2129ba549f1b6605ee87e74"
+}
+```
 
 
 ### Connect Hook
