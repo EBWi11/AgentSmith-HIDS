@@ -25,7 +25,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ### AgentSmith-HIDS实现了以下的主要功能：
 
-* 内核模块通过kprobeHook了**execve,connect,process inject, mprotect, create file,DNS query,load LKM**的行为，并且通过对Linux namespace兼容的方式实现了对容器行为的信息收集
+* 内核模块通过kprobeHook了**execve,connect,process inject, create file,DNS query,load LKM**的行为，并且通过对Linux namespace兼容的方式实现了对容器行为的信息收集
 * 用户态支持自定义检测模块，目前已内置：**系统用户列表查询**，**系统端口监听列表查询**，**系统RPM LIST查询**，**系统定时任务查询**
 * **部分Rootkit检测能力**，From: [Tyton](https://github.com/nbulischeck/tyton) ，目前已经移植了**PROC_FILE_HOOK**，**SYSCALL_HOOK**，**LKM_HIDDEN**，**INTERRUPTS_HOOK**，目前仅支持Kernel > 3.10。
 * cred 变化检测 （sudo/su/sshd除外）
@@ -173,33 +173,6 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 }
 ```
 
-### mprotect Hook
-
-通过Hook **mprotect()** 实现，数据样例：
-
-```json
-{
-    "uid":"0",
-    "data_type":"10",
-    "exe":"/root/dlinject/main",
-    "pid":"9729",
-    "ppid":"2443",
-    "pgid":"9729",
-    "tgid":"9729",
-    "comm":"main",
-    "start":"140377101094912",
-    "len":"16384",
-    "prot":"1",
-    "nodename":"test",
-    "sessionid":"4",
-    "user":"root",
-    "time":"1582823732418",
-    "local_ip":"192.168.165.152",
-    "hostname":"test",
-    "exe_md5":"716d8dc1f34427ed1893dc9958e96b2f"
-}
-
-```
 
 ### Create File Hook
 

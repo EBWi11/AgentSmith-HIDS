@@ -30,7 +30,6 @@
 #define CREATE_FILE_HOOK 1
 #define PTRACE_HOOK 1
 #define DNS_HOOK 1
-#define MPROTECT_HOOK 0
 #define LOAD_MODULE_HOOK 1
 #define UPDATE_CRED_HOOK 1
 
@@ -45,7 +44,6 @@ char ptrace_kprobe_state = 0x0;
 char recvfrom_kprobe_state = 0x0;
 char load_module_kprobe_state = 0x0;
 char update_cred_kprobe_state = 0x0;
-char mprotect_kprobe_state = 0x0;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
 char execveat_kretprobe_state = 0x0;
@@ -610,29 +608,170 @@ struct execve_data {
     int free_argv;
 };
 
-#ifdef CONFIG_COMPAT
-int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
-{
+struct execve_data *get_execve_data(struct user_arg_ptr argv_ptr, struct user_arg_ptr env_ptr, const char __user * elf_path, struct execve_data *data) {
     int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, error = 0;
     int env_len = 0;
+    int free_argv = 0;
+    int free_abs_path = 0;
+    int free_ld_preload = 1;
+    int free_ssh_connection = 1;
+    int ssh_connection_flag = 0;
+    int ld_preload_flag = 0;
     char *tmp_buf = "0";
     char *exe_file_buf = "-2";
     char *argv_res = NULL;
     char *abs_path = NULL;
     char *argv_res_tmp = NULL;
+    char *ssh_connection = NULL;
+    char *ld_preload = NULL;
     const char __user *native;
-    if (share_mem_flag != -1) {
-        int free_argv = 0;
-        int free_abs_path = 0;
-        int free_ld_preload = 1;
-        int free_ssh_connection = 1;
-        int ssh_connection_flag = 0;
-        int ld_preload_flag = 0;
-        char *ssh_connection = NULL;
-        char *ld_preload = NULL;
-        struct execve_data *data;
-        struct path exe_file;
+    struct path exe_file;
 
+    env_len = count(env_ptr, MAX_ARG_STRINGS);
+    argv_res_len = 128 * (argv_len + 2);
+    argv_len = count(argv_ptr, MAX_ARG_STRINGS);
+
+    if(likely(argv_len > 0)) {
+        argv_res = kzalloc(argv_res_len + 1, GFP_ATOMIC);
+        if(unlikely(!argv_res))
+            argv_res = NULL;
+        else {
+            for (i = 0; i < argv_len; i++) {
+                native = get_user_arg_ptr(argv_ptr, i);
+                if (unlikely(IS_ERR(native)))
+                    break;
+
+                len = strnlen_user(native, MAX_ARG_STRLEN);
+                if (unlikely(!len))
+                    break;
+
+                if (offset + len > argv_res_len - 1)
+                    break;
+
+                if (unlikely(copy_from_user(argv_res + offset, native, len)))
+                    break;
+
+                offset += len - 1;
+                *(argv_res + offset) = ' ';
+                offset += 1;
+            }
+        }
+    }
+
+    if (likely(argv_res)) {
+        argv_res_tmp = str_replace(argv_res, "\n", " ");
+        if(likely(argv_res_tmp))
+            free_argv = 1;
+        else
+            argv_res_tmp = "";
+    } else
+        argv_res_tmp = "";
+
+    ssh_connection = kzalloc(255, GFP_ATOMIC);
+    ld_preload = kzalloc(255, GFP_ATOMIC);
+
+    if(unlikely(!ssh_connection))
+        free_ssh_connection = 0;
+
+    if(unlikely(!ld_preload))
+        free_ld_preload = 0;
+
+    if(likely(env_len > 0)) {
+        char buf[256];
+        for (i = 0; i < env_len; i++) {
+            native = get_user_arg_ptr(env_ptr, i);
+            if (unlikely(IS_ERR(native)))
+                continue;
+
+            len = strnlen_user(native, MAX_ARG_STRLEN);
+            if(unlikely(!len))
+                continue;
+            else if(len > 14) {
+                memset(buf, 0, 255);
+                if (unlikely(copy_from_user(buf, native, 255)))
+                    break;
+                else {
+                    if(strncmp("SSH_CONNECTION=", buf, 11) == 0) {
+                        if(likely(free_ssh_connection == 1)) {
+                            strcpy(ssh_connection, buf + 15);
+                            ssh_connection_flag = 1;
+                        } else
+                            ssh_connection = "-1";
+                    } else if(strncmp("LD_PRELOAD=", buf, 11) == 0) {
+                        if (likely(free_ld_preload == 1)) {
+                            strcpy(ld_preload, buf + 11);
+                            ld_preload_flag = 1;
+                        } else
+                            ld_preload = "-1";
+                    }
+                }
+            }
+        }
+    }
+
+    if(unlikely(ssh_connection_flag == 0)) {
+        if(unlikely(free_ssh_connection == 0))
+            ssh_connection = "-1";
+        else
+            strcpy(ssh_connection, "-1");
+    }
+    data->ssh_connection = ssh_connection;
+    data->free_ssh_connection = free_ssh_connection;
+
+    if(unlikely(ld_preload_flag == 0)) {
+        if(unlikely(free_ld_preload== 0))
+            ld_preload = "-1";
+        else
+            strcpy(ld_preload, "-1");
+    }
+    data->ld_preload = ld_preload;
+    data->free_ld_preload = free_ld_preload;
+
+    tmp_buf = kzalloc(256, GFP_ATOMIC);
+    if(unlikely(!tmp_buf))
+        abs_path = "-2";
+    else {
+        if(unlikely(copy_from_user(tmp_buf, elf_path, 256)))
+            abs_path = "-1";
+        else {
+            if(unlikely(strcmp(tmp_buf, "/") != 0 && strcmp(tmp_buf, ".") != 0)) {
+                abs_path = tmp_buf;
+                free_abs_path = 1;
+            } else {
+                error = user_path_at(AT_FDCWD, elf_path, LOOKUP_FOLLOW, &exe_file);
+                if (unlikely(error))
+                    abs_path = "-1";
+                else {
+                    exe_file_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
+                    if (unlikely(!exe_file_buf))
+                        abs_path = "-2";
+                    else {
+                        abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
+                        if (unlikely(IS_ERR(abs_path)))
+                            abs_path = "-1";
+                        kfree(exe_file_buf);
+                    }
+                    path_put(&exe_file);
+                }
+            }
+        }
+    }
+
+    data->argv = argv_res_tmp;
+    data->abs_path = abs_path;
+    data->free_abs_path = free_abs_path;
+    data->free_argv = free_argv;
+
+    if(likely(argv_res))
+        kfree(argv_res);
+
+    return data;
+}
+
+#ifdef CONFIG_COMPAT
+int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
+{
+    if (share_mem_flag != -1) {
         struct user_arg_ptr argv_ptr = {
             .is_compat = true,
             .ptr.compat = (const compat_uptr_t __user *)p_get_arg2(regs),
@@ -643,171 +782,14 @@ int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
             .ptr.compat = (const compat_uptr_t __user *)p_get_arg3(regs),
         };
 
-        data = (struct execve_data *)ri->data;
-
-        env_len = count(env_ptr, MAX_ARG_STRINGS);
-        argv_res_len = 128 * (argv_len + 2);
-        argv_len = count(argv_ptr, MAX_ARG_STRINGS);
-
-        if(likely(argv_len > 0)) {
-            argv_res = kzalloc(argv_res_len + 1, GFP_ATOMIC);
-            if(unlikely(!argv_res))
-                argv_res = NULL;
-            else {
-                for (i = 0; i < argv_len; i++) {
-                    native = get_user_arg_ptr(argv_ptr, i);
-                    if (unlikely(IS_ERR(native)))
-                        break;
-
-                    len = strnlen_user(native, MAX_ARG_STRLEN);
-                    if (unlikely(!len))
-                        break;
-
-                    if (offset + len > argv_res_len - 1)
-                    break;
-
-                    if (unlikely(copy_from_user(argv_res + offset, native, len)))
-                        break;
-
-                    offset += len - 1;
-                    *(argv_res + offset) = ' ';
-                    offset += 1;
-                }
-            }
-        }
-        
-        if (likely(argv_res)) {
-            argv_res_tmp = str_replace(argv_res, "\n", " ");
-            if(likely(argv_res_tmp))
-                free_argv = 1;
-            else
-                argv_res_tmp = "";
-        } else
-            argv_res_tmp = "";
-
-        ssh_connection = kzalloc(255, GFP_ATOMIC);
-        ld_preload = kzalloc(255, GFP_ATOMIC);
-
-        if(unlikely(!ssh_connection))
-            free_ssh_connection = 0;
-
-        if(unlikely(!ld_preload))
-            free_ld_preload = 0;
-
-        if(likely(env_len > 0)) {
-            char buf[256];
-            for (i = 0; i < env_len; i++) {
-                native = get_user_arg_ptr(env_ptr, i);
-                if (unlikely(IS_ERR(native)))
-                    continue;
-
-                len = strnlen_user(native, MAX_ARG_STRLEN);
-                if(unlikely(!len))
-                    continue;
-                else if(len > 14) {
-                    memset(buf, 0, 255);
-                    if (unlikely(copy_from_user(buf, native, 255)))
-                        break;
-                    else {
-                        if(strncmp("SSH_CONNECTION=", buf, 11) == 0) {
-                            if(likely(free_ssh_connection == 1)) {
-                                strcpy(ssh_connection, buf + 15);
-                                ssh_connection_flag = 1;
-                            } else
-                                ssh_connection = "-1";
-                        } else if(strncmp("LD_PRELOAD=", buf, 11) == 0) {
-                            if (likely(free_ld_preload == 1)) {
-                                strcpy(ld_preload, buf + 11);
-                                ld_preload_flag = 1;
-                            } else
-                                ld_preload = "-1";
-                        }
-                    }
-                }
-            }
-        }
-
-        if(unlikely(ssh_connection_flag == 0)) {
-            if(unlikely(free_ssh_connection == 0))
-                ssh_connection = "-1";
-            else
-                strcpy(ssh_connection, "-1");
-        }
-        data->ssh_connection = ssh_connection;
-        data->free_ssh_connection = free_ssh_connection;
-
-        if(unlikely(ld_preload_flag == 0)) {
-            if(unlikely(free_ld_preload== 0))
-                ld_preload = "-1";
-            else
-                strcpy(ld_preload, "-1");
-        }
-        data->ld_preload = ld_preload;
-        data->free_ld_preload = free_ld_preload;
-
-        tmp_buf = kzalloc(256, GFP_ATOMIC);
-        if(unlikely(!tmp_buf))
-            abs_path = "-2";
-        else {
-            if(unlikely(copy_from_user(tmp_buf, (const char __user *)p_get_arg1(regs), 256)))
-                abs_path = "-1";
-            else {
-                if(unlikely(strcmp(tmp_buf, "/") != 0 && strcmp(tmp_buf, ".") != 0)) {
-                    abs_path = tmp_buf;
-                    free_abs_path = 1;
-                } else {
-                    error = user_path_at(AT_FDCWD, (const char __user *)p_get_arg1(regs), LOOKUP_FOLLOW, &exe_file);
-                    if (unlikely(error))
-                        abs_path = "-1";
-                    else {
-                        exe_file_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
-                        if (unlikely(!exe_file_buf))
-                            abs_path = "-2";
-                        else {
-                            abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
-                            if (unlikely(IS_ERR(abs_path)))
-                                abs_path = "-1";
-                            kfree(exe_file_buf);
-                        }
-                        path_put(&exe_file);
-                    }
-                }
-            }
-        }
-
-        data->argv = argv_res_tmp;
-        data->abs_path = abs_path;
-        data->free_abs_path = free_abs_path;
-        data->free_argv = free_argv;
-
-        if(likely(argv_res))
-            kfree(argv_res);
+        get_execve_data(argv_ptr, env_ptr, (const char __user *)p_get_arg1(regs), (struct execve_data *)ri->data);
     }
     return 0;
 }
 
 int compat_execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-    int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, error = 0;
-    int env_len = 0;
-    char *tmp_buf = "0";
-    char *exe_file_buf = "-2";
-    char *argv_res = NULL;
-    char *abs_path = NULL;
-    char *argv_res_tmp = NULL;
-    const char __user *native;
     if (share_mem_flag != -1) {
-        int free_argv = 0;
-        int free_ssh_connection = 1;
-        int free_ld_preload = 1;
-        int free_abs_path = 0;
-        int ssh_connection_flag = 0;
-        int ld_preload_flag = 0;
-        char *ssh_connection = NULL;
-        char *ld_preload = NULL;
-        struct execve_data *data;
-        struct path exe_file;
-
         struct user_arg_ptr argv_ptr = {
             .is_compat = true,
             .ptr.compat = (const compat_uptr_t __user *)p_get_arg3(regs),
@@ -818,145 +800,7 @@ int compat_execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs 
             .ptr.compat = (const compat_uptr_t __user *)p_get_arg4(regs),
         };
 
-        data = (struct execve_data *)ri->data;
-
-        env_len = count(env_ptr, MAX_ARG_STRINGS);
-        argv_res_len = 128 * (argv_len + 2);
-        argv_len = count(argv_ptr, MAX_ARG_STRINGS);
-
-        if(likely(argv_len > 0)) {
-            argv_res = kzalloc(argv_res_len + 1, GFP_ATOMIC);
-            if(unlikely(!argv_res))
-                argv_res = NULL;
-            else {
-                for (i = 0; i < argv_len; i++) {
-                    native = get_user_arg_ptr(argv_ptr, i);
-                    if (unlikely(IS_ERR(native)))
-                        break;
-
-                    len = strnlen_user(native, MAX_ARG_STRLEN);
-                    if (unlikely(!len))
-                        break;
-
-                    if (offset + len > argv_res_len - 1)
-                    break;
-
-                    if (unlikely(copy_from_user(argv_res + offset, native, len)))
-                        break;
-
-                    offset += len - 1;
-                    *(argv_res + offset) = ' ';
-                    offset += 1;
-                }
-            }
-        }
-
-        if (likely(argv_res)) {
-            argv_res_tmp = str_replace(argv_res, "\n", " ");
-            if(likely(argv_res_tmp))
-                free_argv = 1;
-            else
-                argv_res_tmp = "";
-        } else
-            argv_res_tmp = "";
-
-        ssh_connection = kzalloc(255, GFP_ATOMIC);
-        ld_preload = kzalloc(255, GFP_ATOMIC);
-
-        if(unlikely(!ssh_connection))
-            free_ssh_connection = 0;
-
-        if(unlikely(!ld_preload))
-            free_ld_preload = 0;
-
-        if(likely(env_len > 0)) {
-            char buf[256];
-            for (i = 0; i < env_len; i++) {
-                native = get_user_arg_ptr(env_ptr, i);
-                if (unlikely(IS_ERR(native)))
-                    continue;
-
-                len = strnlen_user(native, MAX_ARG_STRLEN);
-                if(unlikely(!len))
-                    continue;
-                else if(len > 14) {
-                    memset(buf, 0, 255);
-                    if (unlikely(copy_from_user(buf, native, 255)))
-                        break;
-                    else {
-                        if(strncmp("SSH_CONNECTION=", buf, 11) == 0) {
-                            if(likely(free_ssh_connection == 1)) {
-                                strcpy(ssh_connection, buf + 15);
-                                ssh_connection_flag = 1;
-                            } else
-                                ssh_connection = "-1";
-                        } else if(strncmp("LD_PRELOAD=", buf, 11) == 0) {
-                            if (likely(free_ld_preload == 1)) {
-                                strcpy(ld_preload, buf + 11);
-                                ld_preload_flag = 1;
-                            } else
-                                ld_preload = "-1";
-                        }
-                    }
-                }
-            }
-        }
-
-        if(unlikely(ssh_connection_flag == 0)) {
-            if(unlikely(free_ssh_connection == 0))
-                ssh_connection = "-1";
-            else
-                strcpy(ssh_connection, "-1");
-        }
-        data->ssh_connection = ssh_connection;
-        data->free_ssh_connection = free_ssh_connection;
-
-        if(unlikely(ld_preload_flag == 0)) {
-            if(unlikely(free_ld_preload== 0))
-                ld_preload = "-1";
-            else
-                strcpy(ld_preload, "-1");
-        }
-        data->ld_preload = ld_preload;
-        data->free_ld_preload = free_ld_preload;
-
-        tmp_buf = kzalloc(256, GFP_ATOMIC);
-        if(unlikely(!tmp_buf))
-            abs_path = "-2";
-        else {
-            if(unlikely(copy_from_user(tmp_buf, (const char __user *)p_get_arg1(regs), 256)))
-                abs_path = "-1";
-            else {
-                if(unlikely(strcmp(tmp_buf, "/") != 0 && strcmp(tmp_buf, ".") != 0)) {
-                    abs_path = tmp_buf;
-                    free_abs_path = 1;
-                } else {
-                    error = user_path_at(AT_FDCWD, (const char __user *)p_get_arg1(regs), LOOKUP_FOLLOW, &exe_file);
-                    if (unlikely(error))
-                        abs_path = "-1";
-                    else {
-                        exe_file_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
-                        if (unlikely(!exe_file_buf))
-                            abs_path = "-2";
-                        else {
-                            abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
-                            if (unlikely(IS_ERR(abs_path)))
-                                abs_path = "-1";
-                            kfree(exe_file_buf);
-                        }
-                        path_put(&exe_file);
-                    }
-                }
-            }
-        }
-
-        data->argv = argv_res_tmp;
-        data->abs_path = abs_path;
-        data->free_abs_path = free_abs_path;
-        data->free_argv = free_argv;
-
-        if(likely(argv_res))
-            kfree(argv_res);
+        get_execve_data(argv_ptr, env_ptr, (const char __user *)p_get_arg1(regs), (struct execve_data *)ri->data);
     }
     return 0;
 }
@@ -964,335 +808,20 @@ int compat_execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs 
 
 int execveat_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-    int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, error = 0;
-    int env_len = 0;
-    char *tmp_buf = "0";
-    char *exe_file_buf = "-2";
-    char *argv_res = NULL;
-    char *abs_path = NULL;
-    char *argv_res_tmp = NULL;
-    const char __user *native;
     if (share_mem_flag != -1) {
-        int free_argv = 0;
-        int free_ssh_connection = 1;
-        int free_ld_preload = 1;
-        int free_abs_path = 0;
-        int ssh_connection_flag = 0;
-        int ld_preload_flag = 0;
-        char *ssh_connection = NULL;
-        char *ld_preload = NULL;
-        struct execve_data *data;
-        struct path exe_file;
         struct user_arg_ptr argv_ptr = {.ptr.native = (const char * const*) p_get_arg3(regs)};
         struct user_arg_ptr env_ptr = {.ptr.native = (const char * const*) p_get_arg4(regs)};
-        data = (struct execve_data *)ri->data;
-
-        env_len = count(env_ptr, MAX_ARG_STRINGS);
-        argv_len = count(argv_ptr, MAX_ARG_STRINGS);
-        argv_res_len = 128 * (argv_len + 2);
-
-        if(likely(argv_len > 0)) {
-            argv_res = kzalloc(argv_res_len + 1, GFP_ATOMIC);
-            if(unlikely(!argv_res))
-                argv_res = NULL;
-            else {
-                for (i = 0; i < argv_len; i++) {
-                    native = get_user_arg_ptr(argv_ptr, i);
-                    if (unlikely(IS_ERR(native)))
-                        break;
-
-                    len = strnlen_user(native, MAX_ARG_STRLEN);
-                    if (unlikely(!len))
-                        break;
-
-                    if (offset + len > argv_res_len - 1)
-                    break;
-
-                    if (unlikely(copy_from_user(argv_res + offset, native, len)))
-                        break;
-
-                    offset += len - 1;
-                    *(argv_res + offset) = ' ';
-                    offset += 1;
-                }
-            }
-        }
-
-        if (likely(argv_res)) {
-            argv_res_tmp = str_replace(argv_res, "\n", " ");
-            if(likely(argv_res_tmp))
-                free_argv = 1;
-            else
-                argv_res_tmp = "";
-        } else
-            argv_res_tmp = "";
-
-        ssh_connection = kzalloc(255, GFP_ATOMIC);
-        ld_preload = kzalloc(255, GFP_ATOMIC);
-
-        if(unlikely(!ssh_connection))
-            free_ssh_connection = 0;
-
-        if(unlikely(!ld_preload))
-            free_ld_preload = 0;
-
-        if(likely(env_len > 0)) {
-            char buf[256];
-            for (i = 0; i < env_len; i++) {
-                native = get_user_arg_ptr(env_ptr, i);
-
-                if (unlikely(IS_ERR(native)))
-                    continue;
-
-                len = strnlen_user(native, MAX_ARG_STRLEN);
-
-                if(unlikely(!len))
-                    continue;
-                else if(len > 14) {
-                    memset(buf, 0, 255);
-                    if (unlikely(copy_from_user(buf, native, 255)))
-                        break;
-                    else {
-                        if(strncmp("SSH_CONNECTION=", buf, 11) == 0) {
-                            if(likely(free_ssh_connection == 1)) {
-                                strcpy(ssh_connection, buf + 15);
-                                ssh_connection_flag = 1;
-                            } else
-                                ssh_connection = "-1";
-                        } else if(strncmp("LD_PRELOAD=", buf, 11) == 0) {
-                            if (likely(free_ld_preload == 1)) {
-                                strcpy(ld_preload, buf + 11);
-                                ld_preload_flag = 1;
-                            } else
-                                ld_preload = "-1";
-                        }
-                    }
-                }
-            }
-        }
-
-        if(unlikely(ssh_connection_flag == 0)) {
-            if(unlikely(free_ssh_connection == 0))
-                ssh_connection = "-1";
-            else
-                strcpy(ssh_connection, "-1");
-        }
-        data->ssh_connection = ssh_connection;
-        data->free_ssh_connection = free_ssh_connection;
-
-        if(unlikely(ld_preload_flag == 0)) {
-            if(unlikely(free_ld_preload== 0))
-                ld_preload = "-1";
-            else
-                strcpy(ld_preload, "-1");
-        }
-        data->ld_preload = ld_preload;
-        data->free_ld_preload = free_ld_preload;
-
-        tmp_buf = kzalloc(256, GFP_ATOMIC);
-        if(unlikely(!tmp_buf))
-            abs_path = "-2";
-        else {
-            if(unlikely(copy_from_user(tmp_buf, (const char __user *)p_get_arg1(regs), 256)))
-                abs_path = "-1";
-            else {
-                if(unlikely(strcmp(tmp_buf, "/") != 0 && strcmp(tmp_buf, ".") != 0)) {
-                    abs_path = tmp_buf;
-                    free_abs_path = 1;
-                } else {
-                    error = user_path_at(AT_FDCWD, (const char __user *)p_get_arg1(regs), LOOKUP_FOLLOW, &exe_file);
-                    if (unlikely(error))
-                        abs_path = "-1";
-                    else {
-                        exe_file_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
-                        if (unlikely(!exe_file_buf))
-                            abs_path = "-2";
-                        else {
-                            abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
-                            if (unlikely(IS_ERR(abs_path)))
-                                abs_path = "-1";
-                            kfree(exe_file_buf);
-                        }
-                        path_put(&exe_file);
-                    }
-                }
-            }
-        }
-
-        data->argv = argv_res_tmp;
-        data->abs_path = abs_path;
-        data->free_abs_path = free_abs_path;
-        data->free_argv = free_argv;
-
-        if(likely(argv_res))
-            kfree(argv_res);
+        get_execve_data(argv_ptr, env_ptr, (const char __user *)p_get_arg1(regs), (struct execve_data *)ri->data);
     }
     return 0;
 }
 
 int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-    int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, error = 0;
-    int env_len = 0;
-    char *tmp_buf = "0";
-    char *exe_file_buf = "-2";
-    char *argv_res = NULL;
-    char *abs_path = NULL;
-    char *argv_res_tmp = NULL;
-    const char __user *native;
     if (share_mem_flag != -1) {
-        int free_argv = 0;
-        int free_abs_path = 0;  
-        int free_ssh_connection = 1;
-        int free_ld_preload = 1;
-        int ssh_connection_flag = 0;
-        int ld_preload_flag = 0;
-        char *ssh_connection = NULL;
-        char *ld_preload = NULL;
-        struct execve_data *data;
-        struct path exe_file;
         struct user_arg_ptr argv_ptr = {.ptr.native = (const char * const*) p_get_arg2(regs)};
         struct user_arg_ptr env_ptr = {.ptr.native = (const char * const*) p_get_arg3(regs)};
-        data = (struct execve_data *)ri->data;
-
-        argv_len = count(argv_ptr, MAX_ARG_STRINGS);
-        argv_res_len = 128 * (argv_len + 2);
-        env_len = count(env_ptr, MAX_ARG_STRINGS);
-
-        if(likely(argv_len > 0)) {
-            argv_res = kzalloc(argv_res_len + 1, GFP_ATOMIC);
-
-            if(unlikely(!argv_res))
-                argv_res = NULL;
-            else {
-                for (i = 0; i < argv_len; i++) {
-                    native = get_user_arg_ptr(argv_ptr, i);
-                    if (unlikely(IS_ERR(native)))
-                        break;
-
-                    len = strnlen_user(native, MAX_ARG_STRLEN);
-                    if (unlikely(!len))
-                        break;
-
-                    if (offset + len > argv_res_len - 1)
-                    break;
-
-                    if (unlikely(copy_from_user(argv_res + offset, native, len)))
-                        break;
-
-                    offset += len - 1;
-                    *(argv_res + offset) = ' ';
-                    offset += 1;
-                }
-            }
-        }
-
-        if (likely(argv_res)) {
-            argv_res_tmp = str_replace(argv_res, "\n", " ");
-            if(likely(argv_res_tmp))
-                free_argv = 1;
-            else
-                argv_res_tmp = "";
-        } else
-            argv_res_tmp = "";
-
-        ssh_connection = kzalloc(255, GFP_ATOMIC);
-        ld_preload = kzalloc(255, GFP_ATOMIC);
-        
-        if(unlikely(!ssh_connection))
-            free_ssh_connection = 0;
-
-        if(unlikely(!ld_preload))
-            free_ld_preload = 0;
-
-        if(likely(env_len > 0)) {
-            char buf[256];
-            for (i = 0; i < env_len; i++) {
-                native = get_user_arg_ptr(env_ptr, i);
-                if (unlikely(IS_ERR(native)))
-                    continue;
-
-                len = strnlen_user(native, MAX_ARG_STRLEN);
-                if(unlikely(!len))
-                    continue;
-                else if(len > 14) {
-                    memset(buf, 0, 255);
-                    if (unlikely(copy_from_user(buf, native, 255)))
-                        break;
-                    else {
-                        if(strncmp("SSH_CONNECTION=", buf, 11) == 0) {
-                            if (likely(free_ssh_connection == 1)) {
-                                strcpy(ssh_connection, buf + 15);
-                                ssh_connection_flag = 1;
-                            } else
-                                ssh_connection = "-1";
-                        } else if(strncmp("LD_PRELOAD=", buf, 11) == 0) {
-                            if (likely(free_ld_preload == 1)) {
-                                strcpy(ld_preload, buf + 11);
-                                ld_preload_flag = 1;
-                            } else
-                                ld_preload = "-1";
-                        }
-                    }
-                }
-            }
-        }
-
-        if(unlikely(ssh_connection_flag == 0)) {
-            if(unlikely(free_ssh_connection == 0))
-                ssh_connection = "-1";
-            else
-                strcpy(ssh_connection, "-1");
-        }
-        data->ssh_connection = ssh_connection;
-        data->free_ssh_connection = free_ssh_connection;
-
-        if(unlikely(ld_preload_flag == 0)) {
-            if(unlikely(free_ld_preload== 0))
-                ld_preload = "-1";
-            else
-                strcpy(ld_preload, "-1");
-        }
-        data->ld_preload = ld_preload;
-        data->free_ld_preload = free_ld_preload;
-
-        tmp_buf = kzalloc(256, GFP_ATOMIC);
-        if(unlikely(!tmp_buf))
-            abs_path = "-2";
-        else {
-            if(unlikely(copy_from_user(tmp_buf, (const char __user *)p_get_arg1(regs), 256)))
-                abs_path = "-1";
-            else {
-                if(unlikely(strcmp(tmp_buf, "/") != 0 && strcmp(tmp_buf, ".") != 0)) {
-                    abs_path = tmp_buf;
-                    free_abs_path = 1;
-                } else {
-                    error = user_path_at(AT_FDCWD, (const char __user *)p_get_arg1(regs), LOOKUP_FOLLOW, &exe_file);
-                    if (unlikely(error))
-                        abs_path = "-1";
-                    else {
-                        exe_file_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
-                        if (unlikely(!exe_file_buf))
-                            abs_path = "-2";
-                        else {
-                            abs_path = d_path(&exe_file, exe_file_buf, PATH_MAX);
-                            if (unlikely(IS_ERR(abs_path)))
-                                abs_path = "-1";
-                            kfree(exe_file_buf);
-                        }
-                        path_put(&exe_file);
-                    }
-                }
-            }
-        }
-
-        data->argv = argv_res_tmp;
-        data->abs_path = abs_path;
-        data->free_abs_path = free_abs_path;
-        data->free_argv = free_argv;
-
-        if(likely(argv_res))
-            kfree(argv_res);
+        get_execve_data(argv_ptr, env_ptr, (const char __user *)p_get_arg1(regs), (struct execve_data *)ri->data);
     }
     return 0;
 }
@@ -1534,260 +1063,144 @@ struct execve_data {
     int free_ld_preload;
 };
 
-int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
+struct execve_data *get_execve_data(char **argv, char **env, struct *execve_data data) {
     int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0;
     int env_len = 0;
+    int free_argv = 0;
+    int ssh_connection_flag = 0;
+    int free_ssh_connection = 1;
+    int free_ld_preload = 1;
+    int ld_preload_flag = 0;
     char *argv_res = NULL;
     char *argv_res_tmp = NULL;
+    char *ssh_connection = NULL;
+    char *ld_preload = NULL;
     const char __user
     *native;
-    if (share_mem_flag != -1) {
-        int free_argv = 0;
-        int ssh_connection_flag = 0;
-        int free_ssh_connection = 1;
-        int free_ld_preload = 1;
-        int ld_preload_flag = 0;
-        char *ssh_connection = NULL;
-        char *ld_preload = NULL;
-        struct execve_data *data;
-        char **argv = (char **) p_get_arg2(regs);
-        char **env = (char **) p_get_arg3(regs);
-        data = (struct execve_data *) ri->data;
 
-        env_len = count(env, MAX_ARG_STRINGS);
-        argv_res_len = 128 * (argv_len + 2);
-        argv_len = count(argv, MAX_ARG_STRINGS);
+    env_len = count(env, MAX_ARG_STRINGS);
+    argv_res_len = 128 * (argv_len + 2);
+    argv_len = count(argv, MAX_ARG_STRINGS);
 
-        if (likely(argv_len > 0)) {
-            argv_res = kzalloc(argv_res_len + 1, GFP_ATOMIC);
-            if (unlikely(!argv_res))
-                argv_res = NULL;
-            else {
-                for (i = 0; i < argv_len; i++) {
-                    native = get_user_arg_ptr(argv_ptr, i);
-                    if (unlikely(IS_ERR(native)))
-                        break;
-
-                    len = strnlen_user(native, MAX_ARG_STRLEN);
-                    if (unlikely(!len))
-                        break;
-
-                    if (offset + len > argv_res_len - 1)
-                        break;
-
-                    if (unlikely(copy_from_user(argv_res + offset, native, len)))
-                        break;
-
-                    offset += len - 1;
-                    *(argv_res + offset) = ' ';
-                    offset += 1;
-                }
-            }
-        }
-
-        if (likely(argv_res)) {
-            argv_res_tmp = str_replace(argv_res, "\n", " ");
-            if (likely(argv_res_tmp))
-                free_argv = 1;
-            else
-                argv_res_tmp = "";
-        } else
-            argv_res_tmp = "";
-
-        ssh_connection = kzalloc(255, GFP_ATOMIC);
-        ld_preload = kzalloc(255, GFP_ATOMIC);
-
-        if (unlikely(!ssh_connection))
-            free_ssh_connection = 0;
-
-        if (unlikely(!ld_preload))
-            free_ld_preload = 0;
-
-        if (likely(env_len > 0)) {
-            char buf[256];
-            for (i = 0; i < env_len; i++) {
-                native = get_user_arg_ptr(env_ptr, i);
+    if (likely(argv_len > 0)) {
+        argv_res = kzalloc(argv_res_len + 1, GFP_ATOMIC);
+        if (unlikely(!argv_res))
+            argv_res = NULL;
+        else {
+            for (i = 0; i < argv_len; i++) {
+                native = get_user_arg_ptr(argv_ptr, i);
                 if (unlikely(IS_ERR(native)))
-                    continue;
+                    break;
 
                 len = strnlen_user(native, MAX_ARG_STRLEN);
                 if (unlikely(!len))
-                    continue;
-                else if (len > 14) {
-                    memset(buf, 0, 255);
-                    if (unlikely(copy_from_user(buf, native, 255)))
-                        break;
-                    else {
-                        if (strncmp("SSH_CONNECTION=", buf, 11) == 0) {
-                            if (likely(free_ssh_connection == 1)) {
-                                strcpy(ssh_connection, buf + 15);
-                                ssh_connection_flag = 1;
-                            } else
-                                ssh_connection = "-1";
-                        } else if (strncmp("LD_PRELOAD=", buf, 11) == 0) {
-                            if (likely(free_ld_preload == 1)) {
-                                strcpy(ld_preload, buf + 11);
-                                ld_preload_flag = 1;
-                            } else
-                                ld_preload = "-1";
-                        }
+                    break;
+
+                if (offset + len > argv_res_len - 1)
+                    break;
+
+                if (unlikely(copy_from_user(argv_res + offset, native, len)))
+                    break;
+
+                offset += len - 1;
+                *(argv_res + offset) = ' ';
+                offset += 1;
+            }
+        }
+    }
+
+    if (likely(argv_res)) {
+        argv_res_tmp = str_replace(argv_res, "\n", " ");
+        if (likely(argv_res_tmp))
+            free_argv = 1;
+        else
+            argv_res_tmp = "";
+    } else
+        argv_res_tmp = "";
+
+    ssh_connection = kzalloc(255, GFP_ATOMIC);
+    ld_preload = kzalloc(255, GFP_ATOMIC);
+
+    if (unlikely(!ssh_connection))
+        free_ssh_connection = 0;
+
+    if (unlikely(!ld_preload))
+        free_ld_preload = 0;
+
+    if (likely(env_len > 0)) {
+        char buf[256];
+        for (i = 0; i < env_len; i++) {
+            native = get_user_arg_ptr(env_ptr, i);
+            if (unlikely(IS_ERR(native)))
+                continue;
+
+            len = strnlen_user(native, MAX_ARG_STRLEN);
+            if (unlikely(!len))
+                continue;
+            else if (len > 14) {
+                memset(buf, 0, 255);
+                if (unlikely(copy_from_user(buf, native, 255)))
+                    break;
+                else {
+                    if (strncmp("SSH_CONNECTION=", buf, 11) == 0) {
+                        if (likely(free_ssh_connection == 1)) {
+                            strcpy(ssh_connection, buf + 15);
+                            ssh_connection_flag = 1;
+                        } else
+                            ssh_connection = "-1";
+                    } else if (strncmp("LD_PRELOAD=", buf, 11) == 0) {
+                        if (likely(free_ld_preload == 1)) {
+                            strcpy(ld_preload, buf + 11);
+                            ld_preload_flag = 1;
+                        } else
+                            ld_preload = "-1";
                     }
                 }
             }
         }
+    }
 
-        if (unlikely(ssh_connection_flag == 0)) {
-            if (unlikely(free_ssh_connection == 0))
-                ssh_connection = "-1";
-            else
-                strcpy(ssh_connection, "-1");
-        }
-        data->ssh_connection = ssh_connection;
-        data->free_ssh_connection = free_ssh_connection;
+    if (unlikely(ssh_connection_flag == 0)) {
+        if (unlikely(free_ssh_connection == 0))
+            ssh_connection = "-1";
+        else
+            strcpy(ssh_connection, "-1");
+    }
+    data->ssh_connection = ssh_connection;
+    data->free_ssh_connection = free_ssh_connection;
 
-        if (unlikely(ld_preload_flag == 0)) {
-            if (unlikely(free_ld_preload == 0))
-                ld_preload = "-1";
-            else
-                strcpy(ld_preload, "-1");
-        }
-        data->ld_preload = ld_preload;
-        data->free_ld_preload = free_ld_preload;
+    if (unlikely(ld_preload_flag == 0)) {
+        if (unlikely(free_ld_preload == 0))
+            ld_preload = "-1";
+        else
+            strcpy(ld_preload, "-1");
+    }
+    data->ld_preload = ld_preload;
+    data->free_ld_preload = free_ld_preload;
 
-        data->argv = argv_res_tmp;
-        data->free_argv = free_argv;
+    data->argv = argv_res_tmp;
+    data->free_argv = free_argv;
 
-        if (likely(argv_res))
-            kfree(argv_res);
+    if (likely(argv_res))
+        kfree(argv_res);
+
+    return execve_data;
+}
+
+int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
+    if (share_mem_flag != -1) {
+        char **argv = (char **) p_get_arg2(regs);
+        char **env = (char **) p_get_arg3(regs);
+        get_execve_data(argv, env, (struct execve_data *)ri->data);
     }
     return 0;
 }
 
 int execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
-    int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0;
-    char *argv_res = NULL;
-    int env_len = 0;
-    char *argv_res_tmp = NULL;
-    const char __user
-    *native;
     if (share_mem_flag != -1) {
-        int free_argv = 0;
-        int free_ssh_connection = 1;
-        int free_ld_preload = 1;
-        int ssh_connection_flag = 0;
-        int ld_preload_flag = 0;
-        char *ssh_connection = NULL;
-        char *ld_preload = NULL;
-        struct execve_data *data;
         char **argv = (char **) p_get_arg2(regs);
         char **env = (char **) p_get_arg3(regs);
-        data = (struct execve_data *) ri->data;
-
-        argv_res_len = 128 * (argv_len + 2);
-        argv_len = count(argv, MAX_ARG_STRINGS);
-        env_len = count(env, MAX_ARG_STRINGS);
-
-        if (likely(argv_len > 0)) {
-            argv_res = kzalloc(argv_res_len + 1, GFP_ATOMIC);
-            if (unlikely(!argv_res))
-                argv_res = NULL;
-            else {
-                for (i = 0; i < argv_len; i++) {
-                    native = get_user_arg_ptr(argv_ptr, i);
-                    if (unlikely(IS_ERR(native)))
-                        break;
-
-                    len = strnlen_user(native, MAX_ARG_STRLEN);
-                    if (unlikely(!len))
-                        break;
-
-                    if (offset + len > argv_res_len - 1)
-                        break;
-
-                    if (unlikely(copy_from_user(argv_res + offset, native, len)))
-                        break;
-
-                    offset += len - 1;
-                    *(argv_res + offset) = ' ';
-                    offset += 1;
-                }
-            }
-        }
-
-        if (likely(argv_res)) {
-            argv_res_tmp = str_replace(argv_res, "\n", " ");
-            if (likely(argv_res_tmp))
-                free_argv = 1;
-            else
-                argv_res_tmp = "";
-        } else
-            argv_res_tmp = "";
-
-        ssh_connection = kzalloc(255, GFP_ATOMIC);
-        ld_preload = kzalloc(255, GFP_ATOMIC);
-
-        if (unlikely(!ssh_connection))
-            free_ssh_connection = 0;
-
-        if (unlikely(!ld_preload))
-            free_ld_preload = 0;
-
-        if (likely(env_len > 0)) {
-            char buf[256];
-            for (i = 0; i < env_len; i++) {
-                native = get_user_arg_ptr(env_ptr, i);
-                if (unlikely(IS_ERR(native)))
-                    continue;
-
-                len = strnlen_user(native, MAX_ARG_STRLEN);
-                if (unlikely(!len))
-                    continue;
-                else if (len > 14) {
-                    memset(buf, 0, 255);
-                    if (unlikely(copy_from_user(buf, native, 255)))
-                        break;
-                    else {
-                        if (strncmp("SSH_CONNECTION=", buf, 11) == 0) {
-                            if (likely(free_ssh_connection == 1)) {
-                                strcpy(ssh_connection, buf + 15);
-                                ssh_connection_flag = 1;
-                            } else
-                                ssh_connection = "-1";
-                        } else if (strncmp("LD_PRELOAD=", buf, 11) == 0) {
-                            if (likely(free_ld_preload == 1)) {
-                                strcpy(ld_preload, buf + 11);
-                                ld_preload_flag = 1;
-                            } else
-                                ld_preload = "-1";
-                        }
-                    }
-                }
-            }
-        }
-
-        if (unlikely(ssh_connection_flag == 0)) {
-            if (unlikely(free_ssh_connection == 0))
-                ssh_connection = "-1";
-            else
-                strcpy(ssh_connection, "-1");
-        }
-        data->ssh_connection = ssh_connection;
-        data->free_ssh_connection = free_ssh_connection;
-
-        if (unlikely(ld_preload_flag == 0)) {
-            if (unlikely(free_ld_preload == 0))
-                ld_preload = "-1";
-            else
-                strcpy(ld_preload, "-1");
-        }
-        data->ld_preload = ld_preload;
-        data->free_ld_preload = free_ld_preload;
-
-        data->argv = argv_res_tmp;
-        data->free_argv = free_argv;
-
-        if (likely(argv_res))
-            kfree(argv_res);
+        get_execve_data(argv, env, (struct execve_data *)ri->data);
     }
     return 0;
 }
@@ -2530,84 +1943,6 @@ int update_cred_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
     return 0;
 }
 
-struct mprotect_data {
-    unsigned long start;
-    size_t len;
-    unsigned long prot;
-};
-
-int mprotect_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
-    if (share_mem_flag != -1) {
-        struct mprotect_data *data;
-        data = (struct mprotect_data *) ri->data;
-        data->start = (unsigned long) p_get_arg1(regs);
-        data->len = (size_t) p_get_arg2(regs);
-        data->prot = (unsigned long) p_get_arg3(regs);
-    }
-    return 0;
-}
-
-int mprotect_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
-    if (share_mem_flag != -1) {
-        int comm_free = 0;
-        int retval;
-        unsigned long prot;
-        struct mprotect_data *data;
-        data = (struct mprotect_data *) ri->data;
-        prot = data->prot;
-        retval = regs_return_value(regs);
-        if (retval == 0) {
-            if (prot & PROT_READ || prot & PROT_EXEC) {
-                unsigned int sessionid;
-                int result_str_len;
-                char *buffer = NULL;
-                char *comm = NULL;
-                char *result_str = NULL;
-                char *abs_path;
-
-                if (strlen(current->comm) > 0) {
-                    comm = str_replace(current->comm, "\n", " ");
-                    if (likely(comm))
-                        comm_free = 1;
-                    else
-                        comm = "";
-                } else
-                    comm = "";
-
-                sessionid = get_sessionid();
-
-                buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
-                if (unlikely(!buffer))
-                    abs_path = "-2";
-                else
-                    abs_path = get_exe_file(current, buffer, PATH_MAX);
-
-                result_str_len = strlen(current->nsproxy->uts_ns->name.nodename)
-                                 + strlen(comm) + strlen(abs_path) + 192;
-
-                result_str = kzalloc(result_str_len, GFP_ATOMIC);
-                if (likely(result_str)) {
-                    snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%lu%s%u%s%lu%s%s%s%u",
-                             get_current_uid(), "\n", MPROTECT_TYPE, "\n", abs_path,
-                             "\n", current->pid, "\n", current->real_parent->pid, "\n",
-                             pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                             comm, "\n", data->start, "\n", data->len, "\n", data->prot,
-                             "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
-
-                    send_msg_to_user(result_str, 1);
-                }
-
-                if (likely(strcmp(abs_path, "-2")))
-                    kfree(buffer);
-
-                if (likely(comm_free == 1))
-                    kfree(comm);
-            }
-        }
-    }
-    return 0;
-}
-
 struct kretprobe connect_kretprobe = {
         .kp.symbol_name = P_GET_SYSCALL_NAME(connect),
         .data_size  = sizeof(struct connect_data),
@@ -2685,14 +2020,6 @@ struct kretprobe update_cred_kretprobe = {
         .data_size  = sizeof(struct update_cred_data),
         .handler = update_cred_handler,
         .entry_handler = update_cred_entry_handler,
-        .maxactive = 40,
-};
-
-struct kretprobe mprotect_kretprobe = {
-        .kp.symbol_name = P_GET_SYSCALL_NAME(mprotect),
-        .data_size  = sizeof(struct mprotect_data),
-        .handler = mprotect_handler,
-        .entry_handler = mprotect_entry_handler,
         .maxactive = 40,
 };
 
@@ -2844,20 +2171,6 @@ void unregister_kprobe_update_cred(void) {
     unregister_kretprobe(&update_cred_kretprobe);
 }
 
-int mprotect_register_kprobe(void) {
-    int ret;
-    ret = register_kretprobe(&mprotect_kretprobe);
-
-    if (ret == 0)
-        mprotect_kprobe_state = 0x1;
-
-    return ret;
-}
-
-void unregister_kprobe_mprotect(void) {
-    unregister_kretprobe(&mprotect_kretprobe);
-}
-
 void uninstall_kprobe(void) {
     if (connect_kprobe_state == 0x1)
         unregister_kretprobe_connect();
@@ -2879,9 +2192,6 @@ void uninstall_kprobe(void) {
 
     if (update_cred_kprobe_state == 0x1)
         unregister_kprobe_update_cred();
-
-    if (mprotect_kprobe_state == 0x1)
-        unregister_kprobe_mprotect();
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
     if (execveat_kretprobe_state == 0x1)
@@ -2986,14 +2296,6 @@ smith_init(void) {
         if (ret < 0) {
             printk(KERN_INFO
             "[SMITH] update_cred register_kprobe failed, returned %d\n", ret);
-        }
-    }
-
-    if (MPROTECT_HOOK == 1) {
-        ret = mprotect_register_kprobe();
-        if (ret < 0) {
-            printk(KERN_INFO
-            "[SMITH] mprotect register_kprobe failed, returned %d\n", ret);
         }
     }
 
