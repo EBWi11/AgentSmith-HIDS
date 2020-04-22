@@ -9,6 +9,7 @@
 #include <sys/mman.h>
 #include <errno.h>
 #include <time.h>
+#include <sys/time.h>
 
 #define MAX_SIZE 2097152
 #define DEVICE_FILENAME "/dev/smith"
@@ -42,7 +43,7 @@ static char *get_user_id(const char *msg) {
     int i;
     int first = strcspn(msg, split_ymbol);
 
-    for (i = 0; i < sizeof(user_id); i++)
+    for (i = 0; i < (char) sizeof(user_id); i++)
         user_id[i] = 0;
 
     for (i = 0; i < first; i++)
@@ -101,7 +102,7 @@ static char *shm_msg_factory_no_callback(char *msg) {
     struct timeval ts;
     memset(shm_res, 0, NLMSG_SPACE(4096));
     gettimeofday(&ts, NULL);
-    sprintf(time_buffer, "%ld\0", ts.tv_sec * 1000 + ts.tv_usec / 1000);
+    sprintf(time_buffer, "%ld", ts.tv_sec * 1000 + ts.tv_usec / 1000);
 
     if (msg) {
         if (strlen(msg) < 4024) {
@@ -112,9 +113,11 @@ static char *shm_msg_factory_no_callback(char *msg) {
 
             if (shm_res_len > 16) {
                 user_id = get_user_id(shm_res);
-                username = get_user(atoi(user_id));
-                strcat(shm_res, username);
-                strcat(shm_res, "\n");
+                if (strcmp(user_id, "-1") != 0) {
+                    username = get_user(atoi(user_id));
+                    strcat(shm_res, username);
+                    strcat(shm_res, "\n");
+                }
                 strcat(shm_res, time_buffer);
                 return shm_res;
             }
