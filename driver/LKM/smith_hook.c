@@ -33,6 +33,7 @@
 #define DNS_HOOK 1
 #define LOAD_MODULE_HOOK 1
 #define UPDATE_CRED_HOOK 1
+#define MAXACTIVE 1
 
 int share_mem_flag = -1;
 int checkCPUendianRes = 0;
@@ -2082,7 +2083,7 @@ struct kretprobe connect_kretprobe = {
         .data_size  = sizeof(struct connect_data),
         .handler = connect_handler,
         .entry_handler = connect_entry_handler,
-        .maxactive = 40,
+        .maxactive = MAXACTIVE,
 };
 
 struct kretprobe bind_kretprobe = {
@@ -2090,7 +2091,7 @@ struct kretprobe bind_kretprobe = {
         .data_size  = sizeof(struct bind_data),
         .handler = bind_handler,
         .entry_handler = bind_entry_handler,
-        .maxactive = 40,
+        .maxactive = MAXACTIVE,
 };
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
@@ -2099,7 +2100,7 @@ struct kretprobe execveat_kretprobe = {
     .data_size  = sizeof(struct execve_data),
     .handler = execve_handler,
     .entry_handler = execveat_entry_handler,
-    .maxactive = 40,
+    .maxactive = MAXACTIVE,
 };
 #endif
 
@@ -2108,7 +2109,7 @@ struct kretprobe execve_kretprobe = {
         .data_size  = sizeof(struct execve_data),
         .handler = execve_handler,
         .entry_handler = execve_entry_handler,
-        .maxactive = 40,
+        .maxactive = MAXACTIVE,
 };
 
 #ifdef CONFIG_COMPAT
@@ -2117,7 +2118,7 @@ struct kretprobe compat_execve_kretprobe = {
     .data_size  = sizeof(struct execve_data),
     .handler = execve_handler,
     .entry_handler = compat_execve_entry_handler,
-    .maxactive = 40,
+    .maxactive = MAXACTIVE,
 };
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,19,0)
@@ -2126,7 +2127,7 @@ struct kretprobe compat_execveat_kretprobe = {
     .data_size  = sizeof(struct execve_data),
     .handler = execve_handler,
     .entry_handler = compat_execveat_entry_handler,
-    .maxactive = 40,
+    .maxactive = MAXACTIVE,
 };
 #endif
 #endif
@@ -2136,7 +2137,7 @@ struct kretprobe security_inode_create_kretprobe = {
         .data_size = sizeof(struct security_inode_create_data),
         .handler = security_inode_create_handler,
         .entry_handler = security_inode_create_entry_handler,
-        .maxactive = 40,
+        .maxactive = MAXACTIVE,
 };
 
 struct kprobe ptrace_kprobe = {
@@ -2149,7 +2150,7 @@ struct kretprobe recvfrom_kretprobe = {
         .data_size  = sizeof(struct recvfrom_data),
         .handler = recvfrom_handler,
         .entry_handler = recvfrom_entry_handler,
-        .maxactive = 40,
+        .maxactive = MAXACTIVE,
 };
 
 struct kprobe load_module_kprobe = {
@@ -2162,7 +2163,7 @@ struct kretprobe update_cred_kretprobe = {
         .data_size  = sizeof(struct update_cred_data),
         .handler = update_cred_handler,
         .entry_handler = update_cred_entry_handler,
-        .maxactive = 40,
+        .maxactive = MAXACTIVE,
 };
 
 int connect_register_kprobe(void) {
