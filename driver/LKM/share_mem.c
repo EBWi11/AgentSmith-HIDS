@@ -147,7 +147,7 @@ static int send_msg_to_user_memshare(char *msg, int kfree_flag) {
         raw_data_len = strlen(msg);
 
         if (unlikely(raw_data_len == 0)) {
-            if (msg && kfree_flag == 1)
+            if (kfree_flag == 1)
                 kfree(msg);
             return 0;
         }
@@ -199,14 +199,14 @@ static int send_msg_to_user_memshare(char *msg, int kfree_flag) {
         write_index_unlock();
     }
 
-    if (likely(msg && kfree_flag == 1))
+    if (likely(kfree_flag == 1))
         kfree(msg);
 
     return 0;
 
     out:
     write_index_unlock();
-    if (likely(msg && kfree_flag == 1))
+    if (likely(kfree_flag == 1))
         kfree(msg);
 
     return 0;
