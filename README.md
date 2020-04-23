@@ -415,6 +415,28 @@ Original Testing Data:
 [Benchmark Data](https://github.com/EBWi11/AgentSmith-HIDS/tree/master/benchmark_data)
 
 
+cyclictest testing
+
+`cyclictest -p 90 - m -c 0 -i 200 -n -h 100 -q -l 1000000`
+
+Uninstall Smith：
+```
+# Total: 000999485
+# Min Latencies: 00002
+# Avg Latencies: 00007
+# Max Latencies: 13905
+# Histogram Overflows: 00515
+```
+
+install Smith：
+```
+# Total: 000999519
+# Min Latencies: 00002
+# Avg Latencies: 00007
+# Max Latencies: 15216
+# Histogram Overflows: 00481
+```
+
 
 ### Documents for deployment and testing purpose:
 
