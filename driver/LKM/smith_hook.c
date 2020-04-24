@@ -34,7 +34,7 @@
 #define LOAD_MODULE_HOOK 1
 #define UPDATE_CRED_HOOK 1
 
-#define MAXACTIVE NR_CPUS 1
+#define MAXACTIVE 1
 
 int share_mem_flag = -1;
 int checkCPUendianRes = 0;
