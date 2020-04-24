@@ -743,7 +743,7 @@ struct execve_data {
     int free_argv;
 };
 
-struct execve_data *get_execve_data(struct user_arg_ptr argv_ptr, struct user_arg_ptr env_ptr, const char __user * elf_path, struct execve_data *data) {
+void get_execve_data(struct user_arg_ptr argv_ptr, struct user_arg_ptr env_ptr, const char __user * elf_path, struct execve_data *data) {
     int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0, error = 0;
     int env_len = 0;
     int free_argv = 0;
@@ -899,8 +899,6 @@ struct execve_data *get_execve_data(struct user_arg_ptr argv_ptr, struct user_ar
 
     if(likely(argv_res))
         kfree(argv_res);
-
-    return data;
 }
 
 #ifdef CONFIG_COMPAT
@@ -1198,7 +1196,7 @@ struct execve_data {
     int free_ld_preload;
 };
 
-struct execve_data *get_execve_data(char **argv, char **env, struct *execve_data data) {
+void get_execve_data(char **argv, char **env, struct execve_data *data) {
     int argv_len = 0, argv_res_len = 0, i = 0, len = 0, offset = 0;
     int env_len = 0;
     int free_argv = 0;
@@ -1219,28 +1217,27 @@ struct execve_data *get_execve_data(char **argv, char **env, struct *execve_data
 
     if (likely(argv_len > 0)) {
         argv_res = kzalloc(argv_res_len + 1, GFP_ATOMIC);
-        if (unlikely(!argv_res))
-            argv_res = NULL;
-        else {
+        if (likely(argv_res)) {
             for (i = 0; i < argv_len; i++) {
-                native = get_user_arg_ptr(argv_ptr, i);
-                if (unlikely(IS_ERR(native)))
+                if (get_user(native, argv + i))
                     break;
 
                 len = strnlen_user(native, MAX_ARG_STRLEN);
-                if (unlikely(!len))
+                if (!len)
                     break;
 
                 if (offset + len > argv_res_len - 1)
                     break;
 
-                if (unlikely(copy_from_user(argv_res + offset, native, len)))
+                if (copy_from_user(argv_res + offset, native, len))
                     break;
 
                 offset += len - 1;
                 *(argv_res + offset) = ' ';
                 offset += 1;
             }
+        } else {
+            argv_res = NULL;
         }
     }
 
@@ -1262,19 +1259,19 @@ struct execve_data *get_execve_data(char **argv, char **env, struct *execve_data
     if (unlikely(!ld_preload))
         free_ld_preload = 0;
 
+
     if (likely(env_len > 0)) {
         char buf[256];
-        for (i = 0; i < env_len; i++) {
-            native = get_user_arg_ptr(env_ptr, i);
-            if (unlikely(IS_ERR(native)))
-                continue;
+        for (i = 0; i < argv_len; i++) {
+            if (get_user(native, env + i))
+                break;
 
             len = strnlen_user(native, MAX_ARG_STRLEN);
-            if (unlikely(!len))
-                continue;
+            if (!len)
+                break;
             else if (len > 14) {
                 memset(buf, 0, 255);
-                if (unlikely(copy_from_user(buf, native, 255)))
+                if (copy_from_user(buf, native, 255))
                     break;
                 else {
                     if (strncmp("SSH_CONNECTION=", buf, 11) == 0) {
@@ -1318,8 +1315,6 @@ struct execve_data *get_execve_data(char **argv, char **env, struct *execve_data
 
     if (likely(argv_res))
         kfree(argv_res);
-
-    return execve_data;
 }
 
 int compat_execve_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
@@ -1353,12 +1348,14 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
     if (share_mem_flag != -1) {
         pid_t socket_pid = -1;
         int i;
+        int limit_index = 0;
+        int limit = 5;
+        int comm_free = 0;
         int pid_tree_free = 0;
-        int free_abs_path;
         int socket_check = 0;
         int tty_name_len = 0;
         void *tmp_socket = NULL;
-        char *pid_tree;
+        char *pid_tree = "1";
         char *nodename = "-1";
         char *socket_pname = "-1";
         char *socket_pname_buf = "-2";
@@ -1390,7 +1387,6 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
         data = (struct execve_data *) ri->data;
         argv = data->argv;
 
-        free_abs_path = data->free_abs_path;
         sessionid = get_sessionid();
 
         if (likely(current->nsproxy->uts_ns))
@@ -1561,9 +1557,6 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
 
         if (likely(strcmp(socket_pname_buf, "-2")))
             kfree(socket_pname_buf);
-
-        if (likely(free_abs_path == 1))
-            kfree(data->abs_path);
 
         if (likely(comm_free == 1))
             kfree(comm);
