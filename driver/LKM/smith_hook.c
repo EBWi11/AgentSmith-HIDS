@@ -33,7 +33,8 @@
 #define DNS_HOOK 1
 #define LOAD_MODULE_HOOK 1
 #define UPDATE_CRED_HOOK 1
-#define MAXACTIVE 1
+
+#define MAXACTIVE NR_CPUS 1
 
 int share_mem_flag = -1;
 int checkCPUendianRes = 0;
@@ -873,7 +874,7 @@ void get_execve_data(struct user_arg_ptr argv_ptr, struct user_arg_ptr env_ptr, 
                 abs_path = tmp_buf;
                 free_abs_path = 1;
             } else {
-                error = user_path_at(AT_FDCWD, elf_path, LOOKUP_FOLLOW, &exe_file);
+                error = kern_path(tmp_buf, LOOKUP_FOLLOW, &exe_file);
                 if (unlikely(error))
                     abs_path = "-1";
                 else {
