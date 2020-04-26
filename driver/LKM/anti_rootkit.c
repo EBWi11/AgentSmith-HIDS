@@ -33,6 +33,9 @@ const char *find_hidden_module(unsigned long addr) {
     struct kobject *cur, *tmp;
     struct module_kobject *kobj;
 
+    if (!mod_kset)
+        return;
+
     list_for_each_entry_safe(cur, tmp, &mod_kset->list, entry)
     {
         if (!kobject_name(tmp))
@@ -65,7 +68,7 @@ void analyze_syscalls(void) {
     unsigned long addr;
     struct module *mod;
 
-    if (!sct)
+    if (!sct || !ckt)
         return;
 
     for (i = 0; i < NR_syscalls; i++){
@@ -148,6 +151,9 @@ void analyze_modules(void) {
     char *result_str;
     struct kobject *cur, *tmp;
     struct module_kobject *kobj;
+
+    if (!mod_kset)
+        return;
 
     list_for_each_entry_safe(cur, tmp, &mod_kset->list, entry){
         if (!kobject_name(tmp))
