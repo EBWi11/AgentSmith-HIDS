@@ -34,7 +34,7 @@ const char *find_hidden_module(unsigned long addr) {
     struct module_kobject *kobj;
 
     if (!mod_kset)
-        return;
+        return "-1";
 
     list_for_each_entry_safe(cur, tmp, &mod_kset->list, entry)
     {
