@@ -105,7 +105,6 @@ int count(struct user_arg_ptr argv, int max)
             ++i;
             if (fatal_signal_pending(current))
                 return -ERESTARTNOHAND;
-            cond_resched();
         }
     }
     return i;
@@ -129,7 +128,6 @@ int count(char **argv, int max) {
 
             if (fatal_signal_pending(current))
                 return -ERESTARTNOHAND;
-            cond_resched();
         }
     }
     return i;
@@ -764,8 +762,8 @@ void get_execve_data(struct user_arg_ptr argv_ptr, struct user_arg_ptr env_ptr, 
     struct path exe_file;
 
     env_len = count(env_ptr, MAX_ARG_STRINGS);
-    argv_res_len = 128 * (argv_len + 2);
     argv_len = count(argv_ptr, MAX_ARG_STRINGS);
+    argv_res_len = 128 * (argv_len + 2);
 
     if(likely(argv_len > 0)) {
         argv_res = kzalloc(argv_res_len + 1, GFP_ATOMIC);
