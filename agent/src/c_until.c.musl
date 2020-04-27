@@ -15,7 +15,7 @@
 #define NLMSG_LENGTH(len) ((len) + NLMSG_HDRLEN)
 #define NLMSG_SPACE(len) NLMSG_ALIGN(NLMSG_LENGTH(len))
 
-#define MAX_SIZE 2097152
+#define MAX_SIZE 4194304
 #define DEVICE_FILENAME "/dev/smith"
 
 typedef void (*rust_callback)(char *);

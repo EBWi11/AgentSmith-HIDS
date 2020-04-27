@@ -11,7 +11,7 @@
 #include <time.h>
 #include <sys/time.h>
 
-#define MAX_SIZE 2097152
+#define MAX_SIZE 4194304
 #define DEVICE_FILENAME "/dev/smith"
 
 typedef void (*rust_callback)(char *);
