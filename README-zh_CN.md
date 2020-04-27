@@ -443,13 +443,13 @@ install Smith：
 
 10 times
 
-Uninstall Smith：
+Install Smith：
 
 | Average User Time(s) |  Average System Time(s) |
 | ---------------------- | ----------------- |
 |22.329|14.885|
 
-install Smith：
+Uninstall Smith：
 
 | Average User Time(s) |  Average System Time(s) |
 | ---------------------- | ----------------- |
