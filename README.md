@@ -415,7 +415,7 @@ Original Testing Data:
 [Benchmark Data](https://github.com/EBWi11/AgentSmith-HIDS/tree/master/benchmark_data)
 
 
-*cyclictest testing*
+**cyclictest testing**
 
 `cyclictest -p 90 - m -c 0 -i 200 -n -h 100 -q -l 1000000`
 
@@ -437,7 +437,8 @@ install Smith：
 # Histogram Overflows: 00481
 ```
 
-*time -v /opt/ltp/testcases/bin/execve05 -n 30000* 
+
+**time -v /opt/ltp/testcases/bin/execve05 -n 30000**
 
 10 times
 

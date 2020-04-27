@@ -438,7 +438,8 @@ install Smith：
 # Histogram Overflows: 00481
 ```
 
-*time -v /opt/ltp/testcases/bin/execve05 -n 30000* 
+
+**time -v /opt/ltp/testcases/bin/execve05 -n 30000**
 
 10 times
 
