@@ -438,6 +438,21 @@ install Smith：
 # Histogram Overflows: 00481
 ```
 
+*time -v /opt/ltp/testcases/bin/execve05 -n 30000* 
+
+10 times
+
+Uninstall Smith：
+
+| Average User Time(s) |  Average System Time(s) |
+| ---------------------- | ----------------- |
+|22.329|14.885|
+
+install Smith：
+
+| Average User Time(s) |  Average System Time(s) |
+| ---------------------- | ----------------- |
+|22.271|14.395|
 
 ### 部署及测试文档
 
