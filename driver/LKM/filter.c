@@ -16,6 +16,9 @@ static char *sh_mem = NULL;
 struct rb_root execve_exe_whitelist = RB_ROOT;
 struct rb_root connect_dip_whitelist = RB_ROOT;
 
+static int execve_exe_whitelist_limit = 0;
+static int connect_dip_whitelist_limit = 0;
+
 static rwlock_t __write_lock;
 
 static void lock_init(void);
@@ -67,7 +70,8 @@ int exist_rb(struct rb_root *root, char *string) {
     struct rb_node *node = root->rb_node;
 
     while (node) {
-        struct whitelist_node *data = container_of(node, struct whitelist_node, node);
+        struct whitelist_node *data = container_of(node,
+        struct whitelist_node, node);
         int result;
 
         result = strcmp(string, data->data);
@@ -82,12 +86,12 @@ int exist_rb(struct rb_root *root, char *string) {
     return 0;
 }
 
-struct whitelist_node *search_rb(struct rb_root *root, char *string)
-{
+struct whitelist_node *search_rb(struct rb_root *root, char *string) {
     struct rb_node *node = root->rb_node;
 
     while (node) {
-        struct whitelist_node *data = container_of(node, struct whitelist_node, node);
+        struct whitelist_node *data = container_of(node,
+        struct whitelist_node, node);
         int result;
 
         result = strcmp(string, data->data);
@@ -102,12 +106,12 @@ struct whitelist_node *search_rb(struct rb_root *root, char *string)
     return NULL;
 }
 
-int insert_rb(struct rb_root *root, struct whitelist_node *data)
-{
+int insert_rb(struct rb_root *root, struct whitelist_node *data) {
     struct rb_node **new = &(root->rb_node), *parent = NULL;
 
     while (*new) {
-        struct whitelist_node *this = container_of(*new, struct whitelist_node, node);
+        struct whitelist_node *this = container_of(*new,
+        struct whitelist_node, node);
         int res;
 
         res = strcmp(data->data, this->data);
@@ -128,7 +132,7 @@ int insert_rb(struct rb_root *root, struct whitelist_node *data)
 
 void del_rb(struct rb_root *root, char *data) {
     struct whitelist_node *node;
-    if(!data)
+    if (!data)
         return;
     if ((node = search_rb(root, data)) == NULL)
         return;
@@ -136,32 +140,33 @@ void del_rb(struct rb_root *root, char *data) {
     kfree(node);
 }
 
-void del_rb_by_data(struct rb_root *root, char *data) {
+int del_rb_by_data(struct rb_root *root, char *data) {
     struct whitelist_node *node;
-    if(!data)
-        return;
+    if (!data)
+        return 0;
     if ((node = search_rb(root, data)) == NULL)
-        return;
+        return 0;
     rb_erase(&node->node, root);
     kfree(node->data);
     kfree(node);
+    return 1;
 }
 
 static void add_execve_exe_whitelist(char *data) {
     struct whitelist_node *node;
-    if(!data)
+    if (!data)
         return;
-    
+
     node = kzalloc(sizeof(struct whitelist_node), GFP_ATOMIC);
     if (!node)
         return;
-    
+
     node->data = data;
     insert_rb(&execve_exe_whitelist, node);
 }
 
-static void del_execve_exe_whitelist(char *data) {
-    del_rb_by_data(&execve_exe_whitelist, data);
+static int del_execve_exe_whitelist(char *data) {
+    return del_rb_by_data(&execve_exe_whitelist, data);
 }
 
 static void del_all_execve_exe_whitelist(void) {
@@ -173,7 +178,7 @@ static void del_all_execve_exe_whitelist(void) {
 }
 
 int execve_exe_check(char *data) {
-    if(likely(data))
+    if (likely(data))
         return exist_rb(&execve_exe_whitelist, data);
     else
         return 0;
@@ -188,8 +193,8 @@ static void add_connect_dip_whitelist(char *data) {
     insert_rb(&connect_dip_whitelist, node);
 }
 
-static void del_connect_dip_whitelist(char *data) {
-    del_rb_by_data(&connect_dip_whitelist, data);
+static int del_connect_dip_whitelist(char *data) {
+    return del_rb_by_data(&connect_dip_whitelist, data);
 }
 
 static void del_all_connect_dip_whitelist(void) {
@@ -201,7 +206,7 @@ static void del_all_connect_dip_whitelist(void) {
 }
 
 int connect_dip_check(char *data) {
-    if(likely(data))
+    if (likely(data))
         return exist_rb(&connect_dip_whitelist, data);
     else
         return 0;
@@ -209,49 +214,68 @@ int connect_dip_check(char *data) {
 
 static ssize_t device_write(struct file *filp, const __user char *buff, size_t len, loff_t *off) {
     int res;
+    int del_res;
     char flag = '`';
     char *data_main;
 
     get_user(flag, buff);
 
-    if (len < 3)
+    if (len < 3 || len > 4096)
         return len;
 
     data_main = kzalloc(len, GFP_ATOMIC);
-    if(!data_main)
+    if (!data_main)
         return len;
 
-    if(copy_from_user(data_main, buff+1, len))
+    if (copy_from_user(data_main, buff + 1, len))
         return len;
 
     switch (flag) {
         case 49:
             _write_lock();
+            execve_exe_whitelist_limit = execve_exe_whitelist_limit + 1;
+            if (execve_exe_whitelist_limit > 64) {
+                execve_exe_whitelist_limit = execve_exe_whitelist_limit - 1;
+                _write_unlock();
+                return len;
+            }
             add_execve_exe_whitelist(strim(data_main));
             _write_unlock();
             break;
         case 50:
             _write_lock();
-            del_execve_exe_whitelist(strim(data_main));
+            del_res = del_execve_exe_whitelist(strim(data_main));
+            if (del_res == 1)
+                execve_exe_whitelist_limit = execve_exe_whitelist_limit - 1;
             _write_unlock();
             break;
         case 51:
             _write_lock();
+            execve_exe_whitelist_limit = 0;
             del_all_execve_exe_whitelist();
             _write_unlock();
             break;
         case 52:
             _write_lock();
+            connect_dip_whitelist_limit = connect_dip_whitelist_limit + 1;
+            if (connect_dip_whitelist_limit > 64) {
+                connect_dip_whitelist_limit = connect_dip_whitelist_limit - 1;
+                _write_unlock();
+                return len;
+            }
             add_connect_dip_whitelist(strim(data_main));
             _write_unlock();
             break;
         case 53:
             _write_lock();
-            del_connect_dip_whitelist(strim(data_main));
+            del_res = del_connect_dip_whitelist(strim(data_main));
+            if (del_res == 1)
+                connect_dip_whitelist_limit = connect_dip_whitelist_limit - 1;
             _write_unlock();
             break;
         case 54:
             _write_lock();
+            connect_dip_whitelist_limit = 0;
             del_all_connect_dip_whitelist();
             _write_unlock();
             break;
