@@ -92,6 +92,8 @@ void analyze_syscalls(void) {
             if (flag != -1) {
                 char *result_str;
                 result_str = kzalloc(32 + strlen(mod_name), GFP_ATOMIC);
+                if(!result_str)
+                    return;
                 snprintf(result_str, 32 + strlen(mod_name),
                          "%d%s%s%s%s%s%d%s%d",
                          -1, "\n", SYSCALL_HOOK, "\n", mod_name, "\n", flag, "\n", syscall_number);
@@ -135,6 +137,8 @@ void analyze_interrupts(void) {
             if (flag != -1) {
                 char *result_str;
                 result_str = kzalloc(32 + strlen(mod_name), GFP_ATOMIC);
+                if(!result_str)
+                    return;
                 snprintf(result_str, 32 + strlen(mod_name),
                          "%d%s%s%s%s%s%d%s%d",
                          -1, "\n", INTERRUPTS_HOOK, "\n", mod_name, "\n", flag, "\n", interrupt_number);
@@ -164,6 +168,8 @@ void analyze_modules(void) {
             mutex_lock(&module_mutex);
             if(!find_module(kobj->mod->name)) {
                 result_str =  kzalloc(32 + strlen(kobj->mod->name), GFP_ATOMIC);
+                if(!result_str)
+                    return;
                 snprintf(result_str, 32 + strlen(kobj->mod->name),
                          "%s%s%s%s%s%s%s",
                          "-1", "\n", LKM_HIDDEN, "\n", kobj->mod->name, "\n", "1");
@@ -217,6 +223,8 @@ void analyze_fops(void) {
         mutex_unlock(&module_mutex);
         if (flag != -1) {
             result_str = kzalloc(32 + strlen(mod_name), GFP_ATOMIC);
+            if(!result_str)
+                return;
             snprintf(result_str, 32 + strlen(mod_name),
                      "%d%s%s%s%s%s%d",
                      -1, "\n", PROC_FILE_HOOK, "\n", mod_name, "\n", flag);

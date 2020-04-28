@@ -20,6 +20,7 @@
 #include "share_mem.h"
 #include "anti_rootkit.h"
 #include "smith_hook.h"
+#include "filter.h"
 #include "struct_wrap.h"
 
 #define EXIT_PROTECT 0
@@ -489,7 +490,7 @@ int bind_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
             case AF_INET:
                 sin = (struct sockaddr_in *) &tmp_dirp;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
-            if (likely(tmp_dirp.sa_data)) {
+                if (likely(tmp_dirp.sa_data)) {
                 snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr));
                 snprintf(sport, 16, "%d", Ntohs(sin->sin_port));
                 flag = 1;
@@ -504,7 +505,7 @@ int bind_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                 sa_family = AF_INET;
                 break;
 #if IS_ENABLED(CONFIG_IPV6)
-            case AF_INET6:
+                case AF_INET6:
                 sin6 = (struct sockaddr_in6 *) &tmp_dirp;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
                 if (likely(tmp_dirp.sa_data)) {
@@ -632,7 +633,7 @@ int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                     sk = socket->sk;
                     inet = (struct inet_sock *) sk;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
-                if (likely(inet->inet_daddr)) {
+                    if (likely(inet->inet_daddr)) {
                     snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_daddr));
                     snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_saddr));
                     snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
@@ -651,7 +652,7 @@ int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                     sa_family = AF_INET;
                     break;
 #if IS_ENABLED(CONFIG_IPV6)
-                case AF_INET6:
+                    case AF_INET6:
                     sk = socket->sk;
                     inet = (struct inet_sock*)sk;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
@@ -679,6 +680,9 @@ int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
             }
             sockfd_put(socket);
         }
+
+        if(connect_dip_check(dip) == 1)
+            goto out;
 
         if (flag == 1) {
             sessionid = get_sessionid();
@@ -1012,6 +1016,22 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         argv = data -> argv;
         abs_path = data -> abs_path;
         free_abs_path = data -> free_abs_path;
+
+        if(execve_exe_check(abs_path) == 1) {
+            if (likely(data->free_abs_path == 1))
+                kfree(data->abs_path);
+
+            if(likely(data->free_argv == 1))
+                kfree(data->argv);
+
+            if(likely(data->free_ld_preload == 1))
+                kfree(data->ld_preload);
+
+            if(likely(data->free_ssh_connection == 1))
+                kfree(data->ssh_connection);
+
+            return 0;
+        }
 
         sessionid = get_sessionid();
         tty = get_current_tty();
@@ -1388,6 +1408,27 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
 
         sessionid = get_sessionid();
 
+        buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
+        if (unlikely(!buffer))
+            abs_path = "-2";
+        else {
+            abs_path = get_exe_file(current, buffer, PATH_MAX);
+            if (execve_exe_check(abs_path) == 1) {
+                if (likely(strcmp(buffer, "-2")))
+                    kfree(buffer);
+
+                if (likely(data->free_argv == 1))
+                    kfree(data->argv);
+
+                if (likely(data->free_ld_preload == 1))
+                    kfree(data->ld_preload);
+
+                if (likely(data->free_ssh_connection == 1))
+                    kfree(data->ssh_connection);
+                return 0;
+            }
+        }
+
         if (likely(current->nsproxy->uts_ns))
             nodename = current->nsproxy->uts_ns->name.nodename;
 
@@ -1466,7 +1507,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                                 socket_check = 1;
                                 break;
 #if IS_ENABLED(CONFIG_IPV6)
-                            case AF_INET6:
+                                case AF_INET6:
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
                                 snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_daddr));
                                 snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_rcv_saddr));
@@ -1521,12 +1562,6 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                 tmp_stdout = "-1";
         } else
             tmp_stdout = "";
-
-        buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
-        if (unlikely(!buffer))
-            abs_path = "-2";
-        else
-            abs_path = get_exe_file(current, buffer, PATH_MAX);
 
         pname = _dentry_path_raw();
 
@@ -2373,6 +2408,13 @@ smith_init(void) {
         printk(KERN_INFO
     "[SMITH] init_share_mem success \n");
 
+    ret = init_filter();
+    if (ret != 0)
+        return ret;
+    else
+        printk(KERN_INFO
+    "[SMITH] filter init success \n");
+
     if (CONNECT_HOOK == 1) {
         ret = connect_register_kprobe();
         if (ret < 0) {
@@ -2490,6 +2532,7 @@ smith_exit(void) {
 
     uninstall_kprobe();
     uninstall_share_mem();
+    uninstall_filter();
     printk(KERN_INFO
     "[SMITH] uninstall_kprobe success\n");
 }
@@ -2498,7 +2541,7 @@ module_init(smith_init)
 module_exit(smith_exit)
 
 MODULE_LICENSE("GPL v2");
-MODULE_VERSION("1.2.3");
+MODULE_VERSION("1.2.4");
 MODULE_AUTHOR("E_Bwill <cy_sniper@yeah.net>");
 MODULE_DESCRIPTION("get execve,connect,bind,ptrace,load_module,dns_query,create_file,cred_change,"
 "and proc_file_hook,syscall_hook,lkm_hidden,interrupts_hook info");

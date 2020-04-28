@@ -1,5 +1,5 @@
 obj-m += smith.o
-smith-objs := smith_hook.o share_mem.o anti_rootkit.o
+smith-objs := smith_hook.o share_mem.o anti_rootkit.o filter.o
 
 KERNEL_VER := $(shell uname -r)
 KERNEL_DIR := /lib/modules/$(KERNEL_VER)/build
