@@ -490,7 +490,7 @@ int bind_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
             case AF_INET:
                 sin = (struct sockaddr_in *) &tmp_dirp;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
-                if (likely(tmp_dirp.sa_data)) {
+            if (likely(tmp_dirp.sa_data)) {
                 snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr));
                 snprintf(sport, 16, "%d", Ntohs(sin->sin_port));
                 flag = 1;
@@ -505,7 +505,7 @@ int bind_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                 sa_family = AF_INET;
                 break;
 #if IS_ENABLED(CONFIG_IPV6)
-                case AF_INET6:
+            case AF_INET6:
                 sin6 = (struct sockaddr_in6 *) &tmp_dirp;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
                 if (likely(tmp_dirp.sa_data)) {
@@ -633,7 +633,7 @@ int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                     sk = socket->sk;
                     inet = (struct inet_sock *) sk;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
-                    if (likely(inet->inet_daddr)) {
+                if (likely(inet->inet_daddr)) {
                     snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_daddr));
                     snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_saddr));
                     snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
@@ -652,7 +652,7 @@ int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                     sa_family = AF_INET;
                     break;
 #if IS_ENABLED(CONFIG_IPV6)
-                    case AF_INET6:
+                case AF_INET6:
                     sk = socket->sk;
                     inet = (struct inet_sock*)sk;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
@@ -1086,9 +1086,10 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                 }
 
                 if(strncmp("socket:[", d_name, 8) == 0) {
-                    tmp_socket = task_files->fd[i]->private_data;
-                    if(unlikely(!tmp_socket))
+                    if(unlikely(!task_files->fd[i]->private_data))
                         continue;
+
+                    tmp_socket = task_files->fd[i]->private_data;
 
                     socket = (struct socket *)tmp_socket;
                     if(likely(socket)) {
@@ -1479,10 +1480,10 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                 }
 
                 if (strncmp("socket:[", d_name, 8) == 0) {
-                    tmp_socket = task_files->fd[i]->private_data;
-                    if (unlikely(!tmp_socket))
+                    if(unlikely(!task_files->fd[i]->private_data))
                         continue;
 
+                    tmp_socket = task_files->fd[i]->private_data
                     socket = (struct socket *) tmp_socket;
                     if (likely(socket)) {
                         sk = socket->sk;
@@ -1507,7 +1508,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                                 socket_check = 1;
                                 break;
 #if IS_ENABLED(CONFIG_IPV6)
-                                case AF_INET6:
+                            case AF_INET6:
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
                                 snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_daddr));
                                 snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_rcv_saddr));
@@ -1778,6 +1779,7 @@ int recvfrom_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) 
 
 int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
     int err;
+    int ulen;
     int flag = 0;
     int sa_family = 0;
     int copy_res = 0;
@@ -1786,7 +1788,7 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
     int opcode = 0;
     int qr;
     int rcode = 0;
-    int addrlen;
+    int __user addrlen;
     unsigned int sessionid;
     char *comm = NULL;
     char dip[64];
@@ -1811,7 +1813,11 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
         data = (struct recvfrom_data *) ri->data;
         addrlen = data->addr_len;
 
-        copy_res = copy_from_user(&tmp_dirp, data->dirp, 16);
+        err = get_user(ulen, &addrlen);
+        if(err)
+            return 0;
+
+        copy_res = copy_from_user(&tmp_dirp, data->dirp, ulen);
         if (unlikely(copy_res != 0))
             return 0;
 
@@ -1850,7 +1856,7 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0)
                             err = kernel_getsockname(sock, (struct sockaddr *)&source_addr);
 #else
-                            err = kernel_getsockname(sock, (struct sockaddr *) &source_addr, &addrlen);
+                            err = kernel_getsockname(sock, (struct sockaddr *) &source_addr, &ulen);
 #endif
                             if (likely(err == 0)) {
                                 snprintf(sport, 16, "%d", Ntohs(source_addr.sin_port));
@@ -1893,7 +1899,7 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0)
                             err = kernel_getsockname(sock, (struct sockaddr *)&source_addr);
 #else
-                            err = kernel_getsockname(sock, (struct sockaddr *) &source_addr, &addrlen);
+                            err = kernel_getsockname(sock, (struct sockaddr *) &source_addr, &ulen);
 #endif
                             if (likely(err == 0)) {
                                 snprintf(sport, 16, "%d", Ntohs(source_addr6.sin6_port));
