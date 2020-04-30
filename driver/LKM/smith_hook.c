@@ -1814,7 +1814,7 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
         addrlen = data->addr_len;
 
         err = get_user(ulen, &addrlen);
-        if(err)
+        if(unlikely(err))
             return 0;
 
         copy_res = copy_from_user(&tmp_dirp, data->dirp, ulen);
@@ -1827,7 +1827,7 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
             sa_family = AF_INET;
             sock = sockfd_lookup(data->fd, &err);
 
-            if (unlikely(IS_ERR(sock)))
+            if (unlikely(!sock))
                 goto out;
 
             sin = (struct sockaddr_in *) &tmp_dirp;
@@ -1871,7 +1871,7 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
             sa_family = AF_INET6;
             sock = sockfd_lookup(data->fd, &err);
 
-            if (unlikely(IS_ERR(sock)))
+            if (unlikely(!sock))
                 goto out;
 
             sin6 = (struct sockaddr_in6 *) &tmp_dirp;
