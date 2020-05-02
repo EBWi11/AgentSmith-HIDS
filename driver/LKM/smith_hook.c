@@ -412,7 +412,6 @@ struct recvfrom_data {
     struct sockaddr *dirp;
     void *ubuf;
     size_t size;
-    int addr_len;
 };
 
 struct create_file_data {
@@ -1772,14 +1771,13 @@ int recvfrom_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) 
         data->ubuf = (void *) p_get_arg2(regs);
         data->size = (size_t) p_get_arg3(regs);
         data->dirp = (struct sockaddr *) p_get_arg5(regs);
-        data->addr_len = (int) p_get_arg6(regs);
     }
     return 0;
 }
 
 int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
     int err;
-    int ulen;
+    int ulen = 16;
     int flag = 0;
     int sa_family = 0;
     int copy_res = 0;
@@ -1788,7 +1786,6 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
     int opcode = 0;
     int qr;
     int rcode = 0;
-    int __user addrlen;
     unsigned int sessionid;
     char *comm = NULL;
     char dip[64];
@@ -1811,17 +1808,10 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
         struct sockaddr_in source_addr;
         struct sockaddr_in6 source_addr6 = {};
         data = (struct recvfrom_data *) ri->data;
-        addrlen = data->addr_len;
-
-        err = get_user(ulen, &addrlen);
-        if(unlikely(err))
-            return 0;
 
         copy_res = copy_from_user(&tmp_dirp, data->dirp, ulen);
         if (unlikely(copy_res != 0))
             return 0;
-
-        sessionid = get_sessionid();
 
         if (tmp_dirp.sa_family == AF_INET) {
             sa_family = AF_INET;
@@ -1838,7 +1828,7 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                 else
                     recv_data_copy_res = copy_from_user(recv_data, data->ubuf, data->size);
 
-                if (strlen(recv_data) >= 8) {
+                if (sizeof(recv_data) >= 8) {
                     qr = (recv_data[2] & 0x80) ? 1 : 0;
 
                     if (qr == 1) {
@@ -1882,7 +1872,7 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                 else
                     recv_data_copy_res = copy_from_user(recv_data, data->ubuf, data->size);
 
-                if (strlen(recv_data) >= 8) {
+                if (sizeof(recv_data) >= 8) {
                     qr = (recv_data[2] & 0x80) ? 1 : 0;
                     if (qr == 1) {
                         flag = 1;
@@ -1897,9 +1887,9 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                         snprintf(dport, 16, "%d", Ntohs(sin6->sin6_port));
                         if (sock) {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0)
-                            err = kernel_getsockname(sock, (struct sockaddr *)&source_addr);
+                            err = kernel_getsockname(sock, (struct sockaddr *)&source_addr6);
 #else
-                            err = kernel_getsockname(sock, (struct sockaddr *) &source_addr, &ulen);
+                            err = kernel_getsockname(sock, (struct sockaddr *) &source_addr6, &ulen);
 #endif
                             if (likely(err == 0)) {
                                 snprintf(sport, 16, "%d", Ntohs(source_addr6.sin6_port));
@@ -1914,6 +1904,8 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
         }
 
         if (flag == 1) {
+            sessionid = get_sessionid();
+
             buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
             if (unlikely(!buffer))
                 abs_path = "-2";
