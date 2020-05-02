@@ -1086,7 +1086,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                 }
 
                 if(strncmp("socket:[", d_name, 8) == 0) {
-                    if(unlikely(!task_files->fd[i]->private_data))
+                    if(unlikely(!task_files->fd[i] || IS_ERR(task_files->fd[i]->private_data)))
                         continue;
 
                     tmp_socket = task_files->fd[i]->private_data;
@@ -1480,7 +1480,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                 }
 
                 if (strncmp("socket:[", d_name, 8) == 0) {
-                    if(unlikely(!task_files->fd[i]->private_data))
+                    if(unlikely(!task_files->fd[i] || IS_ERR(task_files->fd[i]->private_data)))
                         continue;
 
                     tmp_socket = task_files->fd[i]->private_data
