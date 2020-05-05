@@ -402,6 +402,14 @@ struct bind_data {
     struct sockaddr *dirp;
 };
 
+struct udp_recvmsg_data {
+    int flag;
+    char sport[16];
+    char dport[16];
+    char sip[64];
+    char dip[64];
+};
+
 struct connect_data {
     int fd;
     struct sockaddr *dirp;
@@ -680,7 +688,7 @@ int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
             sockfd_put(socket);
         }
 
-        if(connect_dip_check(dip) == 1)
+        if (connect_dip_check(dip) == 1)
             goto out;
 
         if (flag == 1) {
@@ -1479,7 +1487,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                 }
 
                 if (strncmp("socket:[", d_name, 8) == 0) {
-                    if(unlikely(!task_files->fd[i] || IS_ERR(task_files->fd[i]->private_data)))
+                    if (unlikely(!task_files->fd[i] || IS_ERR(task_files->fd[i]->private_data)))
                         continue;
 
                     tmp_socket = task_files->fd[i]->private_data
@@ -1761,6 +1769,296 @@ void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long f
                 kfree(comm);
         }
     }
+}
+
+int udp_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
+    if (share_mem_flag != -1) {
+        struct sock *sk;
+        struct inet_sock *inet;
+        struct udp_recvmsg_data *data;
+
+        struct msghdr *msg;
+        void *tmp_msg;
+
+        int opcode = 0;
+        int qr;
+        int rcode = 0;
+        int comm_free = 0;
+        int result_str_len;
+        int sa_family = AF_INET;
+        int recv_data_copy_res = 1;
+        unsigned int sessionid;
+        char *comm = NULL;
+        char *query = NULL;
+        char *abs_path = NULL;
+        char *result_str = NULL;
+        char *buffer = NULL;
+        unsigned char *recv_data = NULL;
+
+        data = (struct udp_recvmsg_data *) ri->data;
+        sk = (struct sock *) p_get_arg1(regs);
+        inet = (struct inet_sock *) sk;
+
+        data->flag = 0;
+
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
+        if (inet->inet_dport == 13568 || inet->inet_dport == 59668)
+#else
+        if (inet->dport == 13568 || inet->dport == 59668)
+#endif
+        {
+            data->flag = 1;
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
+            if (likely(inet->inet_daddr)) {
+                snprintf(data->dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_daddr));
+                snprintf(data->sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_saddr));
+                snprintf(data->sport, 16, "%d", Ntohs(inet->inet_sport));
+                snprintf(data->dport, 16, "%d", Ntohs(inet->inet_dport));
+            }
+#else
+            if (likely(inet->daddr)) {
+                snprintf(data->dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->daddr));
+                snprintf(data->sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->saddr));
+                snprintf(data->sport, 16, "%d", Ntohs(inet->sport));
+                snprintf(data->dport, 16, "%d", Ntohs(inet->dport));
+            }
+#endif
+            tmp_msg = (void *) p_get_arg2(regs);
+            if (IS_ERR_OR_NULL(tmp_msg))
+                return 0;
+
+            msg = (struct msghdr *) tmp_msg;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
+            if(msg->msg_iter.kvec) {
+                if(msg->msg_iter.kvec->iov_len > 0) {
+                    recv_data = kzalloc(msg->msg_iter.kvec->iov_len, GFP_ATOMIC);
+                    if(unlikely(!recv_data))
+                        return 0;
+
+                    recv_data_copy_res = copy_from_user(recv_data, msg->msg_iter.kvec->iov_base, msg->msg_iter.iov->iov_len);
+                } else
+                    return 0;
+            } else if(msg->msg_iter.iov) {
+                if(msg->msg_iter.iov->iov_len > 0) {
+                    recv_data = kzalloc(msg->msg_iter.iov->iov_len, GFP_ATOMIC);
+                    if(unlikely(!recv_data))
+                        return 0;
+
+                    recv_data_copy_res = copy_from_user(recv_data, msg->msg_iter.iov->iov_base, msg->msg_iter.iov->iov_len);
+                } else
+                    return 0;
+            } else
+                return 0;
+#else
+
+#endif
+        }
+
+        if (unlikely(recv_data_copy_res != 0))
+            return 0;
+        if (sizeof(recv_data) >= 8) {
+
+            qr = (recv_data[2] & 0x80) ? 1 : 0;
+            if (qr == 1) {
+                opcode = (recv_data[2] >> 3) & 0x0f;
+                rcode = recv_data[3] & 0x0f;
+                query = kzalloc(strlen(recv_data + 12), GFP_ATOMIC);
+                if (unlikely(!query))
+                    query = "-2";
+                else
+                    getDNSQuery(recv_data, 12, query);
+
+                sessionid = get_sessionid();
+
+                buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
+                if (unlikely(!buffer))
+                    abs_path = "-2";
+                else
+                    abs_path = get_exe_file(current, buffer, PATH_MAX);
+
+                if (strlen(current->comm) > 0) {
+                    comm = str_replace(current->comm, "\n", " ");
+                    if (likely(comm))
+                        comm_free = 1;
+                    else
+                        comm = "";
+                } else
+                    comm = "";
+
+                result_str_len = strlen(query) + strlen(current->nsproxy->uts_ns->name.nodename) +
+                                 strlen(comm) + strlen(abs_path) + 172;
+
+                result_str = kzalloc(result_str_len, GFP_ATOMIC);
+                if (likely(result_str)) {
+                    snprintf(result_str, result_str_len,
+                             "%d%s%s%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%s%s%u",
+                             get_current_uid(), "\n", DNS_TYPE, "\n", sa_family,
+                             "\n", data->dport, "\n", data->dip, "\n", abs_path, "\n",
+                             current->pid, "\n", current->real_parent->pid, "\n",
+                             pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                             comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
+                             data->sip, "\n", data->sport, "\n", qr, "\n", opcode, "\n", rcode, "\n", query, "\n",
+                             sessionid);
+
+                    send_msg_to_user(result_str, 1);
+                }
+
+                if (likely(strcmp(query, "-2")))
+                    kfree(query);
+
+                if (likely(strcmp(recv_data, "-2")))
+                    kfree(recv_data);
+
+                if (likely(strcmp(abs_path, "-2")))
+                    kfree(buffer);
+
+                if (likely(comm_free == 1))
+                    kfree(comm);
+            }
+        }
+    }
+    return 0;
+}
+
+int udp_recvmsg_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
+    return 0;
+    unsigned int retval;
+    struct msghdr *msg;
+    struct udp_recvmsg_data *data;
+
+    if (share_mem_flag != -1) {
+        int opcode = 0;
+        int qr;
+        int rcode = 0;
+        int comm_free = 0;
+        int result_str_len;
+        int sa_family = AF_INET;
+        int recv_data_copy_res = 1;
+        unsigned int sessionid;
+        char *comm = NULL;
+        char *query = NULL;
+        char *abs_path = NULL;
+        char *result_str = NULL;
+        char *buffer = NULL;
+        void *tmp_msg;
+        unsigned char *recv_data = NULL;
+
+        data = (struct udp_recvmsg_data *) ri->data;
+
+        if (data->flag == 1) {
+            retval = regs_return_value(regs);
+
+            printk("udp %s:%s %s:%s %d", data->dip, data->dport, data->sip, data->sport, retval);
+            if (retval < 8)
+                return 0;
+
+            tmp_msg = (void *) p_get_arg2(regs);
+            if (IS_ERR_OR_NULL(tmp_msg))
+                return 0;
+
+            msg = (struct msghdr *) tmp_msg;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
+            if(msg->msg_iter.kvec) {
+                if(msg->msg_iter.kvec->iov_len > 0) {
+                    recv_data = kzalloc(msg->msg_iter.kvec->iov_len, GFP_ATOMIC);
+                    if(unlikely(!recv_data))
+                        return 0;
+
+                    memcpy(recv_data, msg->msg_iter.kvec->iov_base, msg->msg_iter.kvec->iov_len);
+                    recv_data_copy_res = 0;
+                } else
+                    return 0;
+            } else if(msg->msg_iter.iov) {
+                if(msg->msg_iter.iov->iov_len > 0) {
+                    recv_data = kzalloc(msg->msg_iter.iov->iov_len, GFP_ATOMIC);
+                    if(unlikely(!recv_data))
+                        return 0;
+
+                    recv_data_copy_res = copy_from_user(recv_data, msg->msg_iter.iov->iov_base, msg->msg_iter.iov->iov_len);
+                } else
+                    return 0;
+            } else
+                return 0;
+#else
+            if (retval > 8)
+                recv_data = kzalloc(retval, GFP_ATOMIC);
+
+            if (unlikely(!recv_data)) {
+                recv_data_copy_res = -1;
+                recv_data = "-2";
+            } else {
+                recv_data_copy_res = copy_from_user(recv_data, msg->msg_iov->iov_base, retval);
+            }
+#endif
+        }
+
+        if (unlikely(recv_data_copy_res != 0))
+            return 0;
+        else
+            printk(recv_data);
+
+        qr = (recv_data[2] & 0x80) ? 1 : 0;
+        if (qr == 1) {
+            opcode = (recv_data[2] >> 3) & 0x0f;
+            rcode = recv_data[3] & 0x0f;
+            query = kzalloc(strlen(recv_data + 12), GFP_ATOMIC);
+            if (unlikely(!query))
+                query = "-2";
+            else
+                getDNSQuery(recv_data, 12, query);
+
+            sessionid = get_sessionid();
+
+            buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
+            if (unlikely(!buffer))
+                abs_path = "-2";
+            else
+                abs_path = get_exe_file(current, buffer, PATH_MAX);
+
+            if (strlen(current->comm) > 0) {
+                comm = str_replace(current->comm, "\n", " ");
+                if (likely(comm))
+                    comm_free = 1;
+                else
+                    comm = "";
+            } else
+                comm = "";
+
+            result_str_len = strlen(query) + strlen(current->nsproxy->uts_ns->name.nodename) +
+                             strlen(comm) + strlen(abs_path) + 172;
+
+            result_str = kzalloc(result_str_len, GFP_ATOMIC);
+            if (likely(result_str)) {
+                snprintf(result_str, result_str_len,
+                         "%d%s%s%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%s%s%u",
+                         get_current_uid(), "\n", DNS_TYPE, "\n", sa_family,
+                         "\n", data->dport, "\n", data->dip, "\n", abs_path, "\n",
+                         current->pid, "\n", current->real_parent->pid, "\n",
+                         pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                         comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
+                         data->sip, "\n", data->sport, "\n", qr, "\n", opcode, "\n", rcode, "\n", query, "\n",
+                         sessionid);
+
+                send_msg_to_user(result_str, 1);
+            }
+
+            if (likely(strcmp(query, "-2")))
+                kfree(query);
+
+            if (likely(strcmp(recv_data, "-2")))
+                kfree(recv_data);
+
+            if (likely(strcmp(abs_path, "-2")))
+                kfree(buffer);
+
+            if (likely(comm_free == 1))
+                kfree(comm);
+        }
+    }
+
+    return 0;
 }
 
 int recvfrom_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
@@ -2170,6 +2468,14 @@ struct kprobe ptrace_kprobe = {
         .post_handler = ptrace_post_handler,
 };
 
+struct kretprobe udp_recvmsg_kretprobe = {
+        .kp.symbol_name = "udp_recvmsg",
+        .data_size  = sizeof(struct udp_recvmsg_data),
+        .handler = udp_recvmsg_handler,
+        .entry_handler = udp_recvmsg_entry_handler,
+        .maxactive = MAXACTIVE,
+};
+
 struct kretprobe recvfrom_kretprobe = {
         .kp.symbol_name = P_GET_SYSCALL_NAME(recvfrom),
         .data_size  = sizeof(struct recvfrom_data),
@@ -2307,7 +2613,7 @@ void unregister_kprobe_ptrace(void) {
 
 int recvfrom_register_kprobe(void) {
     int ret;
-    ret = register_kretprobe(&recvfrom_kretprobe);
+    ret = register_kretprobe(&udp_recvmsg_kretprobe);
 
     if (ret == 0)
         recvfrom_kprobe_state = 0x1;
@@ -2316,7 +2622,7 @@ int recvfrom_register_kprobe(void) {
 }
 
 void unregister_kprobe_recvfrom(void) {
-    unregister_kretprobe(&recvfrom_kretprobe);
+    unregister_kretprobe(&udp_recvmsg_kretprobe);
 }
 
 int load_module_register_kprobe(void) {

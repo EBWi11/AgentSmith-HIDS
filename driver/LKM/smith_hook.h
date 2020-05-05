@@ -6,6 +6,7 @@
 * Description:	smith_hook header
 *******************************************************************/
 #include <asm/syscall.h>
+#include <linux/uio.h>
 #include <linux/kprobes.h>
 #include <linux/binfmts.h>
 #include <linux/fdtable.h>
