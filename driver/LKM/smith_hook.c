@@ -1336,7 +1336,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
         int socket_check = 0;
         int tty_name_len = 0;
         void *tmp_socket = NULL;
-        char *pid_tree = "1";
+        char *pid_tree = "-1";
         char *nodename = "-1";
         char *socket_pname = "-1";
         char *socket_pname_buf = "-2";
