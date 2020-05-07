@@ -2785,7 +2785,7 @@ module_init(smith_init)
 module_exit(smith_exit)
 
 MODULE_LICENSE("GPL v2");
-MODULE_VERSION("1.2.4");
+MODULE_VERSION("1.2.5");
 MODULE_AUTHOR("E_Bwill <cy_sniper@yeah.net>");
 MODULE_DESCRIPTION("get execve,connect,bind,ptrace,load_module,dns_query,create_file,cred_change,"
 "and proc_file_hook,syscall_hook,lkm_hidden,interrupts_hook info");
