@@ -34,8 +34,9 @@ const char *find_hidden_module(unsigned long addr) {
     struct module_kobject *kobj;
 
     if (!mod_kset)
-        return "-1";
+        return NULL;
 
+    //spin_lock(&mod_kset->list_lock);
     list_for_each_entry_safe(cur, tmp, &mod_kset->list, entry)
     {
         if (!kobject_name(tmp))
@@ -56,6 +57,7 @@ const char *find_hidden_module(unsigned long addr) {
         }
 #endif
     }
+    //spin_unlock(&mod_kset->list_lock);
 
     return mod_name;
 }
@@ -159,6 +161,7 @@ void analyze_modules(void) {
     if (!mod_kset)
         return;
 
+    //spin_lock(&mod_kset->list_lock);
     list_for_each_entry_safe(cur, tmp, &mod_kset->list, entry){
         if (!kobject_name(tmp))
             break;
@@ -178,6 +181,7 @@ void analyze_modules(void) {
             mutex_unlock(&module_mutex);
         }
     }
+    //spin_lock(&mod_kset->list_lock);
 #endif
 }
 

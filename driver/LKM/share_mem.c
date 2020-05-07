@@ -95,9 +95,7 @@ static int device_mmap(struct file *filp, struct vm_area_struct *vma) {
     struct page *page = NULL;
     unsigned long size = (unsigned long) (vma->vm_end - vma->vm_start);
 
-    vma->vm_flags |= 0;
-
-    if (size > MAX_SIZE) {
+    if((vma_pages(vma) + vma->vm_pgoff) > (MAX_SIZE >> PAGE_SHIFT)) {
         ret = -EINVAL;
         goto out;
     }
@@ -113,12 +111,9 @@ static int device_mmap(struct file *filp, struct vm_area_struct *vma) {
 }
 
 static int get_read_index(void) {
-    int i;
     struct sh_mem_list_head *_list_head;
 
-    for (i = 0; i < 8; i++)
-        list_head_char[i] = sh_mem[i];
-
+    *((long *)list_head_char) = *((long *)sh_mem);
     _list_head = (struct sh_mem_list_head *) list_head_char;
     return _list_head->read_index;
 }
@@ -220,14 +215,15 @@ int send_msg_to_user(char *msg, int kfree_flag) {
 }
 
 int init_share_mem(void) {
-    int i;
     share_mem_flag = -1;
-    list_head_char = kzalloc(8, GFP_ATOMIC);
+    list_head_char = kzalloc(8, GFP_KERNEL);
     if (list_head_char == NULL) {
         pr_err("[SMITH] SHMEM_INIT_ERROR\n");
         return -ENOMEM;
     }
 
+    mutex_init(&mchar_mutex);
+    lock_init();
     major = register_chrdev(0, DEVICE_NAME, &mchar_fops);
 
     if (major < 0) {
@@ -258,29 +254,20 @@ int init_share_mem(void) {
         unregister_chrdev(major, DEVICE_NAME);
         pr_err("[SMITH] SHMEM_INIT_ERROR\n");
         return -ENOMEM;
-    } else {
-        for (i = 0; i < MAX_SIZE; i += PAGE_SIZE)
-            SetPageReserved(virt_to_page(((unsigned long) sh_mem) + i));
     }
 
-    mutex_init(&mchar_mutex);
-    lock_init();
     return 0;
 }
 
 void uninstall_share_mem(void) {
     int i;
     device_destroy(class, MKDEV(major, 0));
-    class_unregister(class);
     class_destroy(class);
     unregister_chrdev(major, DEVICE_NAME);
 
-    if (list_head_char)
-        kfree(list_head_char);
+    kfree(list_head_char);
 
-    if (sh_mem) {
-        for (i = 0; i < MAX_SIZE; i += PAGE_SIZE)
-            ClearPageReserved(virt_to_page(((unsigned long) sh_mem) + i));
-        kfree(sh_mem);
-    }
+    for (i = 0; i < MAX_SIZE; i += PAGE_SIZE)
+        ClearPageReserved(virt_to_page(((unsigned long) sh_mem) + i));
+    kfree(sh_mem);
 }

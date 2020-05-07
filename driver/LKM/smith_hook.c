@@ -40,15 +40,19 @@
 int share_mem_flag = -1;
 int checkCPUendianRes = 0;
 
-char connect_kprobe_state = 0x0;
 char bind_kprobe_state = 0x0;
 char execve_kprobe_state = 0x0;
 char compat_execve_kprobe_state = 0x0;
 char create_file_kprobe_state = 0x0;
 char ptrace_kprobe_state = 0x0;
-char recvfrom_kprobe_state = 0x0;
+char udp_recvmsg_kprobe_state = 0x0;
+char udpv6_recvmsg_kprobe_state = 0x0;
 char load_module_kprobe_state = 0x0;
 char update_cred_kprobe_state = 0x0;
+char ip4_datagram_connect_kprobe_state = 0x0;
+char ip6_datagram_connect_kprobe_state = 0x0;
+char tcp_v4_connect_kprobe_state = 0x0;
+char tcp_v6_connect_kprobe_state = 0x0;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
 char execveat_kretprobe_state = 0x0;
@@ -236,6 +240,7 @@ char *getfullpath(struct inode *inod, char *buffer, int len) {
     if (unlikely(!pinode))
         return NULL;
 
+    spin_lock(&pinode->i_lock);
     list_for_each(plist, &pinode->i_dentry)
     {
         tmp = list_entry(plist,
@@ -245,6 +250,7 @@ char *getfullpath(struct inode *inod, char *buffer, int len) {
             break;
         }
     }
+    spin_unlock(&pinode->i_lock);
 
     if (unlikely(!dent))
         return NULL;
@@ -343,8 +349,11 @@ char *get_pid_tree(void) {
     snprintf(pid, sizeof(size_t), "%d", task->pid);
     tmp_data = kzalloc(4096, GFP_ATOMIC);
 
-    if (unlikely(!tmp_data))
+    if (unlikely(!tmp_data)) {
+        if (comm_free == 1)
+            kfree(comm);
         return NULL;
+    }
 
     strcat(tmp_data, pid);
     strcat(tmp_data, "(");
@@ -387,7 +396,7 @@ char *get_pid_tree(void) {
         strcat(res, comm);
         strcat(res, ")->");
         strcat(res, tmp_data);
-        strcpy(tmp_data, res);
+        strncpy(tmp_data, res, strlen(res));
         kfree(res);
 
         if (likely(comm_free == 1))
@@ -403,21 +412,21 @@ struct bind_data {
 };
 
 struct connect_data {
-    int fd;
-    struct sockaddr *dirp;
+    struct sock *sk;
+    int sa_family;
+    int type;
 };
 
-struct recvfrom_data {
-    int fd;
-    struct sockaddr *dirp;
-    void *ubuf;
-    size_t size;
+struct udp_recvmsg_data {
+    char sport[16];
+    char dport[16];
+    char sip[64];
+    char dip[64];
+    int sa_family;
+    int flag;
+    void __user *iov_base;
+    __kernel_size_t iov_len;
 };
-
-struct create_file_data {
-    int fd;
-};
-
 
 #if EXIT_PROTECT == 1
 void exit_protect_action(void)
@@ -462,32 +471,33 @@ int bind_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
     int retval;
     int sa_family;
     int result_str_len;
+    int comm_free = 0;
+    unsigned int sessionid;
+    char sip[64] = "-1";
+    char sport[16] = "-1";
+    char *abs_path = NULL;
+    char *result_str;
+    char *comm = NULL;
+    char *buffer = NULL;
+    struct sockaddr tmp_dirp;
+    struct bind_data *data;
+    struct sockaddr_in *sin;
+    struct sockaddr_in6 *sin6;
 
-    if (share_mem_flag != -1) {
-        int comm_free = 0;
-        unsigned int sessionid;
-        char sip[64] = "-1";
-        char sport[16] = "-1";
-        char *abs_path = NULL;
-        char *result_str;
-        char *comm = NULL;
-        char *buffer = NULL;
-        struct sockaddr tmp_dirp;
-        struct bind_data *data;
-        struct sockaddr_in *sin;
-        struct sockaddr_in6 *sin6;
+    if (share_mem_flag == -1)
+        return 0;
 
-        retval = regs_return_value(regs);
-        data = (struct bind_data *) ri->data;
+    retval = regs_return_value(regs);
+    data = (struct bind_data *) ri->data;
 
-        copy_res = copy_from_user(&tmp_dirp, data->dirp, 16);
+    copy_res = copy_from_user(&tmp_dirp, data->dirp, 16);
 
-        if (unlikely(copy_res))
-            goto out;
+    if (unlikely(copy_res))
+        goto out;
 
-        switch (tmp_dirp.sa_family) {
-            case AF_INET:
-                sin = (struct sockaddr_in *) &tmp_dirp;
+    switch (tmp_dirp.sa_family) {
+        case AF_INET:
+            sin = (struct sockaddr_in *) &tmp_dirp;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
             if (likely(tmp_dirp.sa_data)) {
                 snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr));
@@ -495,14 +505,14 @@ int bind_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                 flag = 1;
             }
 #else
-                if (likely(tmp_dirp.sa_data)) {
-                    snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr));
-                    snprintf(sport, 16, "%d", Ntohs(sin->sin_port));
-                    flag = 1;
-                }
+            if (likely(tmp_dirp.sa_data)) {
+                snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr));
+                snprintf(sport, 16, "%d", Ntohs(sin->sin_port));
+                flag = 1;
+            }
 #endif
-                sa_family = AF_INET;
-                break;
+            sa_family = AF_INET;
+            break;
 #if IS_ENABLED(CONFIG_IPV6)
             case AF_INET6:
                 sin6 = (struct sockaddr_in6 *) &tmp_dirp;
@@ -522,50 +532,49 @@ int bind_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                 sa_family = AF_INET6;
                 break;
 #endif
-            default:
-                break;
-        }
+        default:
+            break;
+    }
 
-        if (flag == 1) {
-            sessionid = get_sessionid();
-            buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
+    if (flag == 1) {
+        sessionid = get_sessionid();
+        buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
 
-            if (unlikely(!buffer))
-                abs_path = "-2";
+        if (unlikely(!buffer))
+            abs_path = "-2";
+        else
+            abs_path = get_exe_file(current, buffer, PATH_MAX);
+
+        if (strlen(current->comm) > 0) {
+            comm = str_replace(current->comm, "\n", " ");
+            if (likely(comm))
+                comm_free = 1;
             else
-                abs_path = get_exe_file(current, buffer, PATH_MAX);
-
-            if (strlen(current->comm) > 0) {
-                comm = str_replace(current->comm, "\n", " ");
-                if (likely(comm))
-                    comm_free = 1;
-                else
-                    comm = "";
-            } else
                 comm = "";
+        } else
+            comm = "";
 
-            result_str_len = strlen(current->nsproxy->uts_ns->name.nodename) +
-                             strlen(comm) + strlen(abs_path) + 172;
+        result_str_len = strlen(current->nsproxy->uts_ns->name.nodename) +
+                         strlen(comm) + strlen(abs_path) + 172;
 
-            result_str = kzalloc(result_str_len, GFP_ATOMIC);
-            if (likely(result_str)) {
-                snprintf(result_str, result_str_len,
-                         "%d%s%s%s%d%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%u",
-                         get_current_uid(), "\n", BIND_TYPE, "\n", sa_family,
-                         "\n", abs_path, "\n", current->pid, "\n", current->real_parent->pid,
-                         "\n", pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                         comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                         sip, "\n", sport, "\n", retval, "\n", sessionid);
+        result_str = kzalloc(result_str_len, GFP_ATOMIC);
+        if (likely(result_str)) {
+            snprintf(result_str, result_str_len,
+                     "%d%s%s%s%d%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%u",
+                     get_current_uid(), "\n", BIND_TYPE, "\n", sa_family,
+                     "\n", abs_path, "\n", current->pid, "\n", current->real_parent->pid,
+                     "\n", pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
+                     comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
+                     sip, "\n", sport, "\n", retval, "\n", sessionid);
 
-                send_msg_to_user(result_str, 1);
-            }
-
-            if (likely(strcmp(abs_path, "-2")))
-                kfree(buffer);
-
-            if (likely(comm_free == 1))
-                kfree(comm);
+            send_msg_to_user(result_str, 1);
         }
+
+        if (likely(strcmp(abs_path, "-2")))
+            kfree(buffer);
+
+        if (likely(comm_free == 1))
+            kfree(comm);
     }
 
     return 0;
@@ -574,156 +583,121 @@ int bind_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
     return 0;
 }
 
-int connect_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
-    struct connect_data *data;
-    if (share_mem_flag != -1) {
-        data = (struct connect_data *) ri->data;
-        data->fd = p_get_arg1(regs);
-        data->dirp = (struct sockaddr *) p_get_arg2(regs);
-    }
-    return 0;
-}
-
 int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
-    int err;
-    int fd;
     int flag = 0;
-    int copy_res;
     int retval;
-    int sa_family;
+    int comm_free = 0;
     int result_str_len;
+    unsigned int sessionid;
+    char dip[64] = "-1";
+    char sip[64] = "-1";
+    char dport[16] = "-1";
+    char sport[16] = "-1";
+    char *abs_path = NULL;
+    char *result_str;
+    char *comm = NULL;
+    char *buffer = NULL;
+    struct sock *sk;
+    struct connect_data *data;
+    struct inet_sock *inet;
 
-    if (share_mem_flag != -1) {
-        int comm_free = 0;
-        unsigned int sessionid;
-        char dip[64] = "-1";
-        char sip[64] = "-1";
-        char dport[16] = "-1";
-        char sport[16] = "-1";
-        char *abs_path = NULL;
-        char *result_str;
-        char *comm = NULL;
-        char *buffer = NULL;
-        struct socket *socket;
-        struct sock *sk;
-        struct sockaddr tmp_dirp;
-        struct connect_data *data;
-        struct inet_sock *inet;
+    if (share_mem_flag == -1)
+        return 0;
 
-        retval = regs_return_value(regs);
+    retval = regs_return_value(regs);
+    data = (struct connect_data *) ri->data;
 
-        data = (struct connect_data *) ri->data;
-        fd = data->fd;
+    sk = data->sk;
+    inet = (struct inet_sock *) sk;
 
-        if (unlikely(!fd))
-            goto out;
-
-        socket = sockfd_lookup(fd, &err);
-        if (likely(socket)) {
-            copy_res = copy_from_user(&tmp_dirp, data->dirp, 16);
-
-            if (unlikely(copy_res)) {
-                sockfd_put(socket);
-                goto out;
-            }
-
-            switch (tmp_dirp.sa_family) {
-                case AF_INET:
-                    sk = socket->sk;
-                    inet = (struct inet_sock *) sk;
+    switch (data->sa_family) {
+        case AF_INET:
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
-                if (likely(inet->inet_daddr)) {
-                    snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_daddr));
-                    snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_saddr));
+            if (likely(inet->inet_daddr)) {
+                snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_daddr));
+                snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_saddr));
+                snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
+                snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
+                flag = 1;
+            }
+#else
+            if (likely(inet->daddr)) {
+                snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->daddr));
+                snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->saddr));
+                snprintf(sport, 16, "%d", Ntohs(inet->sport));
+                snprintf(dport, 16, "%d", Ntohs(inet->dport));
+                flag = 1;
+            }
+#endif
+            break;
+#if IS_ENABLED(CONFIG_IPV6)
+            case AF_INET6:
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
+                if (likely(inet->inet_dport)) {
+                    snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_daddr));
+                    snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_rcv_saddr));
                     snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
                     snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
                     flag = 1;
                 }
 #else
-                    if (likely(inet->daddr)) {
-                        snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->daddr));
-                        snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->saddr));
-                        snprintf(sport, 16, "%d", Ntohs(inet->sport));
-                        snprintf(dport, 16, "%d", Ntohs(inet->dport));
-                        flag = 1;
-                    }
+                if (likely(inet->dport)) {
+                    snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->daddr));
+                    snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->saddr));
+                    snprintf(sport, 16, "%d", Ntohs(inet->sport));
+                    snprintf(dport, 16, "%d", Ntohs(inet->dport));
+                    flag = 1;
+                }
 #endif
-                    sa_family = AF_INET;
-                    break;
-#if IS_ENABLED(CONFIG_IPV6)
-                case AF_INET6:
-                    sk = socket->sk;
-                    inet = (struct inet_sock*)sk;
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
-                    if (likely(inet->inet_dport)) {
-                        snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_daddr));
-                        snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_rcv_saddr));
-                        snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
-                        snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
-                        flag = 1;
-                    }
-#else
-                    if (likely(inet->dport)) {
-                        snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->daddr));
-                        snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->saddr));
-                        snprintf(sport, 16, "%d", Ntohs(inet->sport));
-                        snprintf(dport, 16, "%d", Ntohs(inet->dport));
-                        flag = 1;
-                    }
+                break;
 #endif
-                    sa_family = AF_INET6;
-                    break;
-#endif
-                default:
-                    break;
-            }
-            sockfd_put(socket);
-        }
+        default:
+            break;
+    }
 
-        if(connect_dip_check(dip) == 1)
-            goto out;
+    if (connect_dip_check(dip) == 1)
+        goto out;
 
-        if (flag == 1) {
-            sessionid = get_sessionid();
-            buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
+    if (flag == 1) {
+        sessionid = get_sessionid();
+        buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
 
-            if (unlikely(!buffer))
-                abs_path = "-2";
+        if (unlikely(!buffer))
+            abs_path = "-2";
+        else
+            abs_path = get_exe_file(current, buffer, PATH_MAX);
+
+        if (strlen(current->comm) > 0) {
+            comm = str_replace(current->comm, "\n", " ");
+            if (likely(comm))
+                comm_free = 1;
             else
-                abs_path = get_exe_file(current, buffer, PATH_MAX);
-
-            if (strlen(current->comm) > 0) {
-                comm = str_replace(current->comm, "\n", " ");
-                if (likely(comm))
-                    comm_free = 1;
-                else
-                    comm = "";
-            } else
                 comm = "";
+        } else
+            comm = "";
 
-            result_str_len = strlen(current->nsproxy->uts_ns->name.nodename) +
-                             strlen(comm) + strlen(abs_path) + 172;
+        result_str_len = strlen(current->nsproxy->uts_ns->name.nodename) +
+                         strlen(comm) + strlen(abs_path) + 172;
 
-            result_str = kzalloc(result_str_len, GFP_ATOMIC);
-            if (likely(result_str)) {
-                snprintf(result_str, result_str_len,
-                         "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%u",
-                         get_current_uid(), "\n", CONNECT_TYPE, "\n", sa_family,
-                         "\n", fd, "\n", dport, "\n", dip, "\n", abs_path, "\n",
-                         current->pid, "\n", current->real_parent->pid, "\n",
-                         pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                         comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                         sip, "\n", sport, "\n", retval, "\n", sessionid);
+        result_str = kzalloc(result_str_len, GFP_ATOMIC);
+        if (likely(result_str)) {
+            snprintf(result_str, result_str_len,
+                     "%d\n%s\n%d\n%d\n%s\n%s\n%s\n%d\n%d\n%d\n%d\n%s\n%s\n%s\n%s\n%d\n%u",
+                     get_current_uid(), CONNECT_TYPE, data->sa_family,
+                     data->type, dport, dip, abs_path,
+                     current->pid, current->real_parent->pid,
+                     pid_vnr(task_pgrp(current)), current->tgid,
+                     comm, current->nsproxy->uts_ns->name.nodename,
+                     sip, sport, retval, sessionid);
 
-                send_msg_to_user(result_str, 1);
-            }
-
-            if (likely(strcmp(abs_path, "-2")))
-                kfree(buffer);
-
-            if (likely(comm_free == 1))
-                kfree(comm);
+            send_msg_to_user(result_str, 1);
         }
+
+        if (likely(strcmp(abs_path, "-2")))
+            kfree(buffer);
+
+        if (likely(comm_free == 1))
+            kfree(comm);
     }
 
     return 0;
@@ -1127,7 +1101,6 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                 else
                     pid_tree_free = 1;
 
-                pid_tree_free = 1;
                 socket_pid = task->pid;
                 socket_pname_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
                 if (unlikely(!socket_pname_buf))
@@ -1167,15 +1140,15 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
         if(likely(result_str)) {
             snprintf(result_str, result_str_len,
-                 "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%u%s%s%s%s%s%s%s%s%s%d%s%s%s%s%s%d%s%s%s%s%s%s",
-                 get_current_uid(), "\n", EXECVE_TYPE, "\n", pname, "\n",
-                 abs_path, "\n", argv, "\n", current->pid, "\n",
-                 current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
-                 "\n", current->tgid, "\n", comm, "\n",
-                 nodename,"\n",tmp_stdin,"\n",tmp_stdout,
-                 "\n", sessionid, "\n", dip, "\n", dport,"\n", sip,"\n", sport,"\n", sa_family,
-                 "\n", pid_tree, "\n", tty_name,"\n", socket_pid, "\n", socket_pname, "\n",
-                 data->ssh_connection, "\n", data->ld_preload);
+                 "%d\n%s\n%s\n%s\n%s\n%d\n%d\n%d\n%d\n%s\n%s\n%s\n%s\n%u\n%s\n%s\n%s\n%s\n%d\n%s\n%s\n%d\n%s\n%s\n%s",
+                 get_current_uid(), EXECVE_TYPE, pname,
+                 abs_path, argv, current->pid,
+                 current->real_parent->pid, pid_vnr(task_pgrp(current)),
+                 current->tgid, comm,
+                 nodename, tmp_stdin, tmp_stdout,
+                 sessionid, dip, dport, sip, sport, sa_family,
+                 pid_tree, tty_name, socket_pid, socket_pname,
+                 data->ssh_connection, data->ld_preload);
 
             send_msg_to_user(result_str, 1);
         }
@@ -1374,7 +1347,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
         int socket_check = 0;
         int tty_name_len = 0;
         void *tmp_socket = NULL;
-        char *pid_tree = "1";
+        char *pid_tree = "-1";
         char *nodename = "-1";
         char *socket_pname = "-1";
         char *socket_pname_buf = "-2";
@@ -1479,7 +1452,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                 }
 
                 if (strncmp("socket:[", d_name, 8) == 0) {
-                    if(unlikely(!task_files->fd[i] || IS_ERR(task_files->fd[i]->private_data)))
+                    if (unlikely(!task_files->fd[i] || IS_ERR(task_files->fd[i]->private_data)))
                         continue;
 
                     tmp_socket = task_files->fd[i]->private_data
@@ -1507,20 +1480,20 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                                 socket_check = 1;
                                 break;
 #if IS_ENABLED(CONFIG_IPV6)
-                            case AF_INET6:
+                                case AF_INET6:
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
-                                snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_daddr));
-                                snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_rcv_saddr));
-                                snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
-                                snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
+                                    snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_daddr));
+                                    snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_rcv_saddr));
+                                    snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
+                                    snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
 #else
-                                snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->daddr));
-                                snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->saddr));
-                                snprintf(sport, 16, "%d", Ntohs(inet->sport));
-                                snprintf(dport, 16, "%d", Ntohs(inet->dport));
+                                    snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->daddr));
+                                    snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->saddr));
+                                    snprintf(sport, 16, "%d", Ntohs(inet->sport));
+                                    snprintf(dport, 16, "%d", Ntohs(inet->dport));
 #endif
-                                socket_check = 1;
-                                break;
+                                    socket_check = 1;
+                                    break;
 #endif
                         }
                     }
@@ -1573,15 +1546,15 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
         if (likely(result_str)) {
             snprintf(result_str, result_str_len,
-                     "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%u%s%s%s%s%s%s%s%s%s%d%s%s%s%s%s%d%s%s%s%s%s%s",
-                     get_current_uid(), "\n", EXECVE_TYPE, "\n", pname, "\n",
-                     abs_path, "\n", argv, "\n", current->pid, "\n",
-                     current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
-                     "\n", current->tgid, "\n", comm, "\n",
-                     nodename, "\n", tmp_stdin, "\n", tmp_stdout,
-                     "\n", sessionid, "\n", dip, "\n", dport, "\n", sip, "\n", sport, "\n", sa_family,
-                     "\n", pid_tree, "\n", tty_name, "\n", socket_pid, "\n", socket_pname, "\n",
-                     data->ssh_connection, "\n", data->ld_preload);
+                     "%d\n%s\n%s\n%s\n%s\n%d\n%d\n%d\n%d\n%s\n%s\n%s\n%s\n%u\n%s\n%s\n%s\n%s\n%d\n%s\n%s\n%d\n%s\n%s\n%s",
+                     get_current_uid(), EXECVE_TYPE, pname,
+                     abs_path, argv, current->pid,
+                     current->real_parent->pid, pid_vnr(task_pgrp(current)),
+                     current->tgid, comm,
+                     nodename, tmp_stdin, tmp_stdout,
+                     sessionid, dip, dport, sip, sport, sa_family,
+                     pid_tree, tty_name, socket_pid, socket_pname,
+                     data->ssh_connection, data->ld_preload);
 
             send_msg_to_user(result_str, 1);
         }
@@ -1613,97 +1586,83 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
 
 #endif
 
-struct security_inode_create_data {
-    char *filename;
-    char *pname_buf;
-};
-
 int security_inode_create_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
-    if (share_mem_flag != -1) {
-        char *result_str;
-        char *pname_buf;
-        struct security_inode_create_data *data;
-        pname_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
-        data = (struct security_inode_create_data *) ri->data;
-        if (unlikely(!pname_buf)) {
-            pname_buf = "-2";
-            result_str = "-2";
-        } else {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 38)
-            result_str = dentry_path_raw((struct dentry *) p_regs_get_arg2(regs),pname_buf,PATH_MAX);
-#else
-            result_str = __dentry_path((struct dentry *) p_regs_get_arg2(regs), pname_buf, PATH_MAX);
-#endif
-        }
-
-        data->filename = result_str;
-        data->pname_buf = pname_buf;
-    }
-    return 0;
-}
-
-int security_inode_create_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
+    int result_str_len;
+    int comm_free = 0;
     unsigned int sessionid;
     char *result_str = NULL;
-    int result_str_len;
     char *comm = NULL;
-    if (share_mem_flag != -1) {
-        int comm_free = 0;
-        struct security_inode_create_data *data;
-        char *buffer = NULL;
-        char *pathstr = NULL;
-        char *abs_path = NULL;
+    char *pname_buf = NULL;
+    char *buffer = NULL;
+    char *pathstr = NULL;
+    char *abs_path = NULL;
 
-        data = (struct security_inode_create_data *) ri->data;
-        pathstr = data->filename;
-        buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
-        if (unlikely(!buffer))
-            abs_path = "-2";
-        else
-            abs_path = get_exe_file(current, buffer, PATH_MAX);
+    if (share_mem_flag == -1)
+        return 0;
 
-        sessionid = get_sessionid();
+    pname_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
 
-        if (strlen(current->comm) > 0) {
-            comm = str_replace(current->comm, "\n", " ");
-            if (likely(comm))
-                comm_free = 1;
-            else
-                comm = "";
-        } else
-            comm = "";
-
-        result_str_len = strlen(current->nsproxy->uts_ns->name.nodename)
-                         + strlen(comm) + strlen(abs_path) + 172;
-        if (likely(pathstr))
-            result_str_len = result_str_len + strlen(pathstr);
-        else
-            pathstr = "";
-
-        result_str = kzalloc(result_str_len, GFP_ATOMIC);
-        if (likely(result_str)) {
-            snprintf(result_str, result_str_len,
-                     "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
-                     get_current_uid(), "\n", CREATE_FILE, "\n", abs_path, "\n", pathstr,
-                     "\n", current->pid, "\n", current->real_parent->pid, "\n",
-                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                     comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
-            send_msg_to_user(result_str, 1);
-        }
-
-        if (likely(strcmp(data->pname_buf, "-2")))
-            kfree(data->pname_buf);
-        if (likely(strcmp(abs_path, "-2")))
-            kfree(buffer);
-
-        if (likely(comm_free == 1))
-            kfree(comm);
+    if (unlikely(!pname_buf)) {
+        pname_buf = "-2";
+        pathstr = "-2";
+    } else {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 38)
+        pathstr = dentry_path_raw((struct dentry *) p_regs_get_arg2(regs),pname_buf,PATH_MAX);
+#else
+        pathstr = __dentry_path((struct dentry *) p_regs_get_arg2(regs), pname_buf, PATH_MAX);
+#endif
     }
+
+    buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
+    if (unlikely(!buffer))
+        abs_path = "-2";
+    else
+        abs_path = get_exe_file(current, buffer, PATH_MAX);
+
+    sessionid = get_sessionid();
+
+    if (strlen(current->comm) > 0) {
+        comm = str_replace(current->comm, "\n", " ");
+        if (likely(comm))
+            comm_free = 1;
+        else
+            comm = "";
+    } else
+        comm = "";
+
+    result_str_len = strlen(current->nsproxy->uts_ns->name.nodename)
+                     + strlen(comm) + strlen(abs_path) + 172;
+    if (likely(pathstr))
+        result_str_len = result_str_len + strlen(pathstr);
+    else
+        pathstr = "";
+
+    result_str = kzalloc(result_str_len, GFP_ATOMIC);
+    if (likely(result_str)) {
+        snprintf(result_str, result_str_len,
+                 "%d\n%s\n%s\n%s\n%d\n%d\n%d\n%d\n%s\n%s\n%u",
+                 get_current_uid(), CREATE_FILE, abs_path, pathstr,
+                 current->pid, current->real_parent->pid,
+                 pid_vnr(task_pgrp(current)), current->tgid,
+                 comm, current->nsproxy->uts_ns->name.nodename, sessionid);
+        send_msg_to_user(result_str, 1);
+    }
+
+    if (likely(strcmp(pname_buf, "-2")))
+        kfree(pname_buf);
+
+    if (likely(strcmp(abs_path, "-2")))
+        kfree(buffer);
+
+    if (likely(comm_free == 1))
+        kfree(comm);
+
     return 0;
 }
 
 void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags) {
     int result_str_len;
+    int comm_free = 0;
     long request;
     long pid;
     void *addr;
@@ -1715,281 +1674,21 @@ void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long f
     unsigned int sessionid;
 
     request = (long) p_get_arg1(regs);
-    if (share_mem_flag != -1) {
-        int comm_free = 0;
-        if (request == PTRACE_POKETEXT || request == PTRACE_POKEDATA) {
-            pid = (long) p_get_arg2(regs);
-            addr = (void *) p_get_arg3(regs);
-            data = (char *) p_get_arg4(regs);
-            sessionid = get_sessionid();
 
-            buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
-            if (unlikely(!buffer))
-                abs_path = "-2";
-            else
-                abs_path = get_exe_file(current, buffer, PATH_MAX);
+    if (share_mem_flag == -1)
+        return;
 
-            if (strlen(current->comm) > 0) {
-                comm = str_replace(current->comm, "\n", " ");
-                if (likely(comm))
-                    comm_free = 1;
-                else
-                    comm = "";
-            } else
-                comm = "";
-
-            result_str_len = strlen(current->nsproxy->uts_ns->name.nodename) +
-                             strlen(comm) + strlen(abs_path) + 172;
-
-            result_str = kzalloc(result_str_len, GFP_ATOMIC);
-
-            if (likely(result_str)) {
-                snprintf(result_str, result_str_len,
-                         "%d%s%s%s%ld%s%ld%s%p%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
-                         get_current_uid(), "\n", PTRACE_TYPE, "\n", request,
-                         "\n", pid, "\n", addr, "\n", &data, "\n", abs_path, "\n",
-                         current->pid, "\n", current->real_parent->pid, "\n",
-                         pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                         comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
-                send_msg_to_user(result_str, 1);
-            }
-
-            if (likely(strcmp(abs_path, "-2")))
-                kfree(buffer);
-
-            if (likely(comm_free == 1))
-                kfree(comm);
-        }
-    }
-}
-
-int recvfrom_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
-    struct recvfrom_data *data;
-    if (share_mem_flag != -1) {
-        data = (struct recvfrom_data *) ri->data;
-        data->fd = p_get_arg1(regs);
-        data->ubuf = (void *) p_get_arg2(regs);
-        data->size = (size_t) p_get_arg3(regs);
-        data->dirp = (struct sockaddr *) p_get_arg5(regs);
-    }
-    return 0;
-}
-
-int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
-    int err;
-    int ulen = 16;
-    int flag = 0;
-    int sa_family = 0;
-    int copy_res = 0;
-    int recv_data_copy_res = 0;
-    int result_str_len;
-    int opcode = 0;
-    int qr;
-    int rcode = 0;
-    unsigned int sessionid;
-    char *comm = NULL;
-    char dip[64];
-    char dport[16];
-    char sip[64] = "-1";
-    char sport[16] = "-1";
-    unsigned char *recv_data = NULL;
-    char *query = NULL;
-    char *abs_path = NULL;
-    char *result_str = NULL;
-    char *buffer = NULL;
-
-    if (share_mem_flag != -1) {
-        int comm_free = 0;
-        struct recvfrom_data *data;
-        struct sockaddr tmp_dirp;
-        struct sockaddr_in *sin;
-        struct sockaddr_in6 *sin6;
-        struct socket *sock;
-        struct sockaddr_in source_addr;
-        struct sockaddr_in6 source_addr6 = {};
-        data = (struct recvfrom_data *) ri->data;
-
-        copy_res = copy_from_user(&tmp_dirp, data->dirp, ulen);
-        if (unlikely(copy_res != 0))
-            return 0;
-
-        if (tmp_dirp.sa_family == AF_INET) {
-            sa_family = AF_INET;
-            sock = sockfd_lookup(data->fd, &err);
-
-            if (unlikely(!sock))
-                goto out;
-
-            sin = (struct sockaddr_in *) &tmp_dirp;
-            if (sin->sin_port == 13568 || sin->sin_port == 59668) {
-                recv_data = kzalloc(data->size, GFP_ATOMIC);
-                if (unlikely(!recv_data))
-                    recv_data = "-2";
-                else
-                    recv_data_copy_res = copy_from_user(recv_data, data->ubuf, data->size);
-
-                if (sizeof(recv_data) >= 8) {
-                    qr = (recv_data[2] & 0x80) ? 1 : 0;
-
-                    if (qr == 1) {
-                        flag = 1;
-                        opcode = (recv_data[2] >> 3) & 0x0f;
-                        rcode = recv_data[3] & 0x0f;
-                        query = kzalloc(strlen(recv_data + 12), GFP_ATOMIC);
-                        if (unlikely(!query))
-                            query = "-2";
-                        else
-                            getDNSQuery(recv_data, 12, query);
-                        snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr.s_addr));
-                        snprintf(dport, 16, "%d", Ntohs(sin->sin_port));
-                        if (sock) {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0)
-                            err = kernel_getsockname(sock, (struct sockaddr *)&source_addr);
-#else
-                            err = kernel_getsockname(sock, (struct sockaddr *) &source_addr, &ulen);
-#endif
-                            if (likely(err == 0)) {
-                                snprintf(sport, 16, "%d", Ntohs(source_addr.sin_port));
-                                snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(source_addr.sin_addr));
-                                sockfd_put(sock);
-                            }
-                        }
-                    }
-                }
-            }
-        } else if (tmp_dirp.sa_family == AF_INET6) {
-            sa_family = AF_INET6;
-            sock = sockfd_lookup(data->fd, &err);
-
-            if (unlikely(!sock))
-                goto out;
-
-            sin6 = (struct sockaddr_in6 *) &tmp_dirp;
-            if (sin6->sin6_port == 13568 || sin6->sin6_port == 59668) {
-                recv_data = kzalloc(data->size, GFP_ATOMIC);
-                if (unlikely(!recv_data))
-                    recv_data = "-2";
-                else
-                    recv_data_copy_res = copy_from_user(recv_data, data->ubuf, data->size);
-
-                if (sizeof(recv_data) >= 8) {
-                    qr = (recv_data[2] & 0x80) ? 1 : 0;
-                    if (qr == 1) {
-                        flag = 1;
-                        opcode = (recv_data[2] >> 3) & 0x0f;
-                        rcode = recv_data[3] & 0x0f;
-                        query = kzalloc(strlen(recv_data + 12), GFP_ATOMIC);
-                        if (unlikely(!query))
-                            query = "-2";
-                        else
-                            getDNSQuery(recv_data, 12, query);
-                        snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sin6->sin6_addr));
-                        snprintf(dport, 16, "%d", Ntohs(sin6->sin6_port));
-                        if (sock) {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 17, 0)
-                            err = kernel_getsockname(sock, (struct sockaddr *)&source_addr6);
-#else
-                            err = kernel_getsockname(sock, (struct sockaddr *) &source_addr6, &ulen);
-#endif
-                            if (likely(err == 0)) {
-                                snprintf(sport, 16, "%d", Ntohs(source_addr6.sin6_port));
-                                snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x",
-                                         NIP6(source_addr6.sin6_addr));
-                                sockfd_put(sock);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if (flag == 1) {
-            sessionid = get_sessionid();
-
-            buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
-            if (unlikely(!buffer))
-                abs_path = "-2";
-            else
-                abs_path = get_exe_file(current, buffer, PATH_MAX);
-
-            if (strlen(current->comm) > 0) {
-                comm = str_replace(current->comm, "\n", " ");
-                if (likely(comm))
-                    comm_free = 1;
-                else
-                    comm = "";
-            } else
-                comm = "";
-
-            result_str_len = strlen(query) + strlen(current->nsproxy->uts_ns->name.nodename) +
-                             strlen(comm) + strlen(abs_path) + 172;
-
-            result_str = kzalloc(result_str_len, GFP_ATOMIC);
-            if (likely(result_str)) {
-                snprintf(result_str, result_str_len,
-                         "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%s%s%u",
-                         get_current_uid(), "\n", DNS_TYPE, "\n", sa_family,
-                         "\n", data->fd, "\n", dport, "\n", dip, "\n", abs_path, "\n",
-                         current->pid, "\n", current->real_parent->pid, "\n",
-                         pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                         comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                         sip, "\n", sport, "\n", qr, "\n", opcode, "\n", rcode, "\n", query, "\n", sessionid);
-
-                send_msg_to_user(result_str, 1);
-            }
-
-            if (likely(strcmp(query, "-2")))
-                kfree(query);
-
-            if (likely(strcmp(recv_data, "-2")))
-                kfree(recv_data);
-
-            if (likely(strcmp(abs_path, "-2")))
-                kfree(buffer);
-
-            if (likely(comm_free == 1))
-                kfree(comm);
-        }
-    }
-    return 0;
-
-    out:
-    return 0;
-}
-
-void load_module_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags) {
-    int i = 0;
-    int result_str_len;
-    unsigned int sessionid;
-    char *cwd = NULL;
-    char *result_str = NULL;
-    char *comm = NULL;
-    char *buffer = NULL;
-
-    if (share_mem_flag != -1) {
-        int comm_free = 0;
-        struct path files_path;
-        struct files_struct *current_files;
-        struct fdtable *files_table;
-        char *abs_path = NULL;
-        char init_module_buf[PATH_MAX];
-        memset(init_module_buf, 0, PATH_MAX);
-
+    if (request == PTRACE_POKETEXT || request == PTRACE_POKEDATA) {
+        pid = (long) p_get_arg2(regs);
+        addr = (void *) p_get_arg3(regs);
+        data = (char *) p_get_arg4(regs);
         sessionid = get_sessionid();
-        current_files = current->files;
-        files_table = files_fdtable(current_files);
-
-        while (files_table->fd[i])
-            i++;
 
         buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
         if (unlikely(!buffer))
             abs_path = "-2";
         else
             abs_path = get_exe_file(current, buffer, PATH_MAX);
-
-        files_path = files_table->fd[i - 1]->f_path;
-        cwd = d_path(&files_path, init_module_buf, PATH_MAX);
 
         if (strlen(current->comm) > 0) {
             comm = str_replace(current->comm, "\n", " ");
@@ -2000,23 +1699,395 @@ void load_module_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned l
         } else
             comm = "";
 
-        result_str_len = strlen(cwd) + strlen(current->nsproxy->uts_ns->name.nodename)
-                         + strlen(comm) + strlen(abs_path) + 192;
+        result_str_len = strlen(current->nsproxy->uts_ns->name.nodename) +
+                         strlen(comm) + strlen(abs_path) + 172;
 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
-        if (likely(result_str)) {
-            snprintf(result_str, result_str_len, "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
-                     get_current_uid(), "\n", LOAD_MODULE_TYPE, "\n", abs_path, "\n", cwd,
-                     "\n", current->pid, "\n", current->real_parent->pid, "\n",
-                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                     comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
 
+        if (likely(result_str)) {
+            snprintf(result_str, result_str_len,
+                     "%d\n%s\n%ld\n%ld\n%p\n%s\n%s\n%d\n%d\n%d\n%d\n%s\n%s\n%u",
+                     get_current_uid(), PTRACE_TYPE, request,
+                     pid, addr, &data, abs_path,
+                     current->pid, current->real_parent->pid,
+                     pid_vnr(task_pgrp(current)), current->tgid,
+                     comm, current->nsproxy->uts_ns->name.nodename, sessionid);
             send_msg_to_user(result_str, 1);
         }
 
         if (likely(strcmp(abs_path, "-2")))
             kfree(buffer);
+
+        if (likely(comm_free == 1))
+            kfree(comm);
     }
+}
+
+void dns_data_transport(int sa_family, char *query, char dip[64], char sip[64], char dport[16], char sport[16], int qr,
+                        int opcode, int rcode) {
+    int comm_free = 0;
+    int result_str_len;
+    unsigned int sessionid;
+    char *comm = NULL;
+    char *abs_path = NULL;
+    char *result_str = NULL;
+    char *buffer = NULL;
+    char *nodename = "-1";
+
+    if (connect_dip_check(dip) == 1) {
+        kfree(query);
+        return;
+    }
+
+    sessionid = get_sessionid();
+    buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
+    if (unlikely(!buffer))
+        abs_path = "-2";
+    else
+        abs_path = get_exe_file(current, buffer, PATH_MAX);
+
+    if (strlen(current->comm) > 0) {
+        comm = str_replace(current->comm, "\n", " ");
+        if (likely(comm))
+            comm_free = 1;
+        else
+            comm = "";
+    } else
+        comm = "";
+
+    if (likely(current->nsproxy->uts_ns))
+        nodename = current->nsproxy->uts_ns->name.nodename;
+
+    result_str_len = strlen(query) + strlen(nodename) +
+                     strlen(comm) + strlen(abs_path) + 172;
+
+    result_str = kzalloc(result_str_len, GFP_ATOMIC);
+    if (likely(result_str)) {
+        snprintf(result_str, result_str_len,
+                 "%d\n%s\n%d\n%s\n%s\n%s\n%d\n%d\n%d\n%d\n%s\n%s\n%s\n%s\n%d\n%d\n%d\n%s\n%u",
+                 get_current_uid(), DNS_TYPE, sa_family,
+                 dport, dip, abs_path,
+                 current->pid, current->real_parent->pid,
+                 pid_vnr(task_pgrp(current)), current->tgid,
+                 comm, nodename,
+                 sip, sport, qr, opcode, rcode,
+                 query, sessionid);
+
+        send_msg_to_user(result_str, 1);
+    }
+
+    if (likely(query))
+        kfree(query);
+
+    if (likely(strcmp(abs_path, "-2")))
+        kfree(buffer);
+
+    if (likely(comm_free == 1))
+        kfree(comm);
+}
+
+int udp_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
+    struct sock *sk;
+    struct inet_sock *inet;
+    struct msghdr *msg;
+    struct udp_recvmsg_data *data;
+    void *tmp_msg;
+    int flags;
+
+    if (share_mem_flag == -1)
+        return 0;
+
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4, 0, 9)
+    flags = (int) p_get_arg5(regs);
+#else
+    flags = (int) p_get_arg6(regs);
+#endif
+    if (flags & MSG_ERRQUEUE)
+        return 0;
+
+    data = (struct udp_recvmsg_data *) ri->data;
+
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4, 0, 9)
+    sk = (struct sock *) p_get_arg1(regs);
+#else
+    sk = (struct sock *) p_get_arg2(regs);
+#endif
+
+    inet = (struct inet_sock *) sk;
+    data->flag = 0;
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
+    if (inet->inet_dport == 13568 || inet->inet_dport == 59668)
+#else
+    if (inet->dport == 13568 || inet->dport == 59668)
+#endif
+    {
+        data->flag = 1;
+        data->sa_family = AF_INET;
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
+        if (likely(inet->inet_daddr)) {
+            snprintf(data->dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_daddr));
+            snprintf(data->sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_saddr));
+            snprintf(data->sport, 16, "%d", Ntohs(inet->inet_sport));
+            snprintf(data->dport, 16, "%d", Ntohs(inet->inet_dport));
+        }
+#else
+        if (likely(inet->daddr)) {
+            snprintf(data->dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->daddr));
+            snprintf(data->sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->saddr));
+            snprintf(data->sport, 16, "%d", Ntohs(inet->sport));
+            snprintf(data->dport, 16, "%d", Ntohs(inet->dport));
+        }
+#endif
+
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4, 0, 9)
+        tmp_msg = (void *) p_get_arg2(regs);
+#else
+        tmp_msg = (void *) p_get_arg3(regs);
+#endif
+        if (IS_ERR_OR_NULL(tmp_msg))
+            return 0;
+
+        msg = (struct msghdr *) tmp_msg;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
+        if(msg->msg_iter.iov) {
+            if(msg->msg_iter.iov->iov_len > 0) {
+                data->iov_len = msg->msg_iter.iov->iov_len;
+                data->iov_base = msg->msg_iter.iov->iov_base;
+            } else
+                return 0;
+        } else if(msg->msg_iter.kvec) {
+            if(msg->msg_iter.kvec->iov_len > 0) {
+                data->iov_len = msg->msg_iter.kvec->iov_len;
+                data->iov_base = msg->msg_iter.kvec->iov_base;
+            } else
+                return 0;
+        } else
+            return 0;
+#else
+        if(data->iov_len > 0) {
+            data->iov_base = msg->msg_iov->iov_base;
+            data->iov_len = msg->msg_iov->iov_len;
+        } else
+            return 0;
+#endif
+    }
+
+    return 0;
+}
+
+int udpv6_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
+    struct sock *sk;
+    struct inet_sock *inet;
+    struct msghdr *msg;
+    struct udp_recvmsg_data *data;
+    void *tmp_msg;
+    int flags;
+
+    if (share_mem_flag == -1)
+        return 0;
+
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4, 0, 9)
+    flags = (int) p_get_arg5(regs);
+#else
+    flags = (int) p_get_arg6(regs);
+#endif
+    if (flags & MSG_ERRQUEUE)
+        return 0;
+
+    data = (struct udp_recvmsg_data *) ri->data;
+
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4, 0, 9)
+    sk = (struct sock *) p_get_arg1(regs);
+#else
+    sk = (struct sock *) p_get_arg2(regs);
+#endif
+
+    inet = (struct inet_sock *) sk;
+    data->flag = 0;
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
+    if (inet->inet_dport == 13568 || inet->inet_dport == 59668)
+#else
+    if (inet->dport == 13568 || inet->dport == 59668)
+#endif
+    {
+        data->flag = 1;
+        data->sa_family = AF_INET;
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
+        if (likely(inet->inet_dport)) {
+            snprintf(data->dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_daddr));
+            snprintf(data->sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_rcv_saddr));
+            snprintf(data->sport, 16, "%d", Ntohs(inet->inet_sport));
+            snprintf(data->dport, 16, "%d", Ntohs(inet->inet_dport));
+        }
+#else
+        if (likely(inet->dport)) {
+            snprintf(data->dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->daddr));
+            snprintf(data->sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->saddr));
+            snprintf(data->sport, 16, "%d", Ntohs(inet->sport));
+            snprintf(data->dport, 16, "%d", Ntohs(inet->dport));
+        }
+#endif
+
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4, 0, 9)
+        tmp_msg = (void *) p_get_arg2(regs);
+#else
+        tmp_msg = (void *) p_get_arg3(regs);
+#endif
+        if (IS_ERR_OR_NULL(tmp_msg))
+            return 0;
+
+        msg = (struct msghdr *) tmp_msg;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
+        if(msg->msg_iter.iov) {
+            if(msg->msg_iter.iov->iov_len > 0) {
+                data->iov_len = msg->msg_iter.iov->iov_len;
+                data->iov_base = msg->msg_iter.iov->iov_base;
+            } else
+                return 0;
+        } else if(msg->msg_iter.kvec) {
+            if(msg->msg_iter.kvec->iov_len > 0) {
+                data->iov_len = msg->msg_iter.kvec->iov_len;
+                data->iov_base = msg->msg_iter.kvec->iov_base;
+            } else
+                return 0;
+        } else
+            return 0;
+#else
+        if(data->iov_len > 0) {
+            data->iov_base = msg->msg_iov->iov_base;
+            data->iov_len = msg->msg_iov->iov_len;
+        } else
+            return 0;
+#endif
+    }
+
+    return 0;
+}
+
+int udp_recvmsg_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
+    int opcode = 0;
+    int qr;
+    int rcode = 0;
+    int recv_data_copy_res = 1;
+    char *query;
+    unsigned char *recv_data = NULL;
+    struct udp_recvmsg_data *data;
+
+    if (share_mem_flag == -1)
+        return 0;
+
+    data = (struct udp_recvmsg_data *) ri->data;
+    if(data->flag != 1)
+        return 0;
+
+    if (data->iov_len > 0)
+        recv_data = kzalloc(data->iov_len, GFP_ATOMIC);
+    else
+        return 0;
+
+    if (unlikely(!recv_data))
+        return 0;
+    else
+        recv_data_copy_res = copy_from_user(recv_data, data->iov_base, data->iov_len);
+
+    if (unlikely(recv_data_copy_res != 0)) {
+        kfree(recv_data);
+        return 0;
+    }
+
+    if (sizeof(recv_data) >= 8) {
+        qr = (recv_data[2] & 0x80) ? 1 : 0;
+        if (qr == 1) {
+            opcode = (recv_data[2] >> 3) & 0x0f;
+            rcode = recv_data[3] & 0x0f;
+
+            if (strlen(recv_data + 12) == 0) {
+                kfree(recv_data);
+                return 0;
+            }
+
+            query = kzalloc(strlen(recv_data + 12), GFP_ATOMIC);
+            if (unlikely(IS_ERR_OR_NULL(query)))
+                query = "-2";
+            else
+                getDNSQuery(recv_data, 12, query);
+
+            if (!query) {
+                kfree(query);
+                return 0;
+            }
+
+            dns_data_transport(AF_INET6, query, data->dip, data->sip, data->dport, data->sport, qr, opcode, rcode);
+        }
+    }
+
+    kfree(recv_data);
+    return 0;
+}
+
+void load_module_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long flags) {
+    int i = 0;
+    int comm_free = 0;
+    int result_str_len;
+    unsigned int sessionid;
+    char *cwd = NULL;
+    char *result_str = NULL;
+    char *comm = NULL;
+    char *buffer = NULL;
+    char *abs_path = NULL;
+    char init_module_buf[PATH_MAX];
+    struct path files_path;
+    struct files_struct *current_files;
+    struct fdtable *files_table;
+
+    if (share_mem_flag == -1)
+        return;
+
+    memset(init_module_buf, 0, PATH_MAX);
+
+    sessionid = get_sessionid();
+    current_files = current->files;
+    files_table = files_fdtable(current_files);
+
+    while (files_table->fd[i])
+        i++;
+
+    buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
+    if (unlikely(!buffer))
+        abs_path = "-2";
+    else
+        abs_path = get_exe_file(current, buffer, PATH_MAX);
+
+    files_path = files_table->fd[i - 1]->f_path;
+    cwd = d_path(&files_path, init_module_buf, PATH_MAX);
+
+    if (strlen(current->comm) > 0) {
+        comm = str_replace(current->comm, "\n", " ");
+        if (likely(comm))
+            comm_free = 1;
+        else
+            comm = "";
+    } else
+        comm = "";
+
+    result_str_len = strlen(cwd) + strlen(current->nsproxy->uts_ns->name.nodename)
+                     + strlen(comm) + strlen(abs_path) + 192;
+
+    result_str = kzalloc(result_str_len, GFP_ATOMIC);
+    if (likely(result_str)) {
+        snprintf(result_str, result_str_len, "%d\n%s\n%s\n%s\n%d\n%d\n%d\n%d\n%s\n%s\n%u",
+                 get_current_uid(), LOAD_MODULE_TYPE, abs_path, cwd,
+                 current->pid, current->real_parent->pid,
+                 pid_vnr(task_pgrp(current)), current->tgid,
+                 comm, current->nsproxy->uts_ns->name.nodename, sessionid);
+
+        send_msg_to_user(result_str, 1);
+    }
+
+    if (likely(strcmp(abs_path, "-2")))
+        kfree(buffer);
 }
 
 struct update_cred_data {
@@ -2041,75 +2112,121 @@ int update_cred_entry_handler(struct kretprobe_instance *ri, struct pt_regs *reg
 }
 
 int update_cred_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
-    if (share_mem_flag != -1) {
-        int now_uid;
-        now_uid = get_current_uid();
+    int comm_free = 0;
+    int now_uid;
+    struct update_cred_data *data;
+    char *comm = NULL;
+    char *buffer = NULL;
 
-        if (now_uid == 0) {
-            int comm_free = 0;
-            struct update_cred_data *data;
-            char *comm = NULL;
-            char *buffer = NULL;
-            data = (struct update_cred_data *) ri->data;
+    if (share_mem_flag == -1)
+        return 0;
 
-            if (data->old_uid != 0) {
-                if (strlen(current->comm) > 0) {
-                    comm = str_replace(current->comm, "\n", " ");
-                    if (likely(comm))
-                        comm_free = 1;
-                    else
-                        comm = "";
-                } else
-                    comm = "";
+    now_uid = get_current_uid();
 
-                if (strcmp(comm, "sudo") != 0 && strcmp(comm, "su") != 0 && strcmp(comm, "sshd") != 0) {
-                    int result_str_len;
-                    unsigned int sessionid;
-                    char *result_str = NULL;
-                    char *abs_path;
+    if (now_uid != 0)
+        return 0;
 
-                    buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
-                    if (unlikely(!buffer))
-                        abs_path = "-2";
-                    else
-                        abs_path = get_exe_file(current, buffer, PATH_MAX);
+    data = (struct update_cred_data *) ri->data;
+    if (data->old_uid != 0) {
+        if (strlen(current->comm) > 0) {
+            comm = str_replace(current->comm, "\n", " ");
+            if (likely(comm))
+                comm_free = 1;
+            else
+                comm = "";
+        } else
+            comm = "";
 
-                    sessionid = get_sessionid();
+        if (strcmp(comm, "sudo") != 0 && strcmp(comm, "su") != 0 && strcmp(comm, "sshd") != 0) {
+            int result_str_len;
+            unsigned int sessionid;
+            char *result_str = NULL;
+            char *abs_path;
 
-                    result_str_len = strlen(current->nsproxy->uts_ns->name.nodename)
-                                     + strlen(comm) + strlen(abs_path) + 192;
+            buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
+            if (unlikely(!buffer))
+                abs_path = "-2";
+            else
+                abs_path = get_exe_file(current, buffer, PATH_MAX);
 
-                    result_str = kzalloc(result_str_len, GFP_ATOMIC);
-                    if (likely(result_str)) {
-                        snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%d%s%s%s%u",
-                                 get_current_uid(), "\n", UPDATE_CRED_TYPE, "\n", abs_path,
-                                 "\n", current->pid, "\n", current->real_parent->pid, "\n",
-                                 pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                                 comm, "\n", data->old_uid, "\n", current->nsproxy->uts_ns->name.nodename,
-                                 "\n", sessionid);
+            sessionid = get_sessionid();
 
-                        send_msg_to_user(result_str, 1);
-                    }
+            result_str_len = strlen(current->nsproxy->uts_ns->name.nodename)
+                             + strlen(comm) + strlen(abs_path) + 192;
 
-                    if (likely(strcmp(abs_path, "-2")))
-                        kfree(buffer);
+            result_str = kzalloc(result_str_len, GFP_ATOMIC);
+            if (likely(result_str)) {
+                snprintf(result_str, result_str_len, "%d\n%s\n%s\n%d\n%d\n%d\n%d\n%s\n%d\n%s\n%u",
+                         get_current_uid(), UPDATE_CRED_TYPE, abs_path,
+                         current->pid, current->real_parent->pid,
+                         pid_vnr(task_pgrp(current)), current->tgid,
+                         comm, data->old_uid, current->nsproxy->uts_ns->name.nodename,
+                         sessionid);
 
-                    if (likely(comm_free == 1))
-                        kfree(comm);
-                }
+                send_msg_to_user(result_str, 1);
             }
+
+            if (likely(strcmp(abs_path, "-2")))
+                kfree(buffer);
+
+            if (likely(comm_free == 1))
+                kfree(comm);
         }
     }
     return 0;
 }
 
-struct kretprobe connect_kretprobe = {
-        .kp.symbol_name = P_GET_SYSCALL_NAME(connect),
-        .data_size  = sizeof(struct connect_data),
-        .handler = connect_handler,
-        .entry_handler = connect_entry_handler,
-        .maxactive = MAXACTIVE,
-};
+int tcp_v4_connect_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
+    struct connect_data *data;
+    if (share_mem_flag == -1)
+        return 0;
+
+    data = (struct connect_data *) ri->data;
+    data->sk = (struct sock *) p_get_arg1(regs);
+    data->sa_family = AF_INET;
+    data->type = 4;
+    return 0;
+}
+
+#if IS_ENABLED(CONFIG_IPV6)
+int tcp_v6_connect_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
+    struct connect_data *data;
+    if (share_mem_flag == -1)
+        return 0;
+
+    data = (struct connect_data *) ri->data;
+    data->sa_family = AF_INET6;
+    data->type = 6;
+    data->sk = (struct sock *) p_get_arg1(regs);
+    return 0;
+}
+#endif
+
+int ip4_datagram_connect_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
+    struct connect_data *data;
+    if (share_mem_flag == -1)
+        return 0;
+
+    data = (struct connect_data *) ri->data;
+    data->sa_family = AF_INET;
+    data->type = 4;
+    data->sk = (struct sock *) p_get_arg1(regs);
+    return 0;
+}
+
+#if IS_ENABLED(CONFIG_IPV6)
+int ip6_datagram_connect_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
+    struct connect_data *data;
+    if (share_mem_flag == -1)
+        return 0;
+
+    data = (struct connect_data *) ri->data;
+    data->sa_family = AF_INET6;
+    data->type = 6;
+    data->sk = (struct sock *) p_get_arg1(regs);
+    return 0;
+}
+#endif
 
 struct kretprobe bind_kretprobe = {
         .kp.symbol_name = P_GET_SYSCALL_NAME(bind),
@@ -2159,8 +2276,6 @@ struct kretprobe compat_execveat_kretprobe = {
 
 struct kretprobe security_inode_create_kretprobe = {
         .kp.symbol_name = "security_inode_create",
-        .data_size = sizeof(struct security_inode_create_data),
-        .handler = security_inode_create_handler,
         .entry_handler = security_inode_create_entry_handler,
         .maxactive = MAXACTIVE,
 };
@@ -2170,11 +2285,53 @@ struct kprobe ptrace_kprobe = {
         .post_handler = ptrace_post_handler,
 };
 
-struct kretprobe recvfrom_kretprobe = {
-        .kp.symbol_name = P_GET_SYSCALL_NAME(recvfrom),
-        .data_size  = sizeof(struct recvfrom_data),
-        .handler = recvfrom_handler,
-        .entry_handler = recvfrom_entry_handler,
+struct kretprobe udp_recvmsg_kretprobe = {
+        .kp.symbol_name = "udp_recvmsg",
+        .data_size  = sizeof(struct udp_recvmsg_data),
+        .handler = udp_recvmsg_handler,
+        .entry_handler = udp_recvmsg_entry_handler,
+        .maxactive = MAXACTIVE,
+};
+
+#if IS_ENABLED(CONFIG_IPV6)
+struct kretprobe udpv6_recvmsg_kretprobe = {
+        .kp.symbol_name = "udpv6_recvmsg",
+        .data_size  = sizeof(struct udp_recvmsg_data),
+        .handler = udp_recvmsg_handler,
+        .entry_handler = udpv6_recvmsg_entry_handler,
+        .maxactive = MAXACTIVE,
+};
+
+struct kretprobe ip6_datagram_connect_kretprobe = {
+        .kp.symbol_name = "ip6_datagram_connect",
+        .data_size  = sizeof(struct connect_data),
+        .handler = connect_handler,
+        .entry_handler = ip6_datagram_connect_entry_handler,
+        .maxactive = MAXACTIVE,
+};
+
+struct kretprobe tcp_v6_connect_kretprobe = {
+        .kp.symbol_name = "tcp_v6_connect",
+        .data_size  = sizeof(struct connect_data),
+        .handler = connect_handler,
+        .entry_handler = tcp_v6_connect_entry_handler,
+        .maxactive = MAXACTIVE,
+};
+#endif
+
+struct kretprobe ip4_datagram_connect_kretprobe = {
+        .kp.symbol_name = "ip4_datagram_connect",
+        .data_size  = sizeof(struct connect_data),
+        .handler = connect_handler,
+        .entry_handler = ip4_datagram_connect_entry_handler,
+        .maxactive = MAXACTIVE,
+};
+
+struct kretprobe tcp_v4_connect_kretprobe = {
+        .kp.symbol_name = "tcp_v4_connect",
+        .data_size  = sizeof(struct connect_data),
+        .handler = connect_handler,
+        .entry_handler = tcp_v4_connect_entry_handler,
         .maxactive = MAXACTIVE,
 };
 
@@ -2190,20 +2347,6 @@ struct kretprobe update_cred_kretprobe = {
         .entry_handler = update_cred_entry_handler,
         .maxactive = MAXACTIVE,
 };
-
-int connect_register_kprobe(void) {
-    int ret;
-    ret = register_kretprobe(&connect_kretprobe);
-
-    if (ret == 0)
-        connect_kprobe_state = 0x1;
-
-    return ret;
-}
-
-void unregister_kretprobe_connect(void) {
-    unregister_kretprobe(&connect_kretprobe);
-}
 
 int bind_register_kprobe(void) {
     int ret;
@@ -2305,18 +2448,90 @@ void unregister_kprobe_ptrace(void) {
     unregister_kprobe(&ptrace_kprobe);
 }
 
-int recvfrom_register_kprobe(void) {
+int udp_recvmsg_register_kprobe(void) {
     int ret;
-    ret = register_kretprobe(&recvfrom_kretprobe);
+    ret = register_kretprobe(&udp_recvmsg_kretprobe);
 
     if (ret == 0)
-        recvfrom_kprobe_state = 0x1;
+        udp_recvmsg_kprobe_state = 0x1;
 
     return ret;
 }
 
-void unregister_kprobe_recvfrom(void) {
-    unregister_kretprobe(&recvfrom_kretprobe);
+void unregister_kprobe_udp_recvmsg(void) {
+    unregister_kretprobe(&udp_recvmsg_kretprobe);
+}
+
+#if IS_ENABLED(CONFIG_IPV6)
+int udpv6_recvmsg_register_kprobe(void) {
+    int ret;
+    ret = register_kretprobe(&udpv6_recvmsg_kretprobe);
+
+    if (ret == 0)
+        udpv6_recvmsg_kprobe_state = 0x1;
+
+    return ret;
+}
+
+void unregister_kprobe_udpv6_recvmsg(void) {
+    unregister_kretprobe(&udpv6_recvmsg_kretprobe);
+}
+
+int ip6_datagram_connect_register_kprobe(void) {
+    int ret;
+    ret = register_kretprobe(&ip6_datagram_connect_kretprobe);
+
+    if (ret == 0)
+        ip6_datagram_connect_kprobe_state = 0x1;
+
+    return ret;
+}
+
+void unregister_kprobe_ip6_datagram_connect(void) {
+    unregister_kretprobe(&ip6_datagram_connect_kretprobe);
+}
+
+int tcp_v6_connect_register_kprobe(void) {
+    int ret;
+    ret = register_kretprobe(&tcp_v6_connect_kretprobe);
+
+    if (ret == 0)
+        tcp_v6_connect_kprobe_state = 0x1;
+
+    return ret;
+}
+
+void unregister_kprobe_tcp_v6_connect(void) {
+    unregister_kretprobe(&tcp_v6_connect_kretprobe);
+}
+#endif
+
+int ip4_datagram_connect_register_kprobe(void) {
+    int ret;
+    ret = register_kretprobe(&ip4_datagram_connect_kretprobe);
+
+    if (ret == 0)
+        ip4_datagram_connect_kprobe_state = 0x1;
+
+    return ret;
+}
+
+void unregister_kprobe_ip4_datagram_connect(void) {
+    unregister_kretprobe(&ip4_datagram_connect_kretprobe);
+}
+
+int tcp_v4_connect_register_kprobe(void) {
+    int ret;
+    ret = register_kretprobe(&tcp_v4_connect_kretprobe);
+
+    if (ret == 0)
+        tcp_v4_connect_kprobe_state = 0x1;
+
+    return ret;
+}
+
+void unregister_kprobe_tcp_v4_connect(void) {
+    unregister_kretprobe(&tcp_v4_connect_kretprobe);
 }
 
 int load_module_register_kprobe(void) {
@@ -2354,9 +2569,6 @@ void unregister_kprobe_update_cred(void) {
 }
 
 void uninstall_kprobe(void) {
-    if (connect_kprobe_state == 0x1)
-        unregister_kretprobe_connect();
-
     if (bind_kprobe_state == 0x1)
         unregister_kretprobe_bind();
 
@@ -2369,14 +2581,29 @@ void uninstall_kprobe(void) {
     if (ptrace_kprobe_state == 0x1)
         unregister_kprobe_ptrace();
 
-    if (recvfrom_kprobe_state == 0x1)
-        unregister_kprobe_recvfrom();
+    if (udp_recvmsg_kprobe_state == 0x1)
+        unregister_kprobe_udp_recvmsg();
+
+    if (udpv6_recvmsg_kprobe_state == 0x1)
+        unregister_kprobe_udpv6_recvmsg();
 
     if (load_module_kprobe_state == 0x1)
         unregister_kprobe_load_module();
 
     if (update_cred_kprobe_state == 0x1)
         unregister_kprobe_update_cred();
+
+    if (tcp_v4_connect_kprobe_state == 0x1)
+        unregister_kprobe_tcp_v4_connect();
+
+    if (tcp_v6_connect_kprobe_state == 0x1)
+        unregister_kprobe_tcp_v6_connect();
+
+    if (ip4_datagram_connect_kprobe_state == 0x1)
+        unregister_kprobe_ip4_datagram_connect();
+
+    if (ip6_datagram_connect_kprobe_state == 0x1)
+        unregister_kprobe_ip6_datagram_connect();
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
     if (execveat_kretprobe_state == 0x1)
@@ -2414,11 +2641,31 @@ smith_init(void) {
     "[SMITH] filter init success \n");
 
     if (CONNECT_HOOK == 1) {
-        ret = connect_register_kprobe();
+        ret = tcp_v4_connect_register_kprobe();
         if (ret < 0) {
             printk(KERN_INFO
             "[SMITH] connect register_kprobe failed, returned %d\n", ret);
         }
+
+        ret = ip4_datagram_connect_register_kprobe();
+        if (ret < 0) {
+            printk(KERN_INFO
+            "[SMITH] ip4_datagram_connect register_kprobe failed, returned %d\n", ret);
+        }
+
+#if IS_ENABLED(CONFIG_IPV6)
+        ret = tcp_v6_connect_register_kprobe();
+        if (ret < 0) {
+            printk(KERN_INFO
+            "[SMITH] tcp_v6_connect register_kprobe failed, returned %d\n", ret);
+        }
+
+        ret = ip6_datagram_connect_register_kprobe();
+        if (ret < 0) {
+            printk(KERN_INFO
+            "[SMITH] ip6_datagram_connect register_kprobe failed, returned %d\n", ret);
+        }
+#endif
     }
 
     if (BIND_HOOK == 1) {
@@ -2438,9 +2685,9 @@ smith_init(void) {
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
         ret = execveat_register_kprobe();
-           if (ret < 0) {
-               printk(KERN_INFO "[SMITH] execveat register_kprobe failed, returned %d\n", ret);
-           }
+        if (ret < 0) {
+            printk(KERN_INFO "[SMITH] execveat register_kprobe failed, returned %d\n", ret);
+        }
 #endif
 
 #ifdef CONFIG_COMPAT
@@ -2451,9 +2698,9 @@ smith_init(void) {
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
         ret = compat_execveat_register_kprobe();
-           if (ret < 0) {
-               printk(KERN_INFO "[SMITH] compat_sys_execveat register_kprobe failed, returned %d\n", ret);
-           }
+        if (ret < 0) {
+            printk(KERN_INFO "[SMITH] compat_sys_execveat register_kprobe failed, returned %d\n", ret);
+        }
 #endif
 
 #endif
@@ -2476,11 +2723,19 @@ smith_init(void) {
     }
 
     if (DNS_HOOK == 1) {
-        ret = recvfrom_register_kprobe();
+        ret = udp_recvmsg_register_kprobe();
         if (ret < 0) {
             printk(KERN_INFO
-            "[SMITH] recvfrom register_kprobe failed, returned %d\n", ret);
+            "[SMITH] udp_recvmsg register_kprobe failed, returned %d\n", ret);
         }
+
+#if IS_ENABLED(CONFIG_IPV6)
+        ret = udpv6_recvmsg_register_kprobe();
+        if (ret < 0) {
+            printk(KERN_INFO
+            "[SMITH] udpv6_recvmsg register_kprobe failed, returned %d\n", ret);
+        }
+#endif
     }
 
     if (LOAD_MODULE_HOOK == 1) {
@@ -2539,7 +2794,7 @@ module_init(smith_init)
 module_exit(smith_exit)
 
 MODULE_LICENSE("GPL v2");
-MODULE_VERSION("1.2.4");
+MODULE_VERSION("1.2.5");
 MODULE_AUTHOR("E_Bwill <cy_sniper@yeah.net>");
 MODULE_DESCRIPTION("get execve,connect,bind,ptrace,load_module,dns_query,create_file,cred_change,"
 "and proc_file_hook,syscall_hook,lkm_hidden,interrupts_hook info");

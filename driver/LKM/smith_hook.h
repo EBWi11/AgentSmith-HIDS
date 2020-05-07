@@ -6,6 +6,7 @@
 * Description:	smith_hook header
 *******************************************************************/
 #include <asm/syscall.h>
+#include <linux/uio.h>
 #include <linux/kprobes.h>
 #include <linux/binfmts.h>
 #include <linux/fdtable.h>
@@ -45,7 +46,6 @@
 
 typedef unsigned short int uint16;
 typedef unsigned long int uint32;
-
 
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 32)
 #define __ARG_PLACEHOLDER_1 0,
