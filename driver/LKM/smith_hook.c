@@ -40,7 +40,6 @@
 int share_mem_flag = -1;
 int checkCPUendianRes = 0;
 
-char connect_kprobe_state = 0x0;
 char bind_kprobe_state = 0x0;
 char execve_kprobe_state = 0x0;
 char compat_execve_kprobe_state = 0x0;
@@ -50,6 +49,10 @@ char udp_recvmsg_kprobe_state = 0x0;
 char udpv6_recvmsg_kprobe_state = 0x0;
 char load_module_kprobe_state = 0x0;
 char update_cred_kprobe_state = 0x0;
+char ip4_datagram_connect_kprobe_state = 0x0;
+char ip6_datagram_connect_kprobe_state = 0x0;
+char tcp_v4_connect_kprobe_state = 0x0;
+char tcp_v6_connect_kprobe_state = 0x0;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
 char execveat_kretprobe_state = 0x0;
@@ -409,14 +412,10 @@ struct bind_data {
 };
 
 struct connect_data {
-    int fd;
-    struct sockaddr *dirp;
+    struct sock *sk;
+    int sa_family;
+    int type;
 };
-
-struct create_file_data {
-    int fd;
-};
-
 
 #if EXIT_PROTECT == 1
 void exit_protect_action(void)
@@ -573,23 +572,9 @@ int bind_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
     return 0;
 }
 
-int connect_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
-    struct connect_data *data;
-    if (share_mem_flag != -1) {
-        data = (struct connect_data *) ri->data;
-        data->fd = p_get_arg1(regs);
-        data->dirp = (struct sockaddr *) p_get_arg2(regs);
-    }
-    return 0;
-}
-
 int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
-    int err;
-    int fd;
     int flag = 0;
-    int copy_res;
     int retval;
-    int sa_family;
     int comm_free = 0;
     int result_str_len;
     unsigned int sessionid;
@@ -601,9 +586,7 @@ int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
     char *result_str;
     char *comm = NULL;
     char *buffer = NULL;
-    struct socket *socket;
     struct sock *sk;
-    struct sockaddr tmp_dirp;
     struct connect_data *data;
     struct inet_sock *inet;
 
@@ -611,73 +594,54 @@ int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
         return 0;
 
     retval = regs_return_value(regs);
-
     data = (struct connect_data *) ri->data;
-    fd = data->fd;
 
-    if (unlikely(!fd))
-        goto out;
+    sk = data->sk;
+    inet = (struct inet_sock *) sk;
 
-    socket = sockfd_lookup(fd, &err);
-    if (likely(socket)) {
-        copy_res = copy_from_user(&tmp_dirp, data->dirp, 16);
-
-        if (unlikely(copy_res)) {
-            sockfd_put(socket);
-            goto out;
-        }
-
-        switch (tmp_dirp.sa_family) {
-            case AF_INET:
-                sk = socket->sk;
-                inet = (struct inet_sock *) sk;
+    switch (data->sa_family) {
+        case AF_INET:
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
-                if (likely(inet->inet_daddr)) {
-                    snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_daddr));
-                    snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_saddr));
+            if (likely(inet->inet_daddr)) {
+                snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_daddr));
+                snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_saddr));
+                snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
+                snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
+                flag = 1;
+            }
+#else
+            if (likely(inet->daddr)) {
+                snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->daddr));
+                snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->saddr));
+                snprintf(sport, 16, "%d", Ntohs(inet->sport));
+                snprintf(dport, 16, "%d", Ntohs(inet->dport));
+                flag = 1;
+            }
+#endif
+            break;
+#if IS_ENABLED(CONFIG_IPV6)
+            case AF_INET6:
+#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
+                if (likely(inet->inet_dport)) {
+                    snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_daddr));
+                    snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_rcv_saddr));
                     snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
                     snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
                     flag = 1;
                 }
 #else
-                if (likely(inet->daddr)) {
-                    snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->daddr));
-                    snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->saddr));
+                if (likely(inet->dport)) {
+                    snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->daddr));
+                    snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->saddr));
                     snprintf(sport, 16, "%d", Ntohs(inet->sport));
                     snprintf(dport, 16, "%d", Ntohs(inet->dport));
                     flag = 1;
                 }
 #endif
-                sa_family = AF_INET;
                 break;
-#if IS_ENABLED(CONFIG_IPV6)
-                case AF_INET6:
-                    sk = socket->sk;
-                    inet = (struct inet_sock*)sk;
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
-                    if (likely(inet->inet_dport)) {
-                        snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_daddr));
-                        snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_rcv_saddr));
-                        snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
-                        snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
-                        flag = 1;
-                    }
-#else
-                    if (likely(inet->dport)) {
-                        snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->daddr));
-                        snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->saddr));
-                        snprintf(sport, 16, "%d", Ntohs(inet->sport));
-                        snprintf(dport, 16, "%d", Ntohs(inet->dport));
-                        flag = 1;
-                    }
 #endif
-                    sa_family = AF_INET6;
-                    break;
-#endif
-            default:
-                break;
-        }
-        sockfd_put(socket);
+        default:
+            break;
     }
 
     if (connect_dip_check(dip) == 1)
@@ -707,13 +671,13 @@ int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
         if (likely(result_str)) {
             snprintf(result_str, result_str_len,
-                     "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%u",
-                     get_current_uid(), "\n", CONNECT_TYPE, "\n", sa_family,
-                     "\n", fd, "\n", dport, "\n", dip, "\n", abs_path, "\n",
-                     current->pid, "\n", current->real_parent->pid, "\n",
-                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                     comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                     sip, "\n", sport, "\n", retval, "\n", sessionid);
+                     "%d\n%s\n%d\n%d\n%s\n%s\n%s\n%d\n%d\n%d\n%d\n%s\n%s\n%s\n%s\n%d\n%u",
+                     get_current_uid(), CONNECT_TYPE, data->sa_family,
+                     data->type, dport, dip, abs_path,
+                     current->pid, current->real_parent->pid,
+                     pid_vnr(task_pgrp(current)), current->tgid,
+                     comm, current->nsproxy->uts_ns->name.nodename,
+                     sip, sport, retval, sessionid);
 
             send_msg_to_user(result_str, 1);
         }
@@ -1759,7 +1723,7 @@ void dns_data_transport(int sa_family, char *query, char dip[64], char sip[64], 
     char *buffer = NULL;
     char *nodename = "-1";
 
-    if(connect_dip_check(dip) == 1) {
+    if (connect_dip_check(dip) == 1) {
         kfree(query);
         return;
     }
@@ -2203,13 +2167,57 @@ int update_cred_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
     return 0;
 }
 
-struct kretprobe connect_kretprobe = {
-        .kp.symbol_name = P_GET_SYSCALL_NAME(connect),
-        .data_size  = sizeof(struct connect_data),
-        .handler = connect_handler,
-        .entry_handler = connect_entry_handler,
-        .maxactive = MAXACTIVE,
-};
+int tcp_v4_connect_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
+    struct connect_data *data;
+    if (share_mem_flag == -1)
+        return 0;
+
+    data = (struct connect_data *) ri->data;
+    data->sk = (struct sock *) p_get_arg1(regs);
+    data->sa_family = AF_INET;
+    data->type = 4;
+    return 0;
+}
+
+#if IS_ENABLED(CONFIG_IPV6)
+int tcp_v6_connect_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
+    struct connect_data *data;
+    if (share_mem_flag == -1)
+        return 0;
+
+    data = (struct connect_data *) ri->data;
+    data->sa_family = AF_INET6;
+    data->type = 6;
+    data->sk = (struct sock *) p_get_arg1(regs);
+    return 0;
+}
+#endif
+
+int ip4_datagram_connect_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
+    struct connect_data *data;
+    if (share_mem_flag == -1)
+        return 0;
+
+    data = (struct connect_data *) ri->data;
+    data->sa_family = AF_INET;
+    data->type = 4;
+    data->sk = (struct sock *) p_get_arg1(regs);
+    return 0;
+}
+
+#if IS_ENABLED(CONFIG_IPV6)
+int ip6_datagram_connect_entry_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
+    struct connect_data *data;
+    if (share_mem_flag == -1)
+        return 0;
+
+    data = (struct connect_data *) ri->data;
+    data->sa_family = AF_INET6;
+    data->type = 6;
+    data->sk = (struct sock *) p_get_arg1(regs);
+    return 0;
+}
+#endif
 
 struct kretprobe bind_kretprobe = {
         .kp.symbol_name = P_GET_SYSCALL_NAME(bind),
@@ -2280,7 +2288,39 @@ struct kretprobe udpv6_recvmsg_kretprobe = {
         .entry_handler = udpv6_recvmsg_entry_handler,
         .maxactive = MAXACTIVE,
 };
+
+struct kretprobe ip6_datagram_connect_kretprobe = {
+        .kp.symbol_name = "ip6_datagram_connect",
+        .data_size  = sizeof(struct connect_data),
+        .handler = connect_handler,
+        .entry_handler = ip6_datagram_connect_entry_handler,
+        .maxactive = MAXACTIVE,
+};
+
+struct kretprobe tcp_v6_connect_kretprobe = {
+        .kp.symbol_name = "tcp_v6_connect",
+        .data_size  = sizeof(struct connect_data),
+        .handler = connect_handler,
+        .entry_handler = tcp_v6_connect_entry_handler,
+        .maxactive = MAXACTIVE,
+};
 #endif
+
+struct kretprobe ip4_datagram_connect_kretprobe = {
+        .kp.symbol_name = "ip4_datagram_connect",
+        .data_size  = sizeof(struct connect_data),
+        .handler = connect_handler,
+        .entry_handler = ip4_datagram_connect_entry_handler,
+        .maxactive = MAXACTIVE,
+};
+
+struct kretprobe tcp_v4_connect_kretprobe = {
+        .kp.symbol_name = "tcp_v4_connect",
+        .data_size  = sizeof(struct connect_data),
+        .handler = connect_handler,
+        .entry_handler = tcp_v4_connect_entry_handler,
+        .maxactive = MAXACTIVE,
+};
 
 struct kprobe load_module_kprobe = {
         .symbol_name = "load_module",
@@ -2294,20 +2334,6 @@ struct kretprobe update_cred_kretprobe = {
         .entry_handler = update_cred_entry_handler,
         .maxactive = MAXACTIVE,
 };
-
-int connect_register_kprobe(void) {
-    int ret;
-    ret = register_kretprobe(&connect_kretprobe);
-
-    if (ret == 0)
-        connect_kprobe_state = 0x1;
-
-    return ret;
-}
-
-void unregister_kretprobe_connect(void) {
-    unregister_kretprobe(&connect_kretprobe);
-}
 
 int bind_register_kprobe(void) {
     int ret;
@@ -2437,7 +2463,63 @@ int udpv6_recvmsg_register_kprobe(void) {
 void unregister_kprobe_udpv6_recvmsg(void) {
     unregister_kretprobe(&udpv6_recvmsg_kretprobe);
 }
+
+int ip6_datagram_connect_register_kprobe(void) {
+    int ret;
+    ret = register_kretprobe(&ip6_datagram_connect_kretprobe);
+
+    if (ret == 0)
+        ip6_datagram_connect_kprobe_state = 0x1;
+
+    return ret;
+}
+
+void unregister_kprobe_ip6_datagram_connect(void) {
+    unregister_kretprobe(&ip6_datagram_connect_kretprobe);
+}
+
+int tcp_v6_connect_register_kprobe(void) {
+    int ret;
+    ret = register_kretprobe(&tcp_v6_connect_kretprobe);
+
+    if (ret == 0)
+        tcp_v6_connect_kprobe_state = 0x1;
+
+    return ret;
+}
+
+void unregister_kprobe_tcp_v6_connect(void) {
+    unregister_kretprobe(&tcp_v6_connect_kretprobe);
+}
 #endif
+
+int ip4_datagram_connect_register_kprobe(void) {
+    int ret;
+    ret = register_kretprobe(&ip4_datagram_connect_kretprobe);
+
+    if (ret == 0)
+        ip4_datagram_connect_kprobe_state = 0x1;
+
+    return ret;
+}
+
+void unregister_kprobe_ip4_datagram_connect(void) {
+    unregister_kretprobe(&ip4_datagram_connect_kretprobe);
+}
+
+int tcp_v4_connect_register_kprobe(void) {
+    int ret;
+    ret = register_kretprobe(&tcp_v4_connect_kretprobe);
+
+    if (ret == 0)
+        tcp_v4_connect_kprobe_state = 0x1;
+
+    return ret;
+}
+
+void unregister_kprobe_tcp_v4_connect(void) {
+    unregister_kretprobe(&tcp_v4_connect_kretprobe);
+}
 
 int load_module_register_kprobe(void) {
     int ret;
@@ -2474,9 +2556,6 @@ void unregister_kprobe_update_cred(void) {
 }
 
 void uninstall_kprobe(void) {
-    if (connect_kprobe_state == 0x1)
-        unregister_kretprobe_connect();
-
     if (bind_kprobe_state == 0x1)
         unregister_kretprobe_bind();
 
@@ -2500,6 +2579,18 @@ void uninstall_kprobe(void) {
 
     if (update_cred_kprobe_state == 0x1)
         unregister_kprobe_update_cred();
+
+    if (tcp_v4_connect_kprobe_state == 0x1)
+        unregister_kprobe_tcp_v4_connect();
+
+    if (tcp_v6_connect_kprobe_state == 0x1)
+        unregister_kprobe_tcp_v6_connect();
+
+    if (ip4_datagram_connect_kprobe_state == 0x1)
+        unregister_kprobe_ip4_datagram_connect();
+
+    if (ip6_datagram_connect_kprobe_state == 0x1)
+        unregister_kprobe_ip6_datagram_connect();
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
     if (execveat_kretprobe_state == 0x1)
@@ -2537,11 +2628,31 @@ smith_init(void) {
     "[SMITH] filter init success \n");
 
     if (CONNECT_HOOK == 1) {
-        ret = connect_register_kprobe();
+        ret = tcp_v4_connect_register_kprobe();
         if (ret < 0) {
             printk(KERN_INFO
             "[SMITH] connect register_kprobe failed, returned %d\n", ret);
         }
+
+        ret = ip4_datagram_connect_register_kprobe();
+        if (ret < 0) {
+            printk(KERN_INFO
+            "[SMITH] ip4_datagram_connect register_kprobe failed, returned %d\n", ret);
+        }
+
+#if IS_ENABLED(CONFIG_IPV6)
+        ret = tcp_v6_connect_register_kprobe();
+        if (ret < 0) {
+            printk(KERN_INFO
+            "[SMITH] tcp_v6_connect register_kprobe failed, returned %d\n", ret);
+        }
+
+        ret = ip6_datagram_connect_register_kprobe();
+        if (ret < 0) {
+            printk(KERN_INFO
+            "[SMITH] ip6_datagram_connect register_kprobe failed, returned %d\n", ret);
+        }
+#endif
     }
 
     if (BIND_HOOK == 1) {

@@ -47,7 +47,6 @@
 typedef unsigned short int uint16;
 typedef unsigned long int uint32;
 
-
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(2, 6, 32)
 #define __ARG_PLACEHOLDER_1 0,
 #define config_enabled(cfg) _config_enabled(cfg)
