@@ -236,6 +236,7 @@ char *getfullpath(struct inode *inod, char *buffer, int len) {
     if (unlikely(!pinode))
         return NULL;
 
+    spin_lock(&pinode->i_lock);
     list_for_each(plist, &pinode->i_dentry)
     {
         tmp = list_entry(plist,
@@ -245,6 +246,7 @@ char *getfullpath(struct inode *inod, char *buffer, int len) {
             break;
         }
     }
+    spin_unlock(&pinode->i_lock);
 
     if (unlikely(!dent))
         return NULL;
@@ -343,8 +345,11 @@ char *get_pid_tree(void) {
     snprintf(pid, sizeof(size_t), "%d", task->pid);
     tmp_data = kzalloc(4096, GFP_ATOMIC);
 
-    if (unlikely(!tmp_data))
+    if (unlikely(!tmp_data)) {
+        if (comm_free == 1)
+            kfree(comm);
         return NULL;
+    }
 
     strcat(tmp_data, pid);
     strcat(tmp_data, "(");
@@ -387,7 +392,7 @@ char *get_pid_tree(void) {
         strcat(res, comm);
         strcat(res, ")->");
         strcat(res, tmp_data);
-        strcpy(tmp_data, res);
+        strncpy(tmp_data, res, strlen(res));
         kfree(res);
 
         if (likely(comm_free == 1))
@@ -404,10 +409,15 @@ struct bind_data {
 
 struct udp_recvmsg_data {
     int flag;
+    int qr;
+    int opcode;
+    int rcode;
+    int sa_family;
     char sport[16];
     char dport[16];
     char sip[64];
     char dip[64];
+    char *query;
 };
 
 struct connect_data {
@@ -497,11 +507,11 @@ int bind_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
             case AF_INET:
                 sin = (struct sockaddr_in *) &tmp_dirp;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
-            if (likely(tmp_dirp.sa_data)) {
-                snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr));
-                snprintf(sport, 16, "%d", Ntohs(sin->sin_port));
-                flag = 1;
-            }
+                if (likely(tmp_dirp.sa_data)) {
+                    snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr));
+                    snprintf(sport, 16, "%d", Ntohs(sin->sin_port));
+                    flag = 1;
+                }
 #else
                 if (likely(tmp_dirp.sa_data)) {
                     snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr));
@@ -512,23 +522,23 @@ int bind_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                 sa_family = AF_INET;
                 break;
 #if IS_ENABLED(CONFIG_IPV6)
-            case AF_INET6:
-                sin6 = (struct sockaddr_in6 *) &tmp_dirp;
+                case AF_INET6:
+                    sin6 = (struct sockaddr_in6 *) &tmp_dirp;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
-                if (likely(tmp_dirp.sa_data)) {
-                    snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sin6->sin6_addr));
-                    snprintf(sport, 16, "%d", Ntohs(sin6->sin6_port));
-                    flag = 1;
-                }
+                    if (likely(tmp_dirp.sa_data)) {
+                        snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sin6->sin6_addr));
+                        snprintf(sport, 16, "%d", Ntohs(sin6->sin6_port));
+                        flag = 1;
+                    }
 #else
-                if (likely(tmp_dirp.sa_data)) {
-                    snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sin6->sin6_addr));
-                    snprintf(sport, 16, "%d", Ntohs(sin6->sin6_port));
-                    flag = 1;
-                }
+                    if (likely(tmp_dirp.sa_data)) {
+                        snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sin6->sin6_addr));
+                        snprintf(sport, 16, "%d", Ntohs(sin6->sin6_port));
+                        flag = 1;
+                    }
 #endif
-                sa_family = AF_INET6;
-                break;
+                    sa_family = AF_INET6;
+                    break;
 #endif
             default:
                 break;
@@ -640,13 +650,13 @@ int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                     sk = socket->sk;
                     inet = (struct inet_sock *) sk;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
-                if (likely(inet->inet_daddr)) {
-                    snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_daddr));
-                    snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_saddr));
-                    snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
-                    snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
-                    flag = 1;
-                }
+                    if (likely(inet->inet_daddr)) {
+                        snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_daddr));
+                        snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_saddr));
+                        snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
+                        snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
+                        flag = 1;
+                    }
 #else
                     if (likely(inet->daddr)) {
                         snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->daddr));
@@ -659,28 +669,28 @@ int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                     sa_family = AF_INET;
                     break;
 #if IS_ENABLED(CONFIG_IPV6)
-                case AF_INET6:
-                    sk = socket->sk;
-                    inet = (struct inet_sock*)sk;
+                    case AF_INET6:
+                        sk = socket->sk;
+                        inet = (struct inet_sock*)sk;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
-                    if (likely(inet->inet_dport)) {
-                        snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_daddr));
-                        snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_rcv_saddr));
-                        snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
-                        snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
-                        flag = 1;
-                    }
+                        if (likely(inet->inet_dport)) {
+                            snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_daddr));
+                            snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_rcv_saddr));
+                            snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
+                            snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
+                            flag = 1;
+                        }
 #else
-                    if (likely(inet->dport)) {
-                        snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->daddr));
-                        snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->saddr));
-                        snprintf(sport, 16, "%d", Ntohs(inet->sport));
-                        snprintf(dport, 16, "%d", Ntohs(inet->dport));
-                        flag = 1;
-                    }
+                        if (likely(inet->dport)) {
+                            snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->daddr));
+                            snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->saddr));
+                            snprintf(sport, 16, "%d", Ntohs(inet->sport));
+                            snprintf(dport, 16, "%d", Ntohs(inet->dport));
+                            flag = 1;
+                        }
 #endif
-                    sa_family = AF_INET6;
-                    break;
+                        sa_family = AF_INET6;
+                        break;
 #endif
                 default:
                     break;
@@ -1135,7 +1145,6 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                 else
                     pid_tree_free = 1;
 
-                pid_tree_free = 1;
                 socket_pid = task->pid;
                 socket_pname_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
                 if (unlikely(!socket_pname_buf))
@@ -1175,15 +1184,15 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
 
         if(likely(result_str)) {
             snprintf(result_str, result_str_len,
-                 "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%u%s%s%s%s%s%s%s%s%s%d%s%s%s%s%s%d%s%s%s%s%s%s",
-                 get_current_uid(), "\n", EXECVE_TYPE, "\n", pname, "\n",
-                 abs_path, "\n", argv, "\n", current->pid, "\n",
-                 current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
-                 "\n", current->tgid, "\n", comm, "\n",
-                 nodename,"\n",tmp_stdin,"\n",tmp_stdout,
-                 "\n", sessionid, "\n", dip, "\n", dport,"\n", sip,"\n", sport,"\n", sa_family,
-                 "\n", pid_tree, "\n", tty_name,"\n", socket_pid, "\n", socket_pname, "\n",
-                 data->ssh_connection, "\n", data->ld_preload);
+                 "%d\n%s\n%s\n%s\n%s\n%d\n%d\n%d\n%d\n%s\n%s\n%s\n%s\n%u\n%s\n%s\n%s\n%s\n%d\n%s\n%s\n%d\n%s\n%s\n%s",
+                 get_current_uid(), EXECVE_TYPE, pname,
+                 abs_path, argv, current->pid,
+                 current->real_parent->pid, pid_vnr(task_pgrp(current)),
+                 current->tgid, comm,
+                 nodename, tmp_stdin, tmp_stdout,
+                 sessionid, dip, dport, sip, sport, sa_family,
+                 pid_tree, tty_name, socket_pid, socket_pname,
+                 data->ssh_connection, data->ld_preload);
 
             send_msg_to_user(result_str, 1);
         }
@@ -1515,20 +1524,20 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                                 socket_check = 1;
                                 break;
 #if IS_ENABLED(CONFIG_IPV6)
-                            case AF_INET6:
+                                case AF_INET6:
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
-                                snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_daddr));
-                                snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_rcv_saddr));
-                                snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
-                                snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
+                                    snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_daddr));
+                                    snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_rcv_saddr));
+                                    snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
+                                    snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
 #else
-                                snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->daddr));
-                                snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->saddr));
-                                snprintf(sport, 16, "%d", Ntohs(inet->sport));
-                                snprintf(dport, 16, "%d", Ntohs(inet->dport));
+                                    snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->daddr));
+                                    snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->saddr));
+                                    snprintf(sport, 16, "%d", Ntohs(inet->sport));
+                                    snprintf(dport, 16, "%d", Ntohs(inet->dport));
 #endif
-                                socket_check = 1;
-                                break;
+                                    socket_check = 1;
+                                    break;
 #endif
                         }
                     }
@@ -1581,15 +1590,15 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
         if (likely(result_str)) {
             snprintf(result_str, result_str_len,
-                     "%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%u%s%s%s%s%s%s%s%s%s%d%s%s%s%s%s%d%s%s%s%s%s%s",
-                     get_current_uid(), "\n", EXECVE_TYPE, "\n", pname, "\n",
-                     abs_path, "\n", argv, "\n", current->pid, "\n",
-                     current->real_parent->pid, "\n", pid_vnr(task_pgrp(current)),
-                     "\n", current->tgid, "\n", comm, "\n",
-                     nodename, "\n", tmp_stdin, "\n", tmp_stdout,
-                     "\n", sessionid, "\n", dip, "\n", dport, "\n", sip, "\n", sport, "\n", sa_family,
-                     "\n", pid_tree, "\n", tty_name, "\n", socket_pid, "\n", socket_pname, "\n",
-                     data->ssh_connection, "\n", data->ld_preload);
+                     "%d\n%s\n%s\n%s\n%s\n%d\n%d\n%d\n%d\n%s\n%s\n%s\n%s\n%u\n%s\n%s\n%s\n%s\n%d\n%s\n%s\n%d\n%s\n%s\n%s",
+                     get_current_uid(), EXECVE_TYPE, pname,
+                     abs_path, argv, current->pid,
+                     current->real_parent->pid, pid_vnr(task_pgrp(current)),
+                     current->tgid, comm,
+                     nodename, tmp_stdin, tmp_stdout,
+                     sessionid, dip, dport, sip, sport, sa_family,
+                     pid_tree, tty_name, socket_pid, socket_pname,
+                     data->ssh_connection, data->ld_preload);
 
             send_msg_to_user(result_str, 1);
         }
@@ -1691,11 +1700,11 @@ int security_inode_create_handler(struct kretprobe_instance *ri, struct pt_regs 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
         if (likely(result_str)) {
             snprintf(result_str, result_str_len,
-                     "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
-                     get_current_uid(), "\n", CREATE_FILE, "\n", abs_path, "\n", pathstr,
-                     "\n", current->pid, "\n", current->real_parent->pid, "\n",
-                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                     comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
+                     "%d\n%s\n%s\n%s\n%d\n%d\n%d\n%d\n%s\n%s\n%u",
+                     get_current_uid(), CREATE_FILE, abs_path, pathstr,
+                     current->pid, current->real_parent->pid,
+                     pid_vnr(task_pgrp(current)), current->tgid,
+                     comm, current->nsproxy->uts_ns->name.nodename, sessionid);
             send_msg_to_user(result_str, 1);
         }
 
@@ -1753,12 +1762,12 @@ void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long f
 
             if (likely(result_str)) {
                 snprintf(result_str, result_str_len,
-                         "%d%s%s%s%ld%s%ld%s%p%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
-                         get_current_uid(), "\n", PTRACE_TYPE, "\n", request,
-                         "\n", pid, "\n", addr, "\n", &data, "\n", abs_path, "\n",
-                         current->pid, "\n", current->real_parent->pid, "\n",
-                         pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                         comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
+                         "%d\n%s\n%ld\n%ld\n%p\n%s\n%s\n%d\n%d\n%d\n%d\n%s\n%s\n%u",
+                         get_current_uid(), PTRACE_TYPE, request,
+                         pid, addr, &data, abs_path,
+                         current->pid, current->real_parent->pid,
+                         pid_vnr(task_pgrp(current)), current->tgid,
+                         comm, current->nsproxy->uts_ns->name.nodename, sessionid);
                 send_msg_to_user(result_str, 1);
             }
 
@@ -1780,26 +1789,22 @@ int udp_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *reg
         struct msghdr *msg;
         void *tmp_msg;
 
+        int flags;
         int opcode = 0;
         int qr;
         int rcode = 0;
-        int comm_free = 0;
-        int result_str_len;
-        int sa_family = AF_INET;
         int recv_data_copy_res = 1;
-        unsigned int sessionid;
-        char *comm = NULL;
-        char *query = NULL;
-        char *abs_path = NULL;
-        char *result_str = NULL;
-        char *buffer = NULL;
         unsigned char *recv_data = NULL;
 
         data = (struct udp_recvmsg_data *) ri->data;
+        data->flag = 0;
+
+        flags = (int) p_get_arg5(regs);
+        if (flags & MSG_ERRQUEUE)
+            return 0;
+
         sk = (struct sock *) p_get_arg1(regs);
         inet = (struct inet_sock *) sk;
-
-        data->flag = 0;
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
         if (inet->inet_dport == 13568 || inet->inet_dport == 59668)
@@ -1807,7 +1812,7 @@ int udp_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *reg
         if (inet->dport == 13568 || inet->dport == 59668)
 #endif
         {
-            data->flag = 1;
+
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
             if (likely(inet->inet_daddr)) {
                 snprintf(data->dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_daddr));
@@ -1830,16 +1835,7 @@ int udp_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *reg
             msg = (struct msghdr *) tmp_msg;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
-            if(msg->msg_iter.kvec) {
-                if(msg->msg_iter.kvec->iov_len > 0) {
-                    recv_data = kzalloc(msg->msg_iter.kvec->iov_len, GFP_ATOMIC);
-                    if(unlikely(!recv_data))
-                        return 0;
-
-                    recv_data_copy_res = copy_from_user(recv_data, msg->msg_iter.kvec->iov_base, msg->msg_iter.iov->iov_len);
-                } else
-                    return 0;
-            } else if(msg->msg_iter.iov) {
+            if(msg->msg_iter.iov) {
                 if(msg->msg_iter.iov->iov_len > 0) {
                     recv_data = kzalloc(msg->msg_iter.iov->iov_len, GFP_ATOMIC);
                     if(unlikely(!recv_data))
@@ -1848,135 +1844,13 @@ int udp_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *reg
                     recv_data_copy_res = copy_from_user(recv_data, msg->msg_iter.iov->iov_base, msg->msg_iter.iov->iov_len);
                 } else
                     return 0;
-            } else
-                return 0;
-#else
-
-#endif
-        }
-
-        if (unlikely(recv_data_copy_res != 0))
-            return 0;
-        if (sizeof(recv_data) >= 8) {
-
-            qr = (recv_data[2] & 0x80) ? 1 : 0;
-            if (qr == 1) {
-                opcode = (recv_data[2] >> 3) & 0x0f;
-                rcode = recv_data[3] & 0x0f;
-                query = kzalloc(strlen(recv_data + 12), GFP_ATOMIC);
-                if (unlikely(!query))
-                    query = "-2";
-                else
-                    getDNSQuery(recv_data, 12, query);
-
-                sessionid = get_sessionid();
-
-                buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
-                if (unlikely(!buffer))
-                    abs_path = "-2";
-                else
-                    abs_path = get_exe_file(current, buffer, PATH_MAX);
-
-                if (strlen(current->comm) > 0) {
-                    comm = str_replace(current->comm, "\n", " ");
-                    if (likely(comm))
-                        comm_free = 1;
-                    else
-                        comm = "";
-                } else
-                    comm = "";
-
-                result_str_len = strlen(query) + strlen(current->nsproxy->uts_ns->name.nodename) +
-                                 strlen(comm) + strlen(abs_path) + 172;
-
-                result_str = kzalloc(result_str_len, GFP_ATOMIC);
-                if (likely(result_str)) {
-                    snprintf(result_str, result_str_len,
-                             "%d%s%s%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%s%s%u",
-                             get_current_uid(), "\n", DNS_TYPE, "\n", sa_family,
-                             "\n", data->dport, "\n", data->dip, "\n", abs_path, "\n",
-                             current->pid, "\n", current->real_parent->pid, "\n",
-                             pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                             comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                             data->sip, "\n", data->sport, "\n", qr, "\n", opcode, "\n", rcode, "\n", query, "\n",
-                             sessionid);
-
-                    send_msg_to_user(result_str, 1);
-                }
-
-                if (likely(strcmp(query, "-2")))
-                    kfree(query);
-
-                if (likely(strcmp(recv_data, "-2")))
-                    kfree(recv_data);
-
-                if (likely(strcmp(abs_path, "-2")))
-                    kfree(buffer);
-
-                if (likely(comm_free == 1))
-                    kfree(comm);
-            }
-        }
-    }
-    return 0;
-}
-
-int udp_recvmsg_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
-    return 0;
-    unsigned int retval;
-    struct msghdr *msg;
-    struct udp_recvmsg_data *data;
-
-    if (share_mem_flag != -1) {
-        int opcode = 0;
-        int qr;
-        int rcode = 0;
-        int comm_free = 0;
-        int result_str_len;
-        int sa_family = AF_INET;
-        int recv_data_copy_res = 1;
-        unsigned int sessionid;
-        char *comm = NULL;
-        char *query = NULL;
-        char *abs_path = NULL;
-        char *result_str = NULL;
-        char *buffer = NULL;
-        void *tmp_msg;
-        unsigned char *recv_data = NULL;
-
-        data = (struct udp_recvmsg_data *) ri->data;
-
-        if (data->flag == 1) {
-            retval = regs_return_value(regs);
-
-            printk("udp %s:%s %s:%s %d", data->dip, data->dport, data->sip, data->sport, retval);
-            if (retval < 8)
-                return 0;
-
-            tmp_msg = (void *) p_get_arg2(regs);
-            if (IS_ERR_OR_NULL(tmp_msg))
-                return 0;
-
-            msg = (struct msghdr *) tmp_msg;
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
-            if(msg->msg_iter.kvec) {
+            } else if(msg->msg_iter.kvec) {
                 if(msg->msg_iter.kvec->iov_len > 0) {
                     recv_data = kzalloc(msg->msg_iter.kvec->iov_len, GFP_ATOMIC);
                     if(unlikely(!recv_data))
                         return 0;
 
-                    memcpy(recv_data, msg->msg_iter.kvec->iov_base, msg->msg_iter.kvec->iov_len);
-                    recv_data_copy_res = 0;
-                } else
-                    return 0;
-            } else if(msg->msg_iter.iov) {
-                if(msg->msg_iter.iov->iov_len > 0) {
-                    recv_data = kzalloc(msg->msg_iter.iov->iov_len, GFP_ATOMIC);
-                    if(unlikely(!recv_data))
-                        return 0;
-
-                    recv_data_copy_res = copy_from_user(recv_data, msg->msg_iter.iov->iov_base, msg->msg_iter.iov->iov_len);
+                    recv_data_copy_res = copy_from_user(recv_data, msg->msg_iter.kvec->iov_base, msg->msg_iter.kvec->iov_len);
                 } else
                     return 0;
             } else
@@ -1985,30 +1859,68 @@ int udp_recvmsg_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
             if (retval > 8)
                 recv_data = kzalloc(retval, GFP_ATOMIC);
 
-            if (unlikely(!recv_data)) {
-                recv_data_copy_res = -1;
-                recv_data = "-2";
-            } else {
+            if (unlikely(!recv_data))
+                return 0;
+            else
                 recv_data_copy_res = copy_from_user(recv_data, msg->msg_iov->iov_base, retval);
-            }
 #endif
         }
 
-        if (unlikely(recv_data_copy_res != 0))
+        if (unlikely(recv_data_copy_res != 0)) {
+            kfree(recv_data);
             return 0;
-        else
-            printk(recv_data);
+        }
 
-        qr = (recv_data[2] & 0x80) ? 1 : 0;
-        if (qr == 1) {
-            opcode = (recv_data[2] >> 3) & 0x0f;
-            rcode = recv_data[3] & 0x0f;
-            query = kzalloc(strlen(recv_data + 12), GFP_ATOMIC);
-            if (unlikely(!query))
-                query = "-2";
-            else
-                getDNSQuery(recv_data, 12, query);
+        if (sizeof(recv_data) >= 8) {
+            qr = (recv_data[2] & 0x80) ? 1 : 0;
+            if (qr == 1) {
+                opcode = (recv_data[2] >> 3) & 0x0f;
+                rcode = recv_data[3] & 0x0f;
 
+                if (strlen(recv_data + 12) == 0) {
+                    kfree(recv_data);
+                    return 0;
+                }
+
+                data->query = kzalloc(strlen(recv_data + 12), GFP_ATOMIC);
+                if (unlikely(IS_ERR_OR_NULL(data->query)))
+                    data->query = "-2";
+                else
+                    getDNSQuery(recv_data, 12, data->query);
+
+                if (!data->query) {
+                    kfree(data->query);
+                } else {
+                    data->flag = 1;
+                    data->qr = qr;
+                    data->rcode = rcode;
+                    data->opcode = opcode;
+                    data->sa_family = AF_INET;
+                }
+            }
+        }
+
+        kfree(recv_data);
+    }
+
+    return 0;
+}
+
+int udp_recvmsg_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
+    struct udp_recvmsg_data *data;
+    if (share_mem_flag != -1) {
+        int comm_free = 0;
+        int result_str_len;
+        unsigned int sessionid;
+        char *comm = NULL;
+        char *abs_path = NULL;
+        char *result_str = NULL;
+        char *buffer = NULL;
+        char *nodename = "-1";
+
+        data = (struct udp_recvmsg_data *) ri->data;
+
+        if (data->flag == 1) {
             sessionid = get_sessionid();
 
             buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
@@ -2026,29 +1938,29 @@ int udp_recvmsg_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
             } else
                 comm = "";
 
-            result_str_len = strlen(query) + strlen(current->nsproxy->uts_ns->name.nodename) +
+            if (likely(current->nsproxy->uts_ns))
+                nodename = current->nsproxy->uts_ns->name.nodename;
+
+            result_str_len = strlen(data->query) + strlen(nodename) +
                              strlen(comm) + strlen(abs_path) + 172;
 
             result_str = kzalloc(result_str_len, GFP_ATOMIC);
             if (likely(result_str)) {
                 snprintf(result_str, result_str_len,
-                         "%d%s%s%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%s%s%u",
-                         get_current_uid(), "\n", DNS_TYPE, "\n", sa_family,
-                         "\n", data->dport, "\n", data->dip, "\n", abs_path, "\n",
-                         current->pid, "\n", current->real_parent->pid, "\n",
-                         pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                         comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                         data->sip, "\n", data->sport, "\n", qr, "\n", opcode, "\n", rcode, "\n", query, "\n",
-                         sessionid);
+                         "%d\n%s\n%d\n%s\n%s\n%s\n%d\n%d\n%d\n%d\n%s\n%s\n%s\n%s\n%d\n%d\n%d\n%s\n%u",
+                         get_current_uid(), DNS_TYPE, data->sa_family,
+                         data->dport, data->dip, abs_path,
+                         current->pid, current->real_parent->pid,
+                         pid_vnr(task_pgrp(current)), current->tgid,
+                         comm, nodename,
+                         data->sip, data->sport, data->qr, data->opcode, data->rcode,
+                         data->query, sessionid);
 
                 send_msg_to_user(result_str, 1);
             }
 
-            if (likely(strcmp(query, "-2")))
-                kfree(query);
-
-            if (likely(strcmp(recv_data, "-2")))
-                kfree(recv_data);
+            if (likely(strcmp(data->query, "-2")))
+                kfree(data->query);
 
             if (likely(strcmp(abs_path, "-2")))
                 kfree(buffer);
@@ -2225,13 +2137,13 @@ int recvfrom_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
             result_str = kzalloc(result_str_len, GFP_ATOMIC);
             if (likely(result_str)) {
                 snprintf(result_str, result_str_len,
-                         "%d%s%s%s%d%s%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%d%s%d%s%s%s%u",
-                         get_current_uid(), "\n", DNS_TYPE, "\n", sa_family,
-                         "\n", data->fd, "\n", dport, "\n", dip, "\n", abs_path, "\n",
-                         current->pid, "\n", current->real_parent->pid, "\n",
-                         pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                         comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                         sip, "\n", sport, "\n", qr, "\n", opcode, "\n", rcode, "\n", query, "\n", sessionid);
+                         "%d\n%s\n%d\n%d\n%s\n%s\n%s\n%d\n%d\n%d\n%d\n%s\n%s\n%s\n%s\n%d\n%d\n%d\n%s\n%u",
+                         get_current_uid(), DNS_TYPE, sa_family,
+                         data->fd, dport, dip, abs_path,
+                         current->pid, current->real_parent->pid,
+                         pid_vnr(task_pgrp(current)), current->tgid,
+                         comm, current->nsproxy->uts_ns->name.nodename,
+                         sip, sport, qr, opcode, rcode, query, sessionid);
 
                 send_msg_to_user(result_str, 1);
             }
@@ -2303,11 +2215,11 @@ void load_module_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned l
 
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
         if (likely(result_str)) {
-            snprintf(result_str, result_str_len, "%d%s%s%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%u",
-                     get_current_uid(), "\n", LOAD_MODULE_TYPE, "\n", abs_path, "\n", cwd,
-                     "\n", current->pid, "\n", current->real_parent->pid, "\n",
-                     pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                     comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n", sessionid);
+            snprintf(result_str, result_str_len, "%d\n%s\n%s\n%s\n%d\n%d\n%d\n%d\n%s\n%s\n%u",
+                     get_current_uid(), LOAD_MODULE_TYPE, abs_path, cwd,
+                     current->pid, current->real_parent->pid,
+                     pid_vnr(task_pgrp(current)), current->tgid,
+                     comm, current->nsproxy->uts_ns->name.nodename, sessionid);
 
             send_msg_to_user(result_str, 1);
         }
@@ -2379,12 +2291,12 @@ int update_cred_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
 
                     result_str = kzalloc(result_str_len, GFP_ATOMIC);
                     if (likely(result_str)) {
-                        snprintf(result_str, result_str_len, "%d%s%s%s%s%s%d%s%d%s%d%s%d%s%s%s%d%s%s%s%u",
-                                 get_current_uid(), "\n", UPDATE_CRED_TYPE, "\n", abs_path,
-                                 "\n", current->pid, "\n", current->real_parent->pid, "\n",
-                                 pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                                 comm, "\n", data->old_uid, "\n", current->nsproxy->uts_ns->name.nodename,
-                                 "\n", sessionid);
+                        snprintf(result_str, result_str_len, "%d\n%s\n%s\n%d\n%d\n%d\n%d\n%s\n%d\n%s\n%u",
+                                 get_current_uid(), UPDATE_CRED_TYPE, abs_path,
+                                 current->pid, current->real_parent->pid,
+                                 pid_vnr(task_pgrp(current)), current->tgid,
+                                 comm, data->old_uid, current->nsproxy->uts_ns->name.nodename,
+                                 sessionid);
 
                         send_msg_to_user(result_str, 1);
                     }

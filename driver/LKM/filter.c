@@ -130,16 +130,6 @@ int insert_rb(struct rb_root *root, struct whitelist_node *data) {
     return 0;
 }
 
-void del_rb(struct rb_root *root, char *data) {
-    struct whitelist_node *node;
-    if (!data)
-        return;
-    if ((node = search_rb(root, data)) == NULL)
-        return;
-    rb_erase(&node->node, root);
-    kfree(node);
-}
-
 int del_rb_by_data(struct rb_root *root, char *data) {
     struct whitelist_node *node;
     if (!data)
@@ -172,6 +162,10 @@ static int del_execve_exe_whitelist(char *data) {
 static void del_all_execve_exe_whitelist(void) {
     struct rb_node *node;
     for (node = rb_first(&execve_exe_whitelist); node; node = rb_next(node)) {
+        struct whitelist_node *data = container_of(node,
+        struct whitelist_node, node);
+        kfree(data->data);
+        kfree(data);
         rb_erase(node, &execve_exe_whitelist);
         kfree(node);
     }
@@ -200,6 +194,10 @@ static int del_connect_dip_whitelist(char *data) {
 static void del_all_connect_dip_whitelist(void) {
     struct rb_node *node;
     for (node = rb_first(&connect_dip_whitelist); node; node = rb_next(node)) {
+        struct whitelist_node *data = container_of(node,
+        struct whitelist_node, node);
+        kfree(data->data);
+        kfree(data);
         rb_erase(node, &connect_dip_whitelist);
         kfree(node);
     }
@@ -221,14 +219,14 @@ static ssize_t device_write(struct file *filp, const __user char *buff, size_t l
     get_user(flag, buff);
 
     if (len < 3 || len > 4096)
-        return len;
+        return -1;
 
     data_main = kzalloc(len, GFP_ATOMIC);
     if (!data_main)
-        return len;
+        return -1;
 
     if (copy_from_user(data_main, buff + 1, len))
-        return len;
+        return -1;
 
     switch (flag) {
         case 49:
@@ -248,6 +246,7 @@ static ssize_t device_write(struct file *filp, const __user char *buff, size_t l
             if (del_res == 1)
                 execve_exe_whitelist_limit = execve_exe_whitelist_limit - 1;
             _write_unlock();
+            kfree(data_main);
             break;
         case 51:
             _write_lock();
@@ -272,6 +271,7 @@ static ssize_t device_write(struct file *filp, const __user char *buff, size_t l
             if (del_res == 1)
                 connect_dip_whitelist_limit = connect_dip_whitelist_limit - 1;
             _write_unlock();
+            kfree(data_main);
             break;
         case 54:
             _write_lock();
@@ -297,9 +297,7 @@ static int device_mmap(struct file *filp, struct vm_area_struct *vma) {
     struct page *page = NULL;
     unsigned long size = (unsigned long) (vma->vm_end - vma->vm_start);
 
-    vma->vm_flags |= 0;
-
-    if (size > SINGLE_MAX_SIZE) {
+    if((vma_pages(vma) + vma->vm_pgoff) > (SINGLE_MAX_SIZE >> PAGE_SHIFT)) {
         ret = -EINVAL;
         goto out;
     }
@@ -315,7 +313,7 @@ static int device_mmap(struct file *filp, struct vm_area_struct *vma) {
 }
 
 int init_filter(void) {
-    int i;
+    lock_init();
     filter_major = register_chrdev(0, FILTER_DEVICE_NAME, &mchar_fops);
 
     if (filter_major < 0) {
@@ -346,18 +344,13 @@ int init_filter(void) {
         unregister_chrdev(filter_major, FILTER_DEVICE_NAME);
         pr_err("[SMITH FILTER] SHMEM_INIT_ERROR\n");
         return -ENOMEM;
-    } else {
-        for (i = 0; i < SINGLE_MAX_SIZE; i += PAGE_SIZE)
-            SetPageReserved(virt_to_page(((unsigned long) sh_mem) + i));
     }
 
-    lock_init();
     return 0;
 }
 
 void uninstall_filter(void) {
     device_destroy(filter_class, MKDEV(filter_major, 0));
-    class_unregister(filter_class);
     class_destroy(filter_class);
     del_all_execve_exe_whitelist();
     del_all_connect_dip_whitelist();
