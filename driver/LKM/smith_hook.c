@@ -1821,7 +1821,6 @@ int udp_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *reg
     if (inet->dport == 13568 || inet->dport == 59668)
 #endif
     {
-        data->flag = 1;
         data->sa_family = AF_INET;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
         if (likely(inet->inet_daddr)) {
@@ -1870,6 +1869,8 @@ int udp_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *reg
             data->iov_len = msg->msg_iov->iov_len;
         } else
             return 0;
+
+        data->flag = 1;
 #endif
     }
 
@@ -1911,7 +1912,6 @@ int udpv6_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
     if (inet->dport == 13568 || inet->dport == 59668)
 #endif
     {
-        data->flag = 1;
         data->sa_family = AF_INET;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
         if (likely(inet->inet_dport)) {
@@ -1960,6 +1960,8 @@ int udpv6_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
             data->iov_len = msg->msg_iov->iov_len;
         } else
             return 0;
+
+        data->flag = 1;
 #endif
     }
 
@@ -1970,7 +1972,7 @@ int udp_recvmsg_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
     int opcode = 0;
     int qr;
     int rcode = 0;
-    int recv_data_copy_res = 1;
+    int recv_data_copy_res = 0;
     char *query;
     unsigned char *recv_data = NULL;
     struct udp_recvmsg_data *data;
