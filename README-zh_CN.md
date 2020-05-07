@@ -135,7 +135,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ### Connect Hook
 
-通过Hook **sys_connect()** 实现，数据样例：
+通过Hook **tcp_v4_connect()/tcp_v6_connect()/ip4_datagram_connect()/ip6_datagram_connect()** 实现，数据样例：
 
 ```json
 {
@@ -168,7 +168,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
 
 ### DNS Query Hook
 
-通过Hook **sys_recvfrom()** 实现，数据样例：
+通过Hook **udp_recvmsg()/udpv6_recvmsg()** 实现，数据样例：
 
 ```json
 {

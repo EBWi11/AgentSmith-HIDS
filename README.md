@@ -133,7 +133,7 @@ Achieved by hooking **sys_bind()**, example:
 
 ### Connect Hook
 
-Achieved by hooking **sys_connect()**, example:
+Achieved by hooking **tcp_v4_connect()/tcp_v6_connect()/ip4_datagram_connect()/ip6_datagram_connect()**, example:
 
 ```json
 {
@@ -166,7 +166,7 @@ Achieved by hooking **sys_connect()**, example:
 
 ### DNS Query Hook
 
-Achieved by hooking **sys_recvfrom()**, example:
+Achieved by hooking **udp_recvmsg()/udpv6_recvmsg()**, example:
 
 ```json
 {
