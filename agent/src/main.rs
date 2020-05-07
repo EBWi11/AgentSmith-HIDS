@@ -53,6 +53,68 @@ extern "C" {
     fn shm_run_no_callback() -> *const c_char;
 }
 
+#[derive(Serialize, Deserialize)]
+enum DataType {
+    ConnectType,
+    BindType,
+    ExecveType,
+    PtraceType,
+    DnsType,
+    CreateFile,
+    LoadModuleType,
+    UpdateCredType,
+    ProcFileHook,
+    SyscallHook,
+    LkmHidden,
+    InterruptsHook,
+    NONE,
+}
+
+fn trans_data_type(value: String) -> DataType {
+    match &value[..] {
+      "42" => {
+         return DataType::ConnectType;
+      },
+      "49" => {
+         return DataType::BindType;
+      },
+      "59" => {
+         return DataType::ExecveType;
+      },
+      "101" => {
+         return DataType::PtraceType ;
+      },
+      "601" => {
+         return DataType::DnsType ;
+      },
+      "602" => {
+         return DataType::CreateFile ;
+      },
+      "603" => {
+         return DataType::LoadModuleType ;
+      },
+      "604" => {
+         return DataType::UpdateCredType ;
+      },
+      "700" => {
+         return DataType::ProcFileHook ;
+      },
+      "701" => {
+         return DataType::SyscallHook ;
+      },
+      "702" => {
+         return DataType::LkmHidden ;
+      },
+      "703" => {
+         return DataType::InterruptsHook ;
+      },
+      _ => {
+         return DataType::NONE;
+      },
+      
+   }
+}
+
 fn get_output_kafka(threads: u32) -> KafkaOutput {
     KafkaOutput::new(threads, settings::SEND_KAFKA_FAST_TYPE)
 }
@@ -483,9 +545,10 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
             let msg_type = msg_split[1];
             let tmp_sa_family = msg_split[2];
             let mut white_list_attr: bool = false;
-
-            match msg_type {
-                "49" => {
+            let types = msg_type;
+            let msg_data_type = trans_data_type(types.to_string());
+            match msg_data_type {
+                DataType::BindType => {
                     if exe_white_list.contains(msg_split[6]) {
                         white_list_attr = true;
                     };
@@ -536,7 +599,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                         msg_str = serde_json::to_string(&bind_msg).unwrap();
                     };
                 }
-                "42" => {
+                DataType::ConnectType => {
                     if tmp_sa_family == "2" {
                         if ipv4_whitelist_range.contains(&msg_split[5].parse::<Ipv4Addr>().unwrap())
                         {
@@ -603,7 +666,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                     };
                 }
 
-                "59" => {
+                DataType::ExecveType => {
                     if exe_white_list.contains(msg_split[3]) {
                         white_list_attr = true;
                     };
@@ -692,7 +755,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                     };
                 }
 
-                "101" => {
+                DataType::PtraceType => {
                     if exe_white_list.contains(msg_split[6]) {
                         white_list_attr = true;
                     };
@@ -742,7 +805,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                     };
                 }
 
-                "601" => {
+                DataType::DnsType => {
                     if msg_split[7] == agent_pid
                         || msg_split[8] == agent_pid
                         || msg_split[9] == agent_pid
@@ -800,7 +863,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                     }
                 }
 
-                "602" => {
+                DataType::CreateFile => {
                     if msg_split[4] == agent_pid
                         || msg_split[5] == agent_pid
                         || msg_split[6] == agent_pid
@@ -900,7 +963,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                     };
                 }
 
-                "603" => {
+                DataType::LoadModuleType => {
                     if exe_white_list.contains(msg_split[2]) {
                         white_list_attr = true;
                     }
@@ -963,7 +1026,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                     }
                 }
 
-                "604" => {
+                DataType::UpdateCredType => {
                     if exe_white_list.contains(msg_split[2]) {
                         white_list_attr = true;
                     }
@@ -1007,7 +1070,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                     }
                 }
 
-                "700" => {
+                DataType::ProcFileHook => {
                     let proc_file_hook_msg = ProcFileHookMsgStruct {
                         uid: msg_split[0],
                         data_type: msg_split[1],
@@ -1021,7 +1084,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                     msg_str = serde_json::to_string(&proc_file_hook_msg).unwrap();
                 }
 
-                "701" => {
+                DataType::SyscallHook => {
                     let syscall_hook_msg = SyscallHookMsgStruct {
                         uid: msg_split[0],
                         data_type: msg_split[1],
@@ -1037,7 +1100,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                     msg_str = serde_json::to_string(&syscall_hook_msg).unwrap();
                 }
 
-                "702" => {
+                DataType::LkmHidden => {
                     let module_hidden_msg = ModuleHiddenMsgStruct {
                         uid: msg_split[0],
                         data_type: msg_split[1],
@@ -1051,7 +1114,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                     msg_str = serde_json::to_string(&module_hidden_msg).unwrap();
                 }
 
-                "703" => {
+                DataType::InterruptsHook => {
                     let interrupt_hook_msg = InterruptHookMsgStruct {
                         uid: msg_split[0],
                         data_type: msg_split[1],
