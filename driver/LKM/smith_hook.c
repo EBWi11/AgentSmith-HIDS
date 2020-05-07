@@ -1852,13 +1852,15 @@ int udp_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *reg
         } else
             return 0;
 #else
-        if (retval > 8)
-            recv_data = kzalloc(retval, GFP_ATOMIC);
+        if (msg->msg_iov->msg_iovlen > 0)
+            recv_data = kzalloc(msg->msg_iov->msg_iovlen, GFP_ATOMIC);
+        else
+            return 0;
 
         if (unlikely(!recv_data))
             return 0;
         else
-            recv_data_copy_res = copy_from_user(recv_data, msg->msg_iov->iov_base, retval);
+            recv_data_copy_res = copy_from_user(recv_data, msg->msg_iov->iov_base, msg->msg_iov->msg_iovlen);
 #endif
     }
 
@@ -1973,13 +1975,15 @@ int udpv6_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
         } else
             return 0;
 #else
-        if (retval > 8)
-            recv_data = kzalloc(retval, GFP_ATOMIC);
+        if (msg->msg_iov->msg_iovlen > 0)
+            recv_data = kzalloc(msg->msg_iov->msg_iovlen, GFP_ATOMIC);
+        else
+            return 0;
 
         if (unlikely(!recv_data))
             return 0;
         else
-            recv_data_copy_res = copy_from_user(recv_data, msg->msg_iov->iov_base, retval);
+            recv_data_copy_res = copy_from_user(recv_data, msg->msg_iov->iov_base, msg->msg_iov->msg_iovlen);
 #endif
     }
 
