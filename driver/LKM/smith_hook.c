@@ -1832,7 +1832,12 @@ int udp_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *reg
             snprintf(dport, 16, "%d", Ntohs(inet->dport));
         }
 #endif
+
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4, 0, 9)
         tmp_msg = (void *) p_get_arg2(regs);
+#endif
+        tmp_msg = (void *) p_get_arg3(regs);
+
         if (IS_ERR_OR_NULL(tmp_msg))
             return 0;
 
@@ -1963,7 +1968,12 @@ int udpv6_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
             snprintf(dport, 16, "%d", Ntohs(inet->dport));
         }
 #endif
+
+#if LINUX_VERSION_CODE > KERNEL_VERSION(4, 0, 9)
         tmp_msg = (void *) p_get_arg2(regs);
+#endif
+        tmp_msg = (void *) p_get_arg3(regs);
+
         if (IS_ERR_OR_NULL(tmp_msg))
             return 0;
 
