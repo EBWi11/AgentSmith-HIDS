@@ -1797,16 +1797,18 @@ int udp_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *reg
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4, 0, 9)
     flags = (int) p_get_arg5(regs);
-#endif
+#else
     flags = (int) p_get_arg6(regs);
+#endif
 
     if (flags & MSG_ERRQUEUE)
         return 0;
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4, 0, 9)
     sk = (struct sock *) p_get_arg1(regs);
-#endif
+#else
     sk = (struct sock *) p_get_arg2(regs);
+#endif
 
     inet = (struct inet_sock *) sk;
 
@@ -1835,8 +1837,9 @@ int udp_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *reg
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4, 0, 9)
         tmp_msg = (void *) p_get_arg2(regs);
-#endif
+#else
         tmp_msg = (void *) p_get_arg3(regs);
+#endif
 
         if (IS_ERR_OR_NULL(tmp_msg))
             return 0;
@@ -1934,16 +1937,17 @@ int udpv6_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4, 0, 9)
     flags = (int) p_get_arg5(regs);
-#endif
+#else
     flags = (int) p_get_arg6(regs);
-
+#endif
     if (flags & MSG_ERRQUEUE)
         return 0;
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4, 0, 9)
     sk = (struct sock *) p_get_arg1(regs);
-#endif
+#else
     sk = (struct sock *) p_get_arg2(regs);
+#endif
 
     inet = (struct inet_sock *) sk;
 
@@ -1971,9 +1975,9 @@ int udpv6_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4, 0, 9)
         tmp_msg = (void *) p_get_arg2(regs);
-#endif
+#else
         tmp_msg = (void *) p_get_arg3(regs);
-
+#endif
         if (IS_ERR_OR_NULL(tmp_msg))
             return 0;
 
