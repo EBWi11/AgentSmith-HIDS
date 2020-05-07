@@ -417,6 +417,17 @@ struct connect_data {
     int type;
 };
 
+struct udp_recvmsg_data {
+    char sport[16];
+    char dport[16];
+    char sip[64];
+    char dip[64];
+    int sa_family;
+    int flag;
+    void __user *iov_base;
+    __kernel_size_t iov_len;
+};
+
 #if EXIT_PROTECT == 1
 void exit_protect_action(void)
 {
@@ -1779,18 +1790,9 @@ int udp_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *reg
     struct sock *sk;
     struct inet_sock *inet;
     struct msghdr *msg;
+    struct udp_recvmsg_data *data;
     void *tmp_msg;
     int flags;
-    int opcode = 0;
-    int qr;
-    int rcode = 0;
-    int recv_data_copy_res = 1;
-    unsigned char *recv_data = NULL;
-    char sport[16];
-    char dport[16];
-    char sip[64];
-    char dip[64];
-    char *query;
 
     if (share_mem_flag == -1)
         return 0;
@@ -1800,9 +1802,10 @@ int udp_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *reg
 #else
     flags = (int) p_get_arg6(regs);
 #endif
-
     if (flags & MSG_ERRQUEUE)
         return 0;
+
+    data = (struct udp_recvmsg_data *) ri->data;
 
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4, 0, 9)
     sk = (struct sock *) p_get_arg1(regs);
@@ -1811,27 +1814,28 @@ int udp_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *reg
 #endif
 
     inet = (struct inet_sock *) sk;
-
+    data->flag = 0;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
     if (inet->inet_dport == 13568 || inet->inet_dport == 59668)
 #else
     if (inet->dport == 13568 || inet->dport == 59668)
 #endif
     {
-
+        data->flag = 1;
+        data->sa_family = AF_INET;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
         if (likely(inet->inet_daddr)) {
-            snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_daddr));
-            snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_saddr));
-            snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
-            snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
+            snprintf(data->dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_daddr));
+            snprintf(data->sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->inet_saddr));
+            snprintf(data->sport, 16, "%d", Ntohs(inet->inet_sport));
+            snprintf(data->dport, 16, "%d", Ntohs(inet->inet_dport));
         }
 #else
         if (likely(inet->daddr)) {
-            snprintf(dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->daddr));
-            snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->saddr));
-            snprintf(sport, 16, "%d", Ntohs(inet->sport));
-            snprintf(dport, 16, "%d", Ntohs(inet->dport));
+            snprintf(data->dip, 64, "%d.%d.%d.%d", NIPQUAD(inet->daddr));
+            snprintf(data->sip, 64, "%d.%d.%d.%d", NIPQUAD(inet->saddr));
+            snprintf(data->sport, 16, "%d", Ntohs(inet->sport));
+            snprintf(data->dport, 16, "%d", Ntohs(inet->dport));
         }
 #endif
 
@@ -1840,7 +1844,6 @@ int udp_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *reg
 #else
         tmp_msg = (void *) p_get_arg3(regs);
 #endif
-
         if (IS_ERR_OR_NULL(tmp_msg))
             return 0;
 
@@ -1849,69 +1852,27 @@ int udp_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *reg
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
         if(msg->msg_iter.iov) {
             if(msg->msg_iter.iov->iov_len > 0) {
-                recv_data = kzalloc(msg->msg_iter.iov->iov_len, GFP_ATOMIC);
-                if(unlikely(!recv_data))
-                    return 0;
-
-                recv_data_copy_res = copy_from_user(recv_data, msg->msg_iter.iov->iov_base, msg->msg_iter.iov->iov_len);
+                data->iov_len = msg->msg_iter.iov->iov_len;
+                data->iov_base = msg->msg_iter.iov->iov_base;
             } else
                 return 0;
         } else if(msg->msg_iter.kvec) {
             if(msg->msg_iter.kvec->iov_len > 0) {
-                recv_data = kzalloc(msg->msg_iter.kvec->iov_len, GFP_ATOMIC);
-                if(unlikely(!recv_data))
-                    return 0;
-
-                recv_data_copy_res = copy_from_user(recv_data, msg->msg_iter.kvec->iov_base, msg->msg_iter.kvec->iov_len);
+                data->iov_len = msg->msg_iter.kvec->iov_len;
+                data->iov_base = msg->msg_iter.kvec->iov_base;
             } else
                 return 0;
         } else
             return 0;
 #else
-        if (msg->msg_iov->iov_len > 0)
-            recv_data = kzalloc(msg->msg_iov->iov_len, GFP_ATOMIC);
-        else
+        if(data->iov_len > 0) {
+            data->iov_base = msg->msg_iov->iov_base;
+            data->iov_len = msg->msg_iov->iov_len;
+        } else
             return 0;
-
-        if (unlikely(!recv_data))
-            return 0;
-        else
-            recv_data_copy_res = copy_from_user(recv_data, msg->msg_iov->iov_base, msg->msg_iov->iov_len);
 #endif
     }
 
-    if (unlikely(recv_data_copy_res != 0)) {
-        kfree(recv_data);
-        return 0;
-    }
-
-    if (sizeof(recv_data) >= 8) {
-        qr = (recv_data[2] & 0x80) ? 1 : 0;
-        if (qr == 1) {
-            opcode = (recv_data[2] >> 3) & 0x0f;
-            rcode = recv_data[3] & 0x0f;
-
-            if (strlen(recv_data + 12) == 0) {
-                kfree(recv_data);
-                return 0;
-            }
-
-            query = kzalloc(strlen(recv_data + 12), GFP_ATOMIC);
-            if (unlikely(IS_ERR_OR_NULL(query)))
-                query = "-2";
-            else
-                getDNSQuery(recv_data, 12, query);
-
-            if (!query) {
-                kfree(query);
-                return 0;
-            }
-
-            dns_data_transport(AF_INET6, query, dip, sip, dport, sport, qr, opcode, rcode);
-        }
-    }
-
-    kfree(recv_data);
     return 0;
 }
 
@@ -1919,18 +1880,9 @@ int udpv6_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
     struct sock *sk;
     struct inet_sock *inet;
     struct msghdr *msg;
+    struct udp_recvmsg_data *data;
     void *tmp_msg;
     int flags;
-    int opcode = 0;
-    int qr;
-    int rcode = 0;
-    int recv_data_copy_res = 1;
-    unsigned char *recv_data = NULL;
-    char sport[16];
-    char dport[16];
-    char sip[64];
-    char dip[64];
-    char *query;
 
     if (share_mem_flag == -1)
         return 0;
@@ -1943,6 +1895,8 @@ int udpv6_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
     if (flags & MSG_ERRQUEUE)
         return 0;
 
+    data = (struct udp_recvmsg_data *) ri->data;
+
 #if LINUX_VERSION_CODE > KERNEL_VERSION(4, 0, 9)
     sk = (struct sock *) p_get_arg1(regs);
 #else
@@ -1950,26 +1904,28 @@ int udpv6_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
 #endif
 
     inet = (struct inet_sock *) sk;
-
+    data->flag = 0;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
     if (inet->inet_dport == 13568 || inet->inet_dport == 59668)
 #else
     if (inet->dport == 13568 || inet->dport == 59668)
 #endif
     {
+        data->flag = 1;
+        data->sa_family = AF_INET;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
         if (likely(inet->inet_dport)) {
-            snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_daddr));
-            snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_rcv_saddr));
-            snprintf(sport, 16, "%d", Ntohs(inet->inet_sport));
-            snprintf(dport, 16, "%d", Ntohs(inet->inet_dport));
+            snprintf(data->dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_daddr));
+            snprintf(data->sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_rcv_saddr));
+            snprintf(data->sport, 16, "%d", Ntohs(inet->inet_sport));
+            snprintf(data->dport, 16, "%d", Ntohs(inet->inet_dport));
         }
 #else
         if (likely(inet->dport)) {
-            snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->daddr));
-            snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->saddr));
-            snprintf(sport, 16, "%d", Ntohs(inet->sport));
-            snprintf(dport, 16, "%d", Ntohs(inet->dport));
+            snprintf(data->dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->daddr));
+            snprintf(data->sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(inet->pinet6->saddr));
+            snprintf(data->sport, 16, "%d", Ntohs(inet->sport));
+            snprintf(data->dport, 16, "%d", Ntohs(inet->dport));
         }
 #endif
 
@@ -1986,36 +1942,55 @@ int udpv6_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
         if(msg->msg_iter.iov) {
             if(msg->msg_iter.iov->iov_len > 0) {
-                recv_data = kzalloc(msg->msg_iter.iov->iov_len, GFP_ATOMIC);
-                if(unlikely(!recv_data))
-                    return 0;
-
-                recv_data_copy_res = copy_from_user(recv_data, msg->msg_iter.iov->iov_base, msg->msg_iter.iov->iov_len);
+                data->iov_len = msg->msg_iter.iov->iov_len;
+                data->iov_base = msg->msg_iter.iov->iov_base;
             } else
                 return 0;
         } else if(msg->msg_iter.kvec) {
             if(msg->msg_iter.kvec->iov_len > 0) {
-                recv_data = kzalloc(msg->msg_iter.kvec->iov_len, GFP_ATOMIC);
-                if(unlikely(!recv_data))
-                    return 0;
-
-                recv_data_copy_res = copy_from_user(recv_data, msg->msg_iter.kvec->iov_base, msg->msg_iter.kvec->iov_len);
+                data->iov_len = msg->msg_iter.kvec->iov_len;
+                data->iov_base = msg->msg_iter.kvec->iov_base;
             } else
                 return 0;
         } else
             return 0;
 #else
-        if (msg->msg_iov->iov_len > 0)
-            recv_data = kzalloc(msg->msg_iov->iov_len, GFP_ATOMIC);
-        else
+        if(data->iov_len > 0) {
+            data->iov_base = msg->msg_iov->iov_base;
+            data->iov_len = msg->msg_iov->iov_len;
+        } else
             return 0;
-
-        if (unlikely(!recv_data))
-            return 0;
-        else
-            recv_data_copy_res = copy_from_user(recv_data, msg->msg_iov->iov_base, msg->msg_iov->iov_len);
 #endif
     }
+
+    return 0;
+}
+
+int udp_recvmsg_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
+    int opcode = 0;
+    int qr;
+    int rcode = 0;
+    int recv_data_copy_res = 1;
+    char *query;
+    unsigned char *recv_data = NULL;
+    struct udp_recvmsg_data *data;
+
+    if (share_mem_flag == -1)
+        return 0;
+
+    data = (struct udp_recvmsg_data *) ri->data;
+    if(data->flag != 1)
+        return 0;
+
+    if (data->iov_len > 0)
+        recv_data = kzalloc(data->iov_len, GFP_ATOMIC);
+    else
+        return 0;
+
+    if (unlikely(!recv_data))
+        return 0;
+    else
+        recv_data_copy_res = copy_from_user(recv_data, data->iov_base, data->iov_len);
 
     if (unlikely(recv_data_copy_res != 0)) {
         kfree(recv_data);
@@ -2044,7 +2019,7 @@ int udpv6_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
                 return 0;
             }
 
-            dns_data_transport(AF_INET, query, dip, sip, dport, sport, qr, opcode, rcode);
+            dns_data_transport(AF_INET6, query, data->dip, data->sip, data->dport, data->sport, qr, opcode, rcode);
         }
     }
 
@@ -2312,6 +2287,8 @@ struct kprobe ptrace_kprobe = {
 
 struct kretprobe udp_recvmsg_kretprobe = {
         .kp.symbol_name = "udp_recvmsg",
+        .data_size  = sizeof(struct udp_recvmsg_data),
+        .handler = udp_recvmsg_handler,
         .entry_handler = udp_recvmsg_entry_handler,
         .maxactive = MAXACTIVE,
 };
@@ -2319,6 +2296,8 @@ struct kretprobe udp_recvmsg_kretprobe = {
 #if IS_ENABLED(CONFIG_IPV6)
 struct kretprobe udpv6_recvmsg_kretprobe = {
         .kp.symbol_name = "udpv6_recvmsg",
+        .data_size  = sizeof(struct udp_recvmsg_data),
+        .handler = udp_recvmsg_handler,
         .entry_handler = udpv6_recvmsg_entry_handler,
         .maxactive = MAXACTIVE,
 };
