@@ -560,13 +560,12 @@ int bind_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
         result_str = kzalloc(result_str_len, GFP_ATOMIC);
         if (likely(result_str)) {
             snprintf(result_str, result_str_len,
-                     "%d%s%s%s%d%s%s%s%d%s%d%s%d%s%d%s%s%s%s%s%s%s%s%s%d%s%u",
-                     get_current_uid(), "\n", BIND_TYPE, "\n", sa_family,
-                     "\n", abs_path, "\n", current->pid, "\n", current->real_parent->pid,
-                     "\n", pid_vnr(task_pgrp(current)), "\n", current->tgid, "\n",
-                     comm, "\n", current->nsproxy->uts_ns->name.nodename, "\n",
-                     sip, "\n", sport, "\n", retval, "\n", sessionid);
-
+                     "%d\n%s\n%d\n%s\n%d\n%d\n%d\n%d\n%s\n%s\n%s\n%s\n%d\n%u",
+                     get_current_uid(), BIND_TYPE, sa_family,
+                     abs_path, current->pid, current->real_parent->pid,
+                     pid_vnr(task_pgrp(current)), current->tgid,
+                     comm, current->nsproxy->uts_ns->name.nodename,
+                     sip, sport, retval, sessionid);
             send_msg_to_user(result_str, 1);
         }
 
@@ -1865,7 +1864,7 @@ int udp_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *reg
         } else
             return 0;
 #else
-        if(data->iov_len > 0) {
+        if (data->iov_len > 0) {
             data->iov_base = msg->msg_iov->iov_base;
             data->iov_len = msg->msg_iov->iov_len;
         } else
@@ -1955,7 +1954,7 @@ int udpv6_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
         } else
             return 0;
 #else
-        if(data->iov_len > 0) {
+        if (data->iov_len > 0) {
             data->iov_base = msg->msg_iov->iov_base;
             data->iov_len = msg->msg_iov->iov_len;
         } else
@@ -1979,7 +1978,7 @@ int udp_recvmsg_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
         return 0;
 
     data = (struct udp_recvmsg_data *) ri->data;
-    if(data->flag != 1)
+    if (data->flag != 1)
         return 0;
 
     if (data->iov_len > 0)
