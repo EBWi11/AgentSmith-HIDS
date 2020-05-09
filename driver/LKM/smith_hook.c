@@ -38,7 +38,8 @@
 #define MAXACTIVE 32 * NR_CPUS
 
 #define PID_TREE_LIMIT 7
-#define EXECVE_GET_SOCK_LIMIT 5
+#define EXECVE_GET_SOCK_PID_LIMIT 7
+#define EXECVE_GET_SOCK_FD_LIMIT 7
 
 int share_mem_flag = -1;
 int checkCPUendianRes = 0;
@@ -833,7 +834,7 @@ int execve_handler(struct execve_data *data)
         task = current;
         while(task->pid != 1) {
             limit_index = limit_index + 1;
-            if(limit_index > EXECVE_GET_SOCK_LIMIT)
+            if(limit_index > EXECVE_GET_SOCK_PID_LIMIT)
                 break;
 
             if(unlikely(!task->files))
@@ -842,7 +843,7 @@ int execve_handler(struct execve_data *data)
             task_files = files_fdtable(task->files);
 
             for (i = 0; task_files->fd[i]; i++) {
-                if(i > 7)
+                if(i > EXECVE_GET_SOCK_FD_LIMIT)
                     break;
 
                 d_name = d_path(&(task_files->fd[i]->f_path), fd_buff, 24);
@@ -1329,7 +1330,7 @@ int execve_handler(struct execve_data *data)
         task = current;
         while (task->pid != 1) {
             limit_index = limit_index + 1;
-            if (limit_index > EXECVE_GET_SOCK_LIMIT)
+            if (limit_index > EXECVE_GET_SOCK_PID_LIMIT)
                 break;
 
             if (unlikely(!task->files))
@@ -1338,7 +1339,7 @@ int execve_handler(struct execve_data *data)
             task_files = files_fdtable(task->files);
 
             for (i = 0; task_files->fd[i]; i++) {
-                if (i > 7)
+                if (i > EXECVE_GET_SOCK_FD_LIMIT)
                     break;
 
                 d_name = d_path(&(task_files->fd[i]->f_path), fd_buff, 24);
