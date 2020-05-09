@@ -403,7 +403,7 @@ char *get_pid_tree(void) {
         strcat(res, comm);
         strcat(res, ")->");
         strcat(res, tmp_data);
-        strncpy(tmp_data, res, strlen(res));
+        strcpy(tmp_data, res);
         kfree(res);
 
         if (likely(comm_free == 1))
