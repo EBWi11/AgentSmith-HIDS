@@ -474,6 +474,8 @@ Uninstall Smith：
 
 ### 作者微信
 
+**使用过程中遇到任何问题请提ISSUE，其他讨论可加微信**
+
 <img src="doc/wechat.jpg" width="50%" height="50%"/>
 
 
