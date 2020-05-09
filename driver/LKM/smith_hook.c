@@ -509,7 +509,7 @@ int bind_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
         case AF_INET:
             sin = (struct sockaddr_in *) &tmp_dirp;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
-            if (likely(tmp_dirp.sa_data)) {
+        if (likely(tmp_dirp.sa_data)) {
                 snprintf(sip, 64, "%d.%d.%d.%d", NIPQUAD(sin->sin_addr));
                 snprintf(sport, 16, "%d", Ntohs(sin->sin_port));
                 flag = 1;
@@ -524,7 +524,7 @@ int bind_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
             sa_family = AF_INET;
             break;
 #if IS_ENABLED(CONFIG_IPV6)
-            case AF_INET6:
+        case AF_INET6:
                 sin6 = (struct sockaddr_in6 *) &tmp_dirp;
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
                 if (likely(tmp_dirp.sa_data)) {
@@ -646,7 +646,7 @@ int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
 #endif
             break;
 #if IS_ENABLED(CONFIG_IPV6)
-            case AF_INET6:
+        case AF_INET6:
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
                 if (likely(inet->inet_dport)) {
                     snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_daddr));
@@ -1351,7 +1351,7 @@ int execve_handler(struct execve_data *data)
                     if (unlikely(!task_files->fd[i] || IS_ERR_OR_NULL(task_files->fd[i]->private_data)))
                         continue;
 
-                    tmp_socket = task_files->fd[i]->private_data
+                    tmp_socket = task_files->fd[i]->private_data;
                     socket = (struct socket *) tmp_socket;
                     if (likely(socket)) {
                         sk = socket->sk;
@@ -1376,7 +1376,7 @@ int execve_handler(struct execve_data *data)
                                 socket_check = 1;
                                 break;
 #if IS_ENABLED(CONFIG_IPV6)
-                                case AF_INET6:
+                            case AF_INET6:
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
                                     snprintf(dip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_daddr));
                                     snprintf(sip, 64, "%04x:%04x:%04x:%04x:%04x:%04x:%04x:%04x", NIP6(sk->sk_v6_rcv_saddr));

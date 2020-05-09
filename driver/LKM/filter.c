@@ -19,17 +19,17 @@ struct rb_root connect_dip_whitelist = RB_ROOT;
 static int execve_exe_whitelist_limit = 0;
 static int connect_dip_whitelist_limit = 0;
 
-static rwlock_t __write_lock;
+static rwlock_t __smith_filter_write_lock;
 
 static void lock_init(void);
 
-static inline void _write_lock(void);
+static inline void _smith_filter_write_lock(void);
 
-static inline void _write_unlock(void);
+static inline void _smith_filter_write_unlock(void);
 
-static inline void _read_lock(void);
+static inline void _smith_filter_read_lock(void);
 
-static inline void _read_unlock(void);
+static inline void _smith_filter_read_unlock(void);
 
 static int device_mmap(struct file *filp, struct vm_area_struct *vma);
 
@@ -42,23 +42,23 @@ static const struct file_operations mchar_fops = {
 };
 
 static void lock_init(void) {
-    rwlock_init(&__write_lock);
+    rwlock_init(&__smith_filter_write_lock);
 }
 
-static inline void _write_lock(void) {
-    write_lock(&__write_lock);
+static inline void _smith_filter_write_lock(void) {
+    write_lock(&__smith_filter_write_lock);
 }
 
-static inline void _write_unlock(void) {
-    write_unlock(&__write_lock);
+static inline void _smith_filter_write_unlock(void) {
+    write_unlock(&__smith_filter_write_lock);
 }
 
-static inline void _read_lock(void) {
-    read_lock(&__write_lock);
+static inline void _smith_filter_read_lock(void) {
+    read_lock(&__smith_filter_write_lock);
 }
 
-static inline void _read_unlock(void) {
-    read_unlock(&__write_lock);
+static inline void _smith_filter_read_unlock(void) {
+    read_unlock(&__smith_filter_write_lock);
 }
 
 struct whitelist_node {
@@ -230,54 +230,54 @@ static ssize_t device_write(struct file *filp, const __user char *buff, size_t l
 
     switch (flag) {
         case 49:
-            _write_lock();
+            _smith_filter_write_lock();
             execve_exe_whitelist_limit = execve_exe_whitelist_limit + 1;
             if (execve_exe_whitelist_limit > 64) {
                 execve_exe_whitelist_limit = execve_exe_whitelist_limit - 1;
-                _write_unlock();
+                _smith_filter_write_unlock();
                 return len;
             }
             add_execve_exe_whitelist(strim(data_main));
-            _write_unlock();
+            _smith_filter_write_unlock();
             break;
         case 50:
-            _write_lock();
+            _smith_filter_write_lock();
             del_res = del_execve_exe_whitelist(strim(data_main));
             if (del_res == 1)
                 execve_exe_whitelist_limit = execve_exe_whitelist_limit - 1;
-            _write_unlock();
+            _smith_filter_write_unlock();
             kfree(data_main);
             break;
         case 51:
-            _write_lock();
+            _smith_filter_write_lock();
             execve_exe_whitelist_limit = 0;
             del_all_execve_exe_whitelist();
-            _write_unlock();
+            _smith_filter_write_unlock();
             break;
         case 52:
-            _write_lock();
+            _smith_filter_write_lock();
             connect_dip_whitelist_limit = connect_dip_whitelist_limit + 1;
             if (connect_dip_whitelist_limit > 64) {
                 connect_dip_whitelist_limit = connect_dip_whitelist_limit - 1;
-                _write_unlock();
+                _smith_filter_write_unlock();
                 return len;
             }
             add_connect_dip_whitelist(strim(data_main));
-            _write_unlock();
+            _smith_filter_write_unlock();
             break;
         case 53:
-            _write_lock();
+            _smith_filter_write_lock();
             del_res = del_connect_dip_whitelist(strim(data_main));
             if (del_res == 1)
                 connect_dip_whitelist_limit = connect_dip_whitelist_limit - 1;
-            _write_unlock();
+            _smith_filter_write_unlock();
             kfree(data_main);
             break;
         case 54:
-            _write_lock();
+            _smith_filter_write_lock();
             connect_dip_whitelist_limit = 0;
             del_all_connect_dip_whitelist();
-            _write_unlock();
+            _smith_filter_write_unlock();
             break;
         case 55:
             res = execve_exe_check(strim(data_main));
