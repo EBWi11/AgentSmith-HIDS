@@ -1253,8 +1253,8 @@ int execve_handler(struct execve_data *data)
         char *argv = NULL;
         char *abs_path = NULL;
         char fd_buff[24];
-        char tmp_stdin_fd[PATH_MAX];
-        char tmp_stdout_fd[PATH_MAX];
+        char *tmp_stdin_fd = NULL;
+        char *tmp_stdout_fd = NULL;
         struct fdtable *files;
         struct socket *socket;
         struct tty_struct *tty;
@@ -1269,8 +1269,6 @@ int execve_handler(struct execve_data *data)
         struct inet_sock *inet;
 
         memset(fd_buff, 0, 24);
-        memset(tmp_stdin_fd, 0, PATH_MAX);
-        memset(tmp_stdout_fd, 0, PATH_MAX);
 
         argv = data->argv;
 
@@ -1418,16 +1416,26 @@ int execve_handler(struct execve_data *data)
 
         files = files_fdtable(current->files);
         if (likely(files->fd[0])) {
-            tmp_stdin = d_path(&(files->fd[0]->f_path), tmp_stdin_fd, PATH_MAX);
-            if (unlikely(IS_ERR(tmp_stdin)))
-                tmp_stdin = "-1";
+            tmp_stdin_fd = kzalloc(PATH_MAX, GFP_ATOMIC);
+            if(unlikely(!tmp_stdin_fd))
+                tmp_stdin = "-2";
+            else {
+                tmp_stdin = d_path(&(files->fd[0]->f_path), tmp_stdin_fd, PATH_MAX);
+                if (unlikely(IS_ERR(tmp_stdin)))
+                    tmp_stdin = "-1";
+            }
         } else
             tmp_stdin = "";
 
         if (likely(files->fd[1])) {
-            tmp_stdout = d_path(&(files->fd[1]->f_path), tmp_stdout_fd, PATH_MAX);
-            if (unlikely(IS_ERR(tmp_stdout)))
-                tmp_stdout = "-1";
+            tmp_stdout_fd = kzalloc(PATH_MAX, GFP_ATOMIC);
+            if(unlikely(!tmp_stdout_fd))
+                tmp_stdin = "-2";
+            else {
+                tmp_stdout = d_path(&(files->fd[1]->f_path), tmp_stdout_fd, PATH_MAX);
+                if (unlikely(IS_ERR(tmp_stdout)))
+                    tmp_stdout = "-1";
+            }
         } else
             tmp_stdout = "";
 
@@ -1474,6 +1482,12 @@ int execve_handler(struct execve_data *data)
 
         if (likely(data->free_ssh_connection == 1))
             kfree(data->ssh_connection);
+
+        if(likely(tmp_stdin_fd))
+            kfree(tmp_stdin_fd);
+
+        if(likely(tmp_stdout_fd))
+            kfree(tmp_stdout_fd);
     }
 
     return 0;
@@ -1716,6 +1730,7 @@ void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long f
     long request;
     long pid;
     void *addr;
+    char *data_res;
     char *data;
     void *data_tmp;
     char *abs_path = NULL;
@@ -1736,8 +1751,12 @@ void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long f
         if (unlikely(IS_ERR_OR_NULL(data_tmp)))
             return;
         else
-            data = (char *) p_get_arg4(regs);
+            data = (char *) data_tmp;
 
+        if(unlikely(IS_ERR_OR_NULL(&data)))
+            return;
+
+        data_res = (char *)&data;
         sessionid = get_sessionid();
 
         buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
@@ -1764,7 +1783,7 @@ void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long f
             snprintf(result_str, result_str_len,
                      "%d\n%s\n%ld\n%ld\n%p\n%s\n%s\n%d\n%d\n%d\n%d\n%s\n%s\n%u",
                      get_current_uid(), PTRACE_TYPE, request,
-                     pid, addr, &data, abs_path,
+                     pid, addr, data_res, abs_path,
                      current->pid, current->real_parent->pid,
                      pid_vnr(task_pgrp(current)), current->tgid,
                      comm, current->nsproxy->uts_ns->name.nodename, sessionid);
@@ -2102,12 +2121,16 @@ void load_module_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned l
     char *comm = NULL;
     char *buffer = NULL;
     char *abs_path = NULL;
-    char init_module_buf[PATH_MAX];
+    char *init_module_buf = NULL;
     struct path files_path;
     struct files_struct *current_files;
     struct fdtable *files_table;
 
     if (share_mem_flag == -1)
+        return;
+
+    init_module_buf = kzalloc(PATH_MAX, GFP_ATOMIC);
+    if(unlikely(!init_module_buf))
         return;
 
     memset(init_module_buf, 0, PATH_MAX);
@@ -2156,6 +2179,8 @@ void load_module_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned l
 
     if (likely(strcmp(abs_path, "-2")))
         kfree(buffer);
+
+    kfree(init_module_buf);
 }
 
 struct update_cred_data {
