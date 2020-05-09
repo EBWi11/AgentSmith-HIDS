@@ -37,9 +37,8 @@
 
 #define MAXACTIVE 32 * NR_CPUS
 
-#define PID_TREE_LIMIT 8
-#define EXECVE_GET_SOCK_FD_LIMIT 8
-#define EXECVE_GET_SOCK_PPID_LIMIT 8
+#define PID_TREE_LIMIT 7
+#define EXECVE_GET_SOCK_LIMIT 5
 
 int share_mem_flag = -1;
 int checkCPUendianRes = 0;
@@ -171,6 +170,7 @@ char *getfullpath(struct inode *inod,char *buffer,int len)
     if(unlikely(!pinode))
         return NULL;
 
+    spin_lock(&pinode->i_lock);
     hlist_for_each(plist, &pinode->i_dentry) {
 #if LINUX_VERSION_CODE > KERNEL_VERSION(3, 16, 7)
         tmp = hlist_entry(plist, struct dentry, d_u.d_alias);
@@ -182,11 +182,15 @@ char *getfullpath(struct inode *inod,char *buffer,int len)
             break;
         }
     }
+    spin_unlock(&pinode->i_lock);
 
     if(unlikely(!dent))
         return NULL;
 
+    spin_lock(&inod->i_lock);
     name = dentry_path_raw(dent, buffer, len);
+    spin_lock(&inod->i_lock);
+
     return name;
 }
 #else
@@ -454,7 +458,7 @@ unsigned short int Ntohs(unsigned short int n) {
 unsigned int get_sessionid(void) {
     unsigned int sessionid = 0;
 #ifdef CONFIG_AUDITSYSCALL
-    sessionid = current -> sessionid;
+    sessionid = current->sessionid;
 #endif
     return sessionid;
 }
@@ -493,7 +497,7 @@ int bind_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
     retval = regs_return_value(regs);
     data = (struct bind_data *) ri->data;
 
-    if(IS_ERR_OR_NULL(data->dirp))
+    if (IS_ERR_OR_NULL(data->dirp))
         goto out;
 
     copy_res = copy_from_user(&tmp_dirp, data->dirp, 16);
@@ -613,7 +617,7 @@ int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
     data = (struct connect_data *) ri->data;
 
     sk = data->sk;
-    if(unlikely(IS_ERR_OR_NULL(sk)))
+    if (unlikely(IS_ERR_OR_NULL(sk)))
         return 0;
 
     inet = (struct inet_sock *) sk;
@@ -1049,7 +1053,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
         task = current;
         while(task->pid != 1) {
             limit_index = limit_index + 1;
-            if(limit_index > EXECVE_GET_SOCK_PPID_LIMIT)
+            if(limit_index > EXECVE_GET_SOCK_LIMIT)
                 break;
 
             if(unlikely(!task->files))
@@ -1058,7 +1062,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
             task_files = files_fdtable(task->files);
 
             for (i = 0; task_files->fd[i]; i++) {
-                if(i > EXECVE_GET_SOCK_FD_LIMIT)
+                if(i > 7)
                     break;
 
                 d_name = d_path(&(task_files->fd[i]->f_path), fd_buff, 24);
@@ -1068,7 +1072,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs)
                 }
 
                 if(strncmp("socket:[", d_name, 8) == 0) {
-                    if(unlikely(!task_files->fd[i] || IS_ERR(task_files->fd[i]->private_data)))
+                    if(unlikely(!task_files->fd[i] || IS_ERR_OR_NULL(task_files->fd[i]->private_data)))
                         continue;
 
                     tmp_socket = task_files->fd[i]->private_data;
@@ -1460,7 +1464,7 @@ int execve_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                 }
 
                 if (strncmp("socket:[", d_name, 8) == 0) {
-                    if (unlikely(!task_files->fd[i] || IS_ERR(task_files->fd[i]->private_data)))
+                    if (unlikely(!task_files->fd[i] || IS_ERR_OR_NULL(task_files->fd[i]->private_data)))
                         continue;
 
                     tmp_socket = task_files->fd[i]->private_data
@@ -1616,7 +1620,7 @@ int security_inode_create_entry_handler(struct kretprobe_instance *ri, struct pt
         pathstr = "-2";
     } else {
         tmp = (void *) p_regs_get_arg2(regs);
-        if(unlikely(IS_ERR_OR_NULL(tmp))) {
+        if (unlikely(IS_ERR_OR_NULL(tmp))) {
             if (likely(strcmp(pname_buf, "-2")))
                 kfree(pname_buf);
             return 0;
@@ -1699,7 +1703,7 @@ void ptrace_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned long f
         pid = (long) p_get_arg2(regs);
         addr = (void *) p_get_arg3(regs);
         data_tmp = (void *) p_get_arg4(regs);
-        if(unlikely(IS_ERR_OR_NULL(data_tmp)))
+        if (unlikely(IS_ERR_OR_NULL(data_tmp)))
             return;
         else
             data = (char *) p_get_arg4(regs);
@@ -1835,7 +1839,7 @@ int udp_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *reg
 #else
     sk = (struct sock *) p_get_arg2(regs);
 #endif
-    if(unlikely(IS_ERR_OR_NULL(sk)))
+    if (unlikely(IS_ERR_OR_NULL(sk)))
         return 0;
 
     inet = (struct inet_sock *) sk;
@@ -1929,7 +1933,7 @@ int udpv6_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
     sk = (struct sock *) p_get_arg2(regs);
 #endif
 
-    if(unlikely(IS_ERR_OR_NULL(sk)))
+    if (unlikely(IS_ERR_OR_NULL(sk)))
         return 0;
 
     inet = (struct inet_sock *) sk;
@@ -2091,6 +2095,9 @@ void load_module_post_handler(struct kprobe *p, struct pt_regs *regs, unsigned l
     else
         abs_path = get_exe_file(current, buffer, PATH_MAX);
 
+    if (!files_table->fd[i - 1])
+        return;
+
     files_path = files_table->fd[i - 1]->f_path;
     cwd = d_path(&files_path, init_module_buf, PATH_MAX);
 
@@ -2168,41 +2175,39 @@ int update_cred_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
         } else
             comm = "";
 
-        if (strcmp(comm, "sudo") != 0 && strcmp(comm, "su") != 0 && strcmp(comm, "sshd") != 0) {
-            int result_str_len;
-            unsigned int sessionid;
-            char *result_str = NULL;
-            char *abs_path;
+        int result_str_len;
+        unsigned int sessionid;
+        char *result_str = NULL;
+        char *abs_path;
 
-            buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
-            if (unlikely(!buffer))
-                abs_path = "-2";
-            else
-                abs_path = get_exe_file(current, buffer, PATH_MAX);
+        buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
+        if (unlikely(!buffer))
+            abs_path = "-2";
+        else
+            abs_path = get_exe_file(current, buffer, PATH_MAX);
 
-            sessionid = get_sessionid();
+        sessionid = get_sessionid();
 
-            result_str_len = strlen(current->nsproxy->uts_ns->name.nodename)
-                             + strlen(comm) + strlen(abs_path) + 192;
+        result_str_len = strlen(current->nsproxy->uts_ns->name.nodename)
+                         + strlen(comm) + strlen(abs_path) + 192;
 
-            result_str = kzalloc(result_str_len, GFP_ATOMIC);
-            if (likely(result_str)) {
-                snprintf(result_str, result_str_len, "%d\n%s\n%s\n%d\n%d\n%d\n%d\n%s\n%d\n%s\n%u",
-                         get_current_uid(), UPDATE_CRED_TYPE, abs_path,
-                         current->pid, current->real_parent->pid,
-                         pid_vnr(task_pgrp(current)), current->tgid,
-                         comm, data->old_uid, current->nsproxy->uts_ns->name.nodename,
-                         sessionid);
+        result_str = kzalloc(result_str_len, GFP_ATOMIC);
+        if (likely(result_str)) {
+            snprintf(result_str, result_str_len, "%d\n%s\n%s\n%d\n%d\n%d\n%d\n%s\n%d\n%s\n%u",
+                     get_current_uid(), UPDATE_CRED_TYPE, abs_path,
+                     current->pid, current->real_parent->pid,
+                     pid_vnr(task_pgrp(current)), current->tgid,
+                     comm, data->old_uid, current->nsproxy->uts_ns->name.nodename,
+                     sessionid);
 
-                send_msg_to_user(result_str, 1);
-            }
-
-            if (likely(strcmp(abs_path, "-2")))
-                kfree(buffer);
-
-            if (likely(comm_free == 1))
-                kfree(comm);
+            send_msg_to_user(result_str, 1);
         }
+
+        if (likely(strcmp(abs_path, "-2")))
+            kfree(buffer);
+
+        if (likely(comm_free == 1))
+            kfree(comm);
     }
     return 0;
 }
