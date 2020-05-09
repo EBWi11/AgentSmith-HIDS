@@ -2152,9 +2152,13 @@ int update_cred_entry_handler(struct kretprobe_instance *ri, struct pt_regs *reg
 int update_cred_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
     int comm_free = 0;
     int now_uid;
-    struct update_cred_data *data;
+    int result_str_len;
+    unsigned int sessionid;
+    char *result_str = NULL;
+    char *abs_path;
     char *comm = NULL;
     char *buffer = NULL;
+    struct update_cred_data *data;
 
     if (share_mem_flag == -1)
         return 0;
@@ -2174,11 +2178,6 @@ int update_cred_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
                 comm = "";
         } else
             comm = "";
-
-        int result_str_len;
-        unsigned int sessionid;
-        char *result_str = NULL;
-        char *abs_path;
 
         buffer = kzalloc(PATH_MAX, GFP_ATOMIC);
         if (unlikely(!buffer))
