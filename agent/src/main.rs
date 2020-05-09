@@ -908,7 +908,6 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                         }
                         create_file_msg.exe_md5 = md5_str.as_str();
 
-                        let mut filename = "";
                         let mut filter_check_flag = false;
                         for item in filter::CREATE_FILE_ALERT_PATH.iter() {
                             if create_file_msg.file_path.starts_with(item) {
@@ -920,7 +919,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                         if !filter_check_flag {
                             let tmp_splits: Vec<&str> =
                                 create_file_msg.file_path.split("\\").collect();
-                            filename = tmp_splits[tmp_splits.len() - 1];
+                            let filename = tmp_splits[tmp_splits.len() - 1];
 
                             for item in filter::CREATE_FILE_ALERT_SUFFIX.iter() {
                                 if filename.ends_with(item) {
@@ -929,10 +928,11 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                                 }
                             }
 
-                            for item in filter::CREATE_FILE_ALERT_CONTAINS.iter() {
-                                if filename.contains(item) {
-                                    filter_check_flag = true;
-                                    break;
+                            if !filter_check_flag {
+                                for item in filter::CREATE_FILE_ALERT_CONTAINS.iter() {
+                                    if filename.contains(item) {
+                                        break;
+                                    }
                                 }
                             }
                         }
