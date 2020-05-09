@@ -616,7 +616,7 @@ int connect_handler(struct kretprobe_instance *ri, struct pt_regs *regs) {
     retval = regs_return_value(regs);
     data = (struct connect_data *) ri->data;
 
-    if(data->flag != 4 && data->flag != 6)
+    if(data->type != 4 && data->type != 6)
         return 0;
 
     sk = data->sk;
