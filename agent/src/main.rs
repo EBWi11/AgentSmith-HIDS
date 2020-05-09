@@ -345,7 +345,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                 uid: T,
                 data_type: T,
                 sa_family: T,
-                type: T,
+                connect_type: T,
                 dport: T,
                 dip: T,
                 exe: T,
@@ -628,7 +628,7 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                             uid: msg_split[0],
                             data_type: msg_split[1],
                             sa_family: msg_split[2],
-                            type: msg_split[3],
+                            connect_type: msg_split[3],
                             dport: msg_split[4],
                             dip: msg_split[5],
                             exe: msg_split[6],
@@ -921,15 +921,14 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                             let tmp_splits: Vec<&str> =
                                 create_file_msg.file_path.split("\\").collect();
                             filename = tmp_splits[tmp_splits.len() - 1];
+
                             for item in filter::CREATE_FILE_ALERT_SUFFIX.iter() {
                                 if filename.ends_with(item) {
                                     filter_check_flag = true;
                                     break;
                                 }
                             }
-                        }
 
-                        if !filter_check_flag {
                             for item in filter::CREATE_FILE_ALERT_CONTAINS.iter() {
                                 if filename.contains(item) {
                                     filter_check_flag = true;
@@ -937,8 +936,6 @@ fn get_data_no_callback(tx: Sender<Vec<u8>>) {
                                 }
                             }
                         }
-
-                        if !filter_check_flag {}
 
                         let md5_tmp;
                         if create_file_msg.file_path != "-1" {

@@ -142,7 +142,7 @@ AgentSmith-HIDS严格意义上并不是一个“Host-based Intrusion Detection S
     "uid":"0",
     "data_type":"42",
     "sa_family":"2",
-    "fd":"4",
+    "connect_type":"4",
     "dport":"1025",
     "dip":"180.101.49.11",
     "exe":"/usr/bin/ping",
