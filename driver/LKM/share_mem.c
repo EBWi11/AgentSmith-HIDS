@@ -73,11 +73,11 @@ static int device_open(struct inode *inode, struct file *file) {
         return -1;
     } else {
         write_index_lock();
-        share_mem_flag = 1;
         pre_slot_len = 0;
         write_index = 8;
         memset(sh_mem, '\0', MAX_SIZE);
         do_init_share_mem(0);
+        share_mem_flag = 1;
         write_index_unlock();
     }
     return 0;
@@ -85,8 +85,8 @@ static int device_open(struct inode *inode, struct file *file) {
 
 static int device_close(struct inode *indoe, struct file *file) {
     write_index_lock();
-    mutex_unlock(&mchar_mutex);
     share_mem_flag = -1;
+    mutex_unlock(&mchar_mutex);
     write_index_unlock();
 
     return 0;
