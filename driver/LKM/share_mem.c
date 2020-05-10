@@ -72,20 +72,22 @@ static int device_open(struct inode *inode, struct file *file) {
     if (!mutex_trylock(&mchar_mutex)) {
         return -1;
     } else {
-        share_mem_flag = 1;
         write_index_lock();
+        share_mem_flag = 1;
         pre_slot_len = 0;
-        write_index_unlock();
         write_index = 8;
         memset(sh_mem, '\0', MAX_SIZE);
         do_init_share_mem(0);
+        write_index_unlock();
     }
     return 0;
 }
 
 static int device_close(struct inode *indoe, struct file *file) {
+    write_index_lock();
     mutex_unlock(&mchar_mutex);
     share_mem_flag = -1;
+    write_index_unlock();
 
     return 0;
 }
@@ -261,6 +263,8 @@ int init_share_mem(void) {
 
 void uninstall_share_mem(void) {
     int i;
+    write_index_lock();
+    share_mem_flag = -1;
     device_destroy(class, MKDEV(major, 0));
     class_destroy(class);
     unregister_chrdev(major, DEVICE_NAME);
@@ -270,4 +274,5 @@ void uninstall_share_mem(void) {
     for (i = 0; i < MAX_SIZE; i += PAGE_SIZE)
         ClearPageReserved(virt_to_page(((unsigned long) sh_mem) + i));
     kfree(sh_mem);
+    write_index_unlock();
 }
