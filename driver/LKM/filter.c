@@ -314,6 +314,7 @@ static int device_mmap(struct file *filp, struct vm_area_struct *vma) {
 
 int init_filter(void) {
     lock_init();
+    _smith_filter_write_lock();
     filter_major = register_chrdev(0, FILTER_DEVICE_NAME, &mchar_fops);
 
     if (filter_major < 0) {
@@ -345,14 +346,16 @@ int init_filter(void) {
         pr_err("[SMITH FILTER] SHMEM_INIT_ERROR\n");
         return -ENOMEM;
     }
-
+    _smith_filter_write_unlock();
     return 0;
 }
 
 void uninstall_filter(void) {
+    _smith_filter_write_lock();
     device_destroy(filter_class, MKDEV(filter_major, 0));
     class_destroy(filter_class);
     del_all_execve_exe_whitelist();
     del_all_connect_dip_whitelist();
     unregister_chrdev(filter_major, FILTER_DEVICE_NAME);
+    _smith_filter_write_unlock();
 }
