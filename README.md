@@ -468,7 +468,7 @@ Uninstall Smith：
 
 [HF-Daniel](https://github.com/HF-Daniel)
 
-
+[smcdef](https://github.com/smcdef)
 
 
 ### Wechat of developer
