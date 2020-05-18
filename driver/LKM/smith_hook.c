@@ -1934,25 +1934,22 @@ int udp_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *reg
             if(msg->msg_iter.iov->iov_len > 0) {
                 data->iov_len = msg->msg_iter.iov->iov_len;
                 data->iov_base = msg->msg_iter.iov->iov_base;
-            } else
-                return 0;
+            }
         } else if(msg->msg_iter.kvec) {
             if(msg->msg_iter.kvec->iov_len > 0) {
                 data->iov_len = msg->msg_iter.kvec->iov_len;
                 data->iov_base = msg->msg_iter.kvec->iov_base;
-            } else
-                return 0;
-        } else
-            return 0;
+            }
+        }
 #else
         if (data->iov_len > 0) {
             data->iov_base = msg->msg_iov->iov_base;
             data->iov_len = msg->msg_iov->iov_len;
-        } else
-            return 0;
-
-        data->flag = 1;
+        }
 #endif
+        if (data->iov_len > 0) {
+            data->flag = 1;
+        }
     }
 
     return 0;
@@ -2028,25 +2025,22 @@ int udpv6_recvmsg_entry_handler(struct kretprobe_instance *ri, struct pt_regs *r
             if(msg->msg_iter.iov->iov_len > 0) {
                 data->iov_len = msg->msg_iter.iov->iov_len;
                 data->iov_base = msg->msg_iter.iov->iov_base;
-            } else
-                return 0;
+            }
         } else if(msg->msg_iter.kvec) {
             if(msg->msg_iter.kvec->iov_len > 0) {
                 data->iov_len = msg->msg_iter.kvec->iov_len;
                 data->iov_base = msg->msg_iter.kvec->iov_base;
-            } else
-                return 0;
-        } else
-            return 0;
+            }
+        }
 #else
         if (data->iov_len > 0) {
             data->iov_base = msg->msg_iov->iov_base;
             data->iov_len = msg->msg_iov->iov_len;
-        } else
-            return 0;
-
-        data->flag = 1;
+        }
 #endif
+        if (data->iov_len > 0) {
+            data->flag = 1;
+        }
     }
 
     return 0;
