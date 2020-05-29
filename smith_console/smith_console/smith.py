@@ -1,3 +1,4 @@
+import sys
 import random
 import re
 import redis
@@ -5,8 +6,8 @@ import signal
 from IPy import IP
 from pyfiglet import Figlet
 
-import cprint
-import setting
+import smith_console.cprint as cprint
+import smith_console.setting as setting
 
 signal.signal(signal.SIGINT, signal.default_int_handler)
 pool = redis.ConnectionPool(host=setting.REDIS_IP, port=setting.REDIS_PORT, decode_responses=True)
@@ -14,7 +15,8 @@ redis_helper = redis.Redis(connection_pool=pool)
 
 random_font_list = ["ogre", "small", "slant", "script", "larry3d", "eftifont", "drpepper", "doom", "chunky"]
 
-if __name__ == "__main__":
+
+def smith_main():
     try:
         random_font = random_font_list[random.randint(0, len(random_font_list) - 1)]
         f = Figlet(font=random_font, width=150)
@@ -23,7 +25,7 @@ if __name__ == "__main__":
         all_host = redis_helper.keys("HIDSHOST-*")
         cprint.cprintln('[ {0} HIDS Online ]'.format(len(all_host)), "invert", "cyan")
         while (True):
-            cmd = raw_input(">>> ")
+            cmd = input(">>> ")
             cmd = cmd.strip().lower()
             if cmd == "exit":
                 print("Bye.")
@@ -71,3 +73,14 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nBye.")
         exit(0)
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "list":
+            all_host = redis_helper.keys("HIDSHOST-*")
+            i = 1
+            for h in all_host:
+                cprint.cprint("{0}:".format(i), "mormal", "green")
+                print(" {0}".format(h.split("-")[1]))
+                i += 1
+    smith_main()

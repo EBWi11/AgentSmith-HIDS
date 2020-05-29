@@ -1,8 +1,9 @@
 ## AgentSmith-HIDS Simple Console(just demo)
 
-1. install redis
-2. python2 pip install -r requirements
+0. install redis
+1. create a new venv(python3)
+2. python setup.py install 
 3. fix setting.py
-4. nohup python hearbeat_server.py &
-5. python smith.py
+4. smith-server
+5. smith-console
 6. enter `help`
