@@ -9,6 +9,9 @@ English | [简体中文](README-zh_CN.md)
 
 
 
+# RELEASE VERSION: https://github.com/bytedance/AgentSmith-HIDS
+
+
 ### About AgentSmith-HIDS
 
 Technically, AgentSmith-HIDS is not a Host-based Intrusion Detection System (HIDS) due to lack of rule engine and detection function. However, it can be used as a high performance 'Host Information Collect Agent' as part of your own HIDS solution.
