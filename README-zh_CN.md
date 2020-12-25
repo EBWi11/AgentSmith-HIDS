@@ -4,11 +4,13 @@
 
 
 
+
 [![License](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://github.com/DianrongSecurity/AgentSmith-HIDS/blob/master/LICENSE) [![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 
 [English](README.md) | 简体中文
 
 
+# RELEASE VERSION: https://github.com/bytedance/AgentSmith-HIDS
 
 
 ### 关于AgentSmith-HIDS
