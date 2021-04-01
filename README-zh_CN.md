@@ -10,7 +10,7 @@
 [English](README.md) | 简体中文
 
 # THIS REPO IS OLD 
-# RELEASE VERSION: https://github.com/bytedance/AgentSmith-HIDS
+# RELEASE VERSION: https://github.com/bytedance/Elkeid
 
 
 ### 关于AgentSmith-HIDS
